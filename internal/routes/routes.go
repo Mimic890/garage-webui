@@ -1,0 +1,170 @@
+package routes
+
+import (
+	"Noooste/garage-ui/internal/auth"
+	"Noooste/garage-ui/internal/config"
+	"Noooste/garage-ui/internal/handlers"
+	"Noooste/garage-ui/internal/middleware"
+	"github.com/gofiber/fiber/v3"
+)
+
+// SetupRoutes configures all API routes
+func SetupRoutes(
+	app *fiber.App,
+	cfg *config.Config,
+	authService *auth.AuthService,
+	healthHandler *handlers.HealthHandler,
+	bucketHandler *handlers.BucketHandler,
+	objectHandler *handlers.ObjectHandler,
+	userHandler *handlers.UserHandler,
+) {
+	// Apply CORS middleware globally
+	app.Use(middleware.CORSMiddleware(&cfg.CORS))
+
+	// Health check endpoint (no auth required)
+	app.Get("/health", healthHandler.Check)
+	app.Get("/api/v1/health", healthHandler.Check)
+
+	// API v1 group
+	api := app.Group("/api/v1")
+
+	// Apply authentication middleware to all API routes
+	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
+
+	// Bucket routes
+	buckets := api.Group("/buckets")
+	{
+		buckets.Get("/", bucketHandler.ListBuckets)          // List all buckets
+		buckets.Post("/", bucketHandler.CreateBucket)        // Create a new bucket
+		buckets.Get("/:name", bucketHandler.GetBucketInfo)   // Get bucket info
+		buckets.Delete("/:name", bucketHandler.DeleteBucket) // Delete a bucket
+	}
+
+	// Object routes
+	objects := api.Group("/buckets/:bucket/objects")
+	{
+		objects.Get("/", objectHandler.ListObjects)                  // List objects in bucket
+		objects.Post("/", objectHandler.UploadObject)                // Upload object (multipart)
+		objects.Delete("/", objectHandler.DeleteMultipleObjects)     // Delete multiple objects
+		objects.Get("/:key", objectHandler.GetObject)                // Download object
+		objects.Put("/:key", objectHandler.UploadObjectStream)       // Upload object (stream)
+		objects.Delete("/:key", objectHandler.DeleteObject)          // Delete object
+		objects.Head("/:key", objectHandler.GetObjectMetadata)       // Get object metadata
+		objects.Post("/:key/presign", objectHandler.GetPresignedURL) // Generate pre-signed URL
+	}
+
+	// User/Key management routes
+	users := api.Group("/users")
+	{
+		users.Get("/", userHandler.ListUsers)                          // List all users/keys
+		users.Post("/", userHandler.CreateUser)                        // Create new user/key
+		users.Get("/:access_key", userHandler.GetUser)                 // Get user info
+		users.Delete("/:access_key", userHandler.DeleteUser)           // Delete user/key
+		users.Patch("/:access_key", userHandler.UpdateUserPermissions) // Update user permissions
+	}
+
+	// OIDC authentication routes (only if OIDC is enabled)
+	if cfg.Auth.Mode == "oidc" && cfg.Auth.OIDC.Enabled {
+		authRoutes := app.Group("/auth")
+		{
+			// Login endpoint - redirects to OIDC provider
+			authRoutes.Get("/login", func(c fiber.Ctx) error {
+				// Generate state token for CSRF protection
+				state := "random-state-token" // In production, use a secure random token
+				authURL, err := authService.GetAuthorizationURL(state)
+				if err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+						"error": "Failed to generate login URL",
+					})
+				}
+				return c.Redirect().To(authURL)
+			})
+
+			// Callback endpoint - handles OIDC redirect after login
+			authRoutes.Get("/callback", func(c fiber.Ctx) error {
+				// Get authorization code from query
+				code := c.Query("code")
+				if code == "" {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+						"error": "Authorization code is required",
+					})
+				}
+
+				// Exchange code for tokens
+				ctx := c.Context()
+				token, err := authService.ExchangeCode(ctx, code)
+				if err != nil {
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+						"error": "Failed to exchange authorization code",
+					})
+				}
+
+				// Extract ID token from OAuth2 token
+				rawIDToken, ok := token.Extra("id_token").(string)
+				if !ok {
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+						"error": "No ID token in response",
+					})
+				}
+
+				// Verify ID token and get user info
+				userInfo, err := authService.VerifyIDToken(ctx, rawIDToken)
+				if err != nil {
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+						"error": "Invalid ID token",
+					})
+				}
+
+				// In production, you should:
+				// 1. Create a session and store it in Redis/memory
+				// 2. Set a secure session cookie
+				// 3. Redirect to the frontend with the session
+
+				// For now, just set the ID token as a cookie (not recommended for production)
+				c.Cookie(&fiber.Cookie{
+					Name:     cfg.Auth.OIDC.CookieName,
+					Value:    rawIDToken,
+					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
+					Secure:   cfg.Auth.OIDC.CookieSecure,
+					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,
+					SameSite: cfg.Auth.OIDC.CookieSameSite,
+				})
+
+				return c.JSON(fiber.Map{
+					"success": true,
+					"user":    userInfo,
+				})
+			})
+
+			// Logout endpoint
+			authRoutes.Post("/logout", func(c fiber.Ctx) error {
+				// Clear session cookie
+				c.Cookie(&fiber.Cookie{
+					Name:   cfg.Auth.OIDC.CookieName,
+					Value:  "",
+					MaxAge: -1,
+				})
+
+				return c.JSON(fiber.Map{
+					"success": true,
+					"message": "Logged out successfully",
+				})
+			})
+
+			// User info endpoint
+			authRoutes.Get("/me", middleware.AuthMiddleware(&cfg.Auth, authService), func(c fiber.Ctx) error {
+				userInfo := c.Locals("userInfo")
+				if userInfo == nil {
+					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+						"error": "Not authenticated",
+					})
+				}
+
+				return c.JSON(fiber.Map{
+					"success": true,
+					"user":    userInfo,
+				})
+			})
+		}
+	}
+}
