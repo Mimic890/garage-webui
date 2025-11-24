@@ -46,7 +46,16 @@ import {
   Eye,
   RotateCwIcon,
   FolderPlus,
+  Trash,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { toast } from 'sonner';
 
 export function Buckets() {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
@@ -69,6 +78,10 @@ export function Buckets() {
   const [selectedObject, setSelectedObject] = useState<S3Object | null>(null);
   const [createDirDialogOpen, setCreateDirDialogOpen] = useState(false);
   const [newDirName, setNewDirName] = useState('');
+  const [sortColumn, setSortColumn] = useState<'name' | 'size' | 'modified'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [selectedFileKeys, setSelectedFileKeys] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Main area drag & drop
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -83,14 +96,20 @@ export function Buckets() {
   const uploadFiles = async (files: File[]) => {
     if (!viewingBucket) return;
 
-    for (const file of files) {
-      const key = currentPath ? `${currentPath}${file.name}` : file.name;
-      await objectsApi.upload(viewingBucket, key, file);
-    }
+    try {
+      for (const file of files) {
+        const key = currentPath ? `${currentPath}${file.name}` : file.name;
+        await objectsApi.upload(viewingBucket, key, file);
+      }
 
-    // Refresh objects list
-    const data = await objectsApi.list(viewingBucket, currentPath);
-    setObjects(data);
+      // Refresh objects list
+      const data = await objectsApi.list(viewingBucket, currentPath);
+      setObjects(data);
+      toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}`);
+    } catch (error) {
+      toast.error('Failed to upload files. Please try again.');
+      console.error('Upload error:', error);
+    }
   };
 
   useEffect(() => {
@@ -122,36 +141,88 @@ export function Buckets() {
     }
   }, [viewingBucket, currentPath]);
 
+  const sortObjects = (objList: S3Object[]): S3Object[] => {
+    const sorted = [...objList].sort((a, b) => {
+      // Always put folders before files
+      const aIsFolder = a.isFolder ? 1 : 0;
+      const bIsFolder = b.isFolder ? 1 : 0;
+      if (aIsFolder !== bIsFolder) {
+        return bIsFolder - aIsFolder; // Folders first (1 > 0)
+      }
+
+      // Then sort by selected column
+      let compareValue = 0;
+      switch (sortColumn) {
+        case 'name': {
+          const aName = a.key.replace(currentPath, '').replace('/', '').toLowerCase();
+          const bName = b.key.replace(currentPath, '').replace('/', '').toLowerCase();
+          compareValue = aName.localeCompare(bName);
+          break;
+        }
+        case 'size':
+          compareValue = a.size - b.size;
+          break;
+        case 'modified': {
+          const aDate = new Date(a.lastModified).getTime();
+          const bDate = new Date(b.lastModified).getTime();
+          compareValue = aDate - bDate;
+          break;
+        }
+      }
+
+      return sortDirection === 'asc' ? compareValue : -compareValue;
+    });
+
+    return sorted;
+  };
+
   useEffect(() => {
     const filtered = objects.filter((obj) =>
       obj.key.toLowerCase().includes(objectSearchQuery.toLowerCase())
     );
-    setFilteredObjects(filtered);
-  }, [objectSearchQuery, objects]);
+    const sorted = sortObjects(filtered);
+    setFilteredObjects(sorted);
+  }, [objectSearchQuery, objects, sortColumn, sortDirection, currentPath]);
 
   const handleCreateBucket = async () => {
-    if (!newBucketName) return;
+    if (!newBucketName) {
+      toast.error('Please enter a bucket name');
+      return;
+    }
 
-    await bucketsApi.create(newBucketName);
-    setCreateDialogOpen(false);
-    setNewBucketName('');
-    setShowCreatePreview(false);
+    try {
+      await bucketsApi.create(newBucketName);
+      setCreateDialogOpen(false);
+      setNewBucketName('');
+      setShowCreatePreview(false);
 
-    // Refresh bucket list
-    const data = await bucketsApi.list();
-    setBuckets(data);
+      // Refresh bucket list
+      const data = await bucketsApi.list();
+      setBuckets(data);
+      toast.success(`Bucket "${newBucketName}" created successfully`);
+    } catch (error) {
+      toast.error('Failed to create bucket. Please try again.');
+      console.error('Create bucket error:', error);
+    }
   };
 
   const handleDeleteBucket = async () => {
     if (!selectedBucket) return;
 
-    await bucketsApi.delete(selectedBucket.name);
-    setDeleteBucketDialogOpen(false);
-    setSelectedBucket(null);
+    try {
+      await bucketsApi.delete(selectedBucket.name);
+      const bucketName = selectedBucket.name;
+      setDeleteBucketDialogOpen(false);
+      setSelectedBucket(null);
 
-    // Refresh bucket list
-    const data = await bucketsApi.list();
-    setBuckets(data);
+      // Refresh bucket list
+      const data = await bucketsApi.list();
+      setBuckets(data);
+      toast.success(`Bucket "${bucketName}" deleted successfully`);
+    } catch (error) {
+      toast.error('Failed to delete bucket. Please try again.');
+      console.error('Delete bucket error:', error);
+    }
   };
 
   const handleViewBucket = (bucketName: string) => {
@@ -174,34 +245,104 @@ export function Buckets() {
   const handleDeleteObject = async () => {
     if (!selectedObject || !viewingBucket) return;
 
-    await objectsApi.delete(viewingBucket, selectedObject.key);
-    setDeleteObjectDialogOpen(false);
-    setSelectedObject(null);
+    try {
+      await objectsApi.delete(viewingBucket, selectedObject.key);
+      const objectName = selectedObject.key;
+      setDeleteObjectDialogOpen(false);
+      setSelectedObject(null);
 
-    // Refresh objects list
-    const data = await objectsApi.list(viewingBucket, currentPath);
-    setObjects(data);
+      // Refresh objects list
+      const data = await objectsApi.list(viewingBucket, currentPath);
+      setObjects(data);
+      toast.success(`Object "${objectName}" deleted successfully`);
+    } catch (error) {
+      toast.error('Failed to delete object. Please try again.');
+      console.error('Delete object error:', error);
+    }
   };
 
   const handleRefreshObjects = async () => {
-    if (!viewingBucket) return;
-    const data = await objectsApi.list(viewingBucket, currentPath);
-    setObjects(data);
+    if (!viewingBucket || isRefreshing) return;
+    try {
+      setIsRefreshing(true);
+      const data = await objectsApi.list(viewingBucket, currentPath);
+      setObjects(data);
+      toast.success('Objects refreshed successfully');
+    } catch (error) {
+      toast.error('Failed to refresh objects. Please try again.');
+      console.error('Refresh error:', error);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
+  const handleToggleFileSelection = (key: string) => {
+    const newSelected = new Set(selectedFileKeys);
+    if (newSelected.has(key)) {
+      newSelected.delete(key);
+    } else {
+      newSelected.add(key);
+    }
+    setSelectedFileKeys(newSelected);
+  };
+
+  const handleSelectAllFiles = () => {
+    const fileKeys = filteredObjects
+      .filter(obj => !obj.isFolder)
+      .map(obj => obj.key);
+
+    if (selectedFileKeys.size === fileKeys.length && fileKeys.length > 0) {
+      // Deselect all
+      setSelectedFileKeys(new Set());
+    } else {
+      // Select all files
+      setSelectedFileKeys(new Set(fileKeys));
+    }
+  };
+
+  const handleBulkDeleteFiles = async () => {
+    if (!viewingBucket || selectedFileKeys.size === 0) return;
+
+    try {
+      const count = selectedFileKeys.size;
+      for (const key of selectedFileKeys) {
+        await objectsApi.delete(viewingBucket, key);
+      }
+
+      setSelectedFileKeys(new Set());
+
+      // Refresh objects list
+      const data = await objectsApi.list(viewingBucket, currentPath);
+      setObjects(data);
+      toast.success(`Successfully deleted ${count} file${count > 1 ? 's' : ''}`);
+    } catch (error) {
+      toast.error('Failed to delete files. Please try again.');
+      console.error('Bulk delete error:', error);
+    }
   };
 
   const handleCreateDirectory = async () => {
-    if (!newDirName || !viewingBucket) return;
+    if (!newDirName || !viewingBucket) {
+      toast.error('Please enter a directory name');
+      return;
+    }
 
-    // Create a directory by uploading an empty object with a trailing slash
-    const dirKey = currentPath ? `${currentPath}${newDirName}/` : `${newDirName}/`;
-    await objectsApi.upload(viewingBucket, dirKey, new File([], ''));
+    try {
+      // Create a directory by uploading an empty object with a trailing slash
+      const dirKey = currentPath ? `${currentPath}${newDirName}/` : `${newDirName}/`;
+      await objectsApi.upload(viewingBucket, dirKey, new File([], ''));
 
-    setCreateDirDialogOpen(false);
-    setNewDirName('');
+      setCreateDirDialogOpen(false);
+      setNewDirName('');
 
-    // Refresh objects list
-    const data = await objectsApi.list(viewingBucket, currentPath);
-    setObjects(data);
+      // Refresh objects list
+      const data = await objectsApi.list(viewingBucket, currentPath);
+      setObjects(data);
+      toast.success(`Directory "${newDirName}" created successfully`);
+    } catch (error) {
+      toast.error('Failed to create directory. Please try again.');
+      console.error('Create directory error:', error);
+    }
   };
 
   const getBreadcrumbs = () => {
@@ -218,6 +359,69 @@ export function Buckets() {
     return breadcrumbs;
   };
 
+  const getFileType = (filename: string): string => {
+    if (!filename) return 'Unknown';
+
+    const extension = filename.split('.').pop()?.toLowerCase() || '';
+    if (!extension) return 'File';
+
+    const typeMap: Record<string, string> = {
+      // Images
+      'png': 'Image',
+      'jpg': 'Image',
+      'jpeg': 'Image',
+      'gif': 'Image',
+      'svg': 'Image',
+      'webp': 'Image',
+
+      // Documents
+      'pdf': 'PDF',
+      'doc': 'Document',
+      'docx': 'Document',
+      'xls': 'Spreadsheet',
+      'xlsx': 'Spreadsheet',
+      'ppt': 'Presentation',
+      'pptx': 'Presentation',
+      'txt': 'Text',
+
+      // Archives
+      'zip': 'Archive',
+      'rar': 'Archive',
+      'gz': 'Archive',
+      'tar': 'Archive',
+
+      // Video/Audio
+      'mp4': 'Video',
+      'avi': 'Video',
+      'mov': 'Video',
+      'mkv': 'Video',
+      'webm': 'Video',
+      'mp3': 'Audio',
+      'wav': 'Audio',
+      'flac': 'Audio',
+
+      // Code
+      'js': 'JavaScript',
+      'ts': 'TypeScript',
+      'tsx': 'TypeScript',
+      'jsx': 'JavaScript',
+      'py': 'Python',
+      'java': 'Java',
+      'cpp': 'C++',
+      'c': 'C',
+      'html': 'HTML',
+      'css': 'CSS',
+      'json': 'JSON',
+      'xml': 'XML',
+      'sql': 'SQL',
+
+      // Data
+      'csv': 'CSV',
+    };
+
+    return typeMap[extension] || extension.toUpperCase();
+  };
+
   // If viewing a bucket's objects, show the objects view
   if (viewingBucket) {
     return (
@@ -225,15 +429,16 @@ export function Buckets() {
         <Header
           title={`Objects in ${viewingBucket}`}
         />
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Back Button */}
-          <Button variant="outline" onClick={handleBackToBuckets}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Buckets
+          <Button variant="outline" onClick={handleBackToBuckets} className="text-sm sm:text-base">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Back to Buckets</span>
+            <span className="sm:hidden">Back</span>
           </Button>
 
           {/* Breadcrumb Navigation */}
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-xs sm:text-sm overflow-x-auto">
             <Home className="h-4 w-4 text-muted-foreground" />
             {getBreadcrumbs().map((crumb, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -253,8 +458,8 @@ export function Buckets() {
           </div>
 
           {/* Toolbar */}
-          <div className="flex items-center justify-between">
-            <div className="relative w-80">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-full sm:max-w-xs">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search objects..."
@@ -263,17 +468,28 @@ export function Buckets() {
                 className="pl-8"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => setShowUploadZone(!showUploadZone)}>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedFileKeys.size > 0 && (
+                <Button
+                  onClick={handleBulkDeleteFiles}
+                  title={`Delete ${selectedFileKeys.size} selected file(s)`}
+                  // set border in red and background transparent and text color red
+                  className={"bg-transparent border border-red-500 text-red-500 hover:bg-red-500/5"}
+                >
+                  <Trash className="h-4 w-4" />
+                  Delete {selectedFileKeys.size} file{selectedFileKeys.size !== 1 ? 's' : ''}
+                </Button>
+              )}
+              <Button variant={"secondary"} onClick={() => setShowUploadZone(!showUploadZone)} className="flex-1 sm:flex-initial">
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Upload</span>
               </Button>
-              <Button onClick={() => setCreateDirDialogOpen(true)}>
-                <FolderPlus className="mr-2 h-4 w-4" />
-                Create Directory
+              <Button onClick={() => setCreateDirDialogOpen(true)} className="flex-1 sm:flex-initial">
+                <FolderPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Directory</span>
               </Button>
-              <Button variant="outline" size="icon" onClick={handleRefreshObjects} title="Refresh">
-                <RotateCwIcon className="h-4 w-4" />
+              <Button variant="outline" size="icon" onClick={handleRefreshObjects} title="Refresh" disabled={isRefreshing}>
+                <RotateCwIcon className={`h-4 w-4 transition-transform duration-500 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
             </div>
           </div>
@@ -343,7 +559,7 @@ export function Buckets() {
           {/* Objects Table with Drag & Drop */}
           <div
             {...getRootProps()}
-            className={`border rounded-lg transition-colors ${
+            className={`border rounded-lg transition-colors overflow-x-auto ${
               isDragActive
                 ? 'border-primary bg-primary/5 border-2'
                 : 'border-border'
@@ -353,17 +569,55 @@ export function Buckets() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Last Modified</TableHead>
-                  <TableHead>Storage Class</TableHead>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={
+                        filteredObjects.filter(obj => !obj.isFolder).length > 0 &&
+                        selectedFileKeys.size === filteredObjects.filter(obj => !obj.isFolder).length
+                      }
+                      onCheckedChange={handleSelectAllFiles}
+                      aria-label="Select all files"
+                    />
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => {
+                    if (sortColumn === 'name') {
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortColumn('name');
+                      setSortDirection('asc');
+                    }
+                  }}>
+                    Objects {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">Type</TableHead>
+                  <TableHead className="hidden md:table-cell">Storage Class</TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => {
+                    if (sortColumn === 'size') {
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortColumn('size');
+                      setSortDirection('asc');
+                    }
+                  }}>
+                    Size {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => {
+                    if (sortColumn === 'modified') {
+                      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortColumn('modified');
+                      setSortDirection('asc');
+                    }
+                  }}>
+                    Modified {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredObjects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       {objectSearchQuery
                         ? 'No objects found matching your search'
                         : isDragActive
@@ -374,6 +628,22 @@ export function Buckets() {
                 ) : (
                   filteredObjects.map((obj) => (
                     <TableRow key={obj.key}>
+                      <TableCell className="w-[50px]">
+                        {obj.isFolder ? (
+                          <Checkbox
+                            disabled
+                            checked={false}
+                            className="opacity-50 cursor-not-allowed bg-muted"
+                            aria-label="Folders cannot be selected"
+                          />
+                        ) : (
+                          <Checkbox
+                            checked={selectedFileKeys.has(obj.key)}
+                            onCheckedChange={() => handleToggleFileSelection(obj.key)}
+                            aria-label={`Select file ${obj.key}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {obj.isFolder ? (
@@ -384,7 +654,7 @@ export function Buckets() {
                           {obj.isFolder ? (
                             <button
                               onClick={() => handleNavigateToFolder(obj.key)}
-                              className="font-medium hover:underline"
+                              className="font-medium cursor-pointer underline hover:text-primary"
                             >
                               {obj.key.replace(currentPath, '').replace('/', '')}
                             </button>
@@ -395,25 +665,92 @@ export function Buckets() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{obj.isFolder ? '---' : formatBytes(obj.size)}</TableCell>
-                      <TableCell>{formatDate(obj.lastModified)}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        {obj.isFolder ? 'Folder' : getFileType(obj.key.replace(currentPath, ''))}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {obj.storageClass && (
                           <Badge variant="secondary">{obj.storageClass}</Badge>
                         )}
+                      </TableCell>
+                      <TableCell>{obj.isFolder ? null : formatBytes(obj.size)}</TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="decoration-dashed decoration-1 underline underline-offset-6 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+                                {new Date(obj.lastModified).toLocaleDateString('en-GB', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })} {new Date(obj.lastModified).toLocaleTimeString('en-GB', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                  hour12: false,
+                                })} CET
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="space-y-1 min-w-max">
+                                <div className="flex gap-3 items-center">
+                                  <span className="text-sm text-gray-400 w-20 text-right">UTC</span>
+                                  <span className="text-sm text-white">
+                                    {new Date(obj.lastModified).toLocaleString('en-GB', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                      hour12: false,
+                                      timeZone: 'UTC',
+                                    })} UTC
+                                  </span>
+                                </div>
+                                <div className="flex gap-3 items-center">
+                                  <span className="text-sm text-gray-400 w-20 text-right">Relative</span>
+                                  <span className="text-sm text-white">
+                                    {(() => {
+                                      const now = new Date();
+                                      const date = new Date(obj.lastModified);
+                                      const diffMs = now.getTime() - date.getTime();
+                                      const diffMins = Math.floor(diffMs / 60000);
+                                      const diffHours = Math.floor(diffMs / 3600000);
+                                      const diffDays = Math.floor(diffMs / 86400000);
+
+                                      if (diffMins < 1) return 'just now';
+                                      if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+                                      if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+                                      if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+                                      if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) !== 1 ? 's' : ''} ago`;
+                                      return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) !== 1 ? 's' : ''} ago`;
+                                    })()}
+                                  </span>
+                                </div>
+                                <div className="flex gap-3 items-center">
+                                  <span className="text-sm text-gray-400 w-20 text-right">Timestamp</span>
+                                  <span className="text-sm text-white font-mono">
+                                    {new Date(obj.lastModified).toISOString()}
+                                  </span>
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell>
                         {!obj.isFolder && (
                           <DropdownMenu>
                             <DropdownMenuTrigger>
                               {/*make the button not affecting the row height*/}
-                              <Button variant="ghost" size="icon" className={"-m-3 top-1 relative"}>
+                              <Button variant="ghost" size="icon" className={"-m-6 top-1 relative"}>
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem>
-                                <Download className="mr-2 h-4 w-4" />
+                                <Download className="h-4 w-4" />
                                 Download
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
@@ -424,7 +761,7 @@ export function Buckets() {
                                   setDeleteObjectDialogOpen(true);
                                 }}
                               >
-                                <Trash2 className="mr-2 h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                                 Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -501,36 +838,34 @@ export function Buckets() {
   return (
     <div>
       <Header title="Buckets" />
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Toolbar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="relative w-80">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search buckets..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-full sm:max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search buckets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+            />
           </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={() => setCreateDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
             Create Bucket
           </Button>
         </div>
 
         {/* Buckets Table */}
-        <div className="border rounded-lg">
+        <div className="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Region</TableHead>
-                <TableHead>Objects</TableHead>
+                <TableHead className="hidden sm:table-cell">Region</TableHead>
+                <TableHead className="hidden md:table-cell">Objects</TableHead>
                 <TableHead>Size</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead className="hidden lg:table-cell">Created</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -548,17 +883,17 @@ export function Buckets() {
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleViewBucket(bucket.name)}
                   >
-                    <TableCell className="font-medium">{bucket.name}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium truncate max-w-[200px]">{bucket.name}</TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Badge variant="secondary">{bucket.region || 'default'}</Badge>
                     </TableCell>
-                    <TableCell>{bucket.objectCount?.toLocaleString() || 0}</TableCell>
+                    <TableCell className="hidden md:table-cell">{bucket.objectCount?.toLocaleString() || 0}</TableCell>
                     <TableCell>{bucket.size ? formatBytes(bucket.size) : '0 B'}</TableCell>
-                    <TableCell>{formatDate(bucket.creationDate)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{formatDate(bucket.creationDate)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" className={"-m-3 top-1 relative"}>
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -567,11 +902,11 @@ export function Buckets() {
                             e.stopPropagation();
                             handleViewBucket(bucket.name);
                           }}>
-                            <FolderIcon className="mr-2 h-4 w-4" />
+                            <FolderIcon className="h-4 w-4" />
                             View Objects
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                            <Settings className="mr-2 h-4 w-4" />
+                            <Settings className="h-4 w-4" />
                             Settings
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -583,7 +918,7 @@ export function Buckets() {
                               setDeleteBucketDialogOpen(true);
                             }}
                           >
-                            <Trash2 className="mr-2 h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -619,19 +954,17 @@ export function Buckets() {
               </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+          <DialogFooter className={"space-y-2"}>
+            <Button
+                variant="outline"
+                onClick={() => setCreateDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button
-              variant="outline"
-              onClick={() => setShowCreatePreview(true)}
-              disabled={!newBucketName}
+                variant={!newBucketName ? "default_disabled" : "default"}
+                onClick={handleCreateBucket}
             >
-              <Eye className="mr-2 h-4 w-4" />
-              Preview
-            </Button>
-            <Button onClick={handleCreateBucket} disabled={!newBucketName}>
               Create
             </Button>
           </DialogFooter>

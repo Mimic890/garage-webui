@@ -54,9 +54,9 @@ export function Dashboard() {
   return (
     <div>
       <Header title="Dashboard" />
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Top Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Storage</CardTitle>
@@ -114,7 +114,7 @@ export function Dashboard() {
                       metrics.requestMetrics.deleteRequests +
                       metrics.requestMetrics.listRequests
                     ).toLocaleString()
-                  : '---'}
+                  : null}
               </div>
               <p className="text-xs text-muted-foreground">
                 GET, PUT, DELETE, LIST
@@ -124,7 +124,7 @@ export function Dashboard() {
         </div>
 
         {/* Cluster Status */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Cluster Status</CardTitle>
@@ -174,7 +174,7 @@ export function Dashboard() {
         </div>
 
         {/* Charts Row 1 */}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
           {/* Bucket Usage Chart */}
           <Card>
             <CardHeader>
@@ -217,9 +217,9 @@ export function Dashboard() {
               {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
                 metrics.usageByBucket.map((bucket) => (
                   <div key={bucket.bucketName} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-sm flex-wrap gap-2">
                       <span className="font-medium">{bucket.bucketName}</span>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                         <span className="text-muted-foreground">
                           {bucket.objectCount.toLocaleString()} objects
                         </span>
@@ -255,22 +255,22 @@ export function Dashboard() {
               {buckets.slice(0, 5).map((bucket) => (
                 <div
                   key={bucket.name}
-                  className="flex items-center justify-between py-3 border-b last:border-0"
+                  className="flex items-center justify-between py-3 border-b last:border-0 gap-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0">
                       <Database className="h-5 w-5 text-primary" />
                     </div>
-                    <div>
-                      <p className="font-medium">{bucket.name}</p>
-                      <p className="text-sm text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{bucket.name}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Created {new Date(bucket.creationDate).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">{bucket.objectCount?.toLocaleString()} objects</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-medium text-sm sm:text-base">{bucket.objectCount?.toLocaleString()} objects</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       {bucket.size ? formatBytes(bucket.size) : '---'}
                     </p>
                   </div>

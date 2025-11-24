@@ -67,7 +67,10 @@ export const objectsApi = {
 
     // Filter mock objects by prefix
     if (!_prefix) {
-      return mockObjectsFlat.filter(obj => !obj.key.includes('/'));
+      return mockObjectsFlat.filter(obj => {
+        // Include root-level files (no slash) and root-level folders (single slash at end)
+        return !obj.key.includes('/') || (obj.key.endsWith('/') && !obj.key.slice(0, -1).includes('/'));
+      });
     }
 
     // Get all objects with this prefix, but only direct children

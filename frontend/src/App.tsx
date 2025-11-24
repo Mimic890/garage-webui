@@ -4,6 +4,7 @@ import { Layout } from '@/components/layout/layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Buckets } from '@/pages/Buckets';
 import { AccessControl } from '@/pages/AccessControl';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      <Toaster richColors position="bottom-right" />
     </ThemeProvider>
   );
 }

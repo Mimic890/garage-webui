@@ -8,13 +8,13 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b bg-background">
-      <div className="flex h-16 items-center gap-4 px-6">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">{title}</h1>
+    <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'hsl(var(--background))' }}>
+      <div className="flex h-16 items-center gap-2 sm:gap-4 px-4 sm:px-6 md:pl-6">
+        <div className="flex-1 min-w-0 md:ml-0 ml-12">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold truncate">{title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative w-64">
+          <div className="relative hidden sm:block w-32 md:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"

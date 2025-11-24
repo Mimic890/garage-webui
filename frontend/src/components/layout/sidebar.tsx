@@ -42,11 +42,23 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
 
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-card">
+    <div
+      className={cn(
+        'flex h-full w-64 flex-col border-r transition-transform duration-300 ease-in-out md:translate-x-0',
+        'fixed md:static z-50',
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      )}
+      style={{ backgroundColor: 'hsl(var(--background))' }}
+    >
       <div className="flex h-16 items-center border-b px-6">
         <img src="/garage.png" alt="Garage UI Logo" className="h-8 w-8 mr-2" />
         <span className="text-lg font-semibold">Garage UI</span>
@@ -60,6 +72,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               to={item.href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive

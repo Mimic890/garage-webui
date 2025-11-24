@@ -42,6 +42,7 @@ import {
   ShieldX,
   Copy,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function AccessControl() {
   const [keys, setKeys] = useState<AccessKey[]>([]);
@@ -74,46 +75,74 @@ export function AccessControl() {
   }, [searchQuery, keys]);
 
   const handleCreateKey = async () => {
-    if (!newKeyName) return;
+    if (!newKeyName) {
+      toast.error('Please enter a key name');
+      return;
+    }
 
-    const permissions: Permission[] = [
-      {
-        resource: newKeyResource,
-        actions: newKeyActions,
-        effect: 'Allow',
-      },
-    ];
+    if (newKeyActions.length === 0) {
+      toast.error('Please select at least one action');
+      return;
+    }
 
-    await accessApi.createKey(newKeyName, permissions);
-    setCreateDialogOpen(false);
-    setNewKeyName('');
-    setNewKeyResource('*');
-    setNewKeyActions(['GetObject']);
+    try {
+      const permissions: Permission[] = [
+        {
+          resource: newKeyResource,
+          actions: newKeyActions,
+          effect: 'Allow',
+        },
+      ];
 
-    // Refresh keys list
-    const data = await accessApi.listKeys();
-    setKeys(data);
+      await accessApi.createKey(newKeyName, permissions);
+      setCreateDialogOpen(false);
+      setNewKeyName('');
+      setNewKeyResource('*');
+      setNewKeyActions(['GetObject']);
+
+      // Refresh keys list
+      const data = await accessApi.listKeys();
+      setKeys(data);
+      toast.success(`API Key "${newKeyName}" created successfully`);
+    } catch (error) {
+      toast.error('Failed to create API key. Please try again.');
+      console.error('Create key error:', error);
+    }
   };
 
   const handleDeleteKey = async () => {
     if (!selectedKey) return;
 
-    await accessApi.deleteKey(selectedKey.accessKeyId);
-    setDeleteDialogOpen(false);
-    setSelectedKey(null);
+    try {
+      await accessApi.deleteKey(selectedKey.accessKeyId);
+      const keyName = selectedKey.name;
+      setDeleteDialogOpen(false);
+      setSelectedKey(null);
 
-    // Refresh keys list
-    const data = await accessApi.listKeys();
-    setKeys(data);
+      // Refresh keys list
+      const data = await accessApi.listKeys();
+      setKeys(data);
+      toast.success(`API Key "${keyName}" deleted successfully`);
+    } catch (error) {
+      toast.error('Failed to delete API key. Please try again.');
+      console.error('Delete key error:', error);
+    }
   };
 
   const handleToggleKeyStatus = async (key: AccessKey) => {
     const newStatus = key.status === 'active' ? 'inactive' : 'active';
-    await accessApi.updateKey(key.accessKeyId, { status: newStatus });
 
-    // Refresh keys list
-    const data = await accessApi.listKeys();
-    setKeys(data);
+    try {
+      await accessApi.updateKey(key.accessKeyId, { status: newStatus });
+
+      // Refresh keys list
+      const data = await accessApi.listKeys();
+      setKeys(data);
+      toast.success(`API Key "${key.name}" ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      toast.error('Failed to update API key status. Please try again.');
+      console.error('Toggle key status error:', error);
+    }
   };
 
   const availableActions = [
@@ -131,16 +160,16 @@ export function AccessControl() {
       <Header
         title="Access Control"
       />
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <Tabs defaultValue="keys">
-          <TabsList>
-            <TabsTrigger value="keys">API Keys</TabsTrigger>
-            <TabsTrigger value="policies">Bucket Policies</TabsTrigger>
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="keys" className="flex-1 sm:flex-initial">API Keys</TabsTrigger>
+            <TabsTrigger value="policies" className="flex-1 sm:flex-initial">Bucket Policies</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="keys" className="space-y-6 mt-6">
+          <TabsContent value="keys" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
             {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Keys</CardTitle>
@@ -177,8 +206,8 @@ export function AccessControl() {
             </div>
 
             {/* Toolbar */}
-            <div className="flex items-center justify-between">
-              <div className="relative w-80">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-full sm:max-w-xs">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search keys..."
@@ -187,23 +216,23 @@ export function AccessControl() {
                   className="pl-8"
                 />
               </div>
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button onClick={() => setCreateDialogOpen(true)} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
                 Create Key
               </Button>
             </div>
 
             {/* Keys Table */}
-            <div className="border rounded-lg">
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Access Key ID</TableHead>
+                    <TableHead className="hidden sm:table-cell">Access Key ID</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Last Used</TableHead>
-                    <TableHead>Permissions</TableHead>
+                    <TableHead className="hidden md:table-cell">Created</TableHead>
+                    <TableHead className="hidden lg:table-cell">Last Used</TableHead>
+                    <TableHead className="hidden md:table-cell">Permissions</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -217,17 +246,20 @@ export function AccessControl() {
                   ) : (
                     filteredKeys.map((key) => (
                       <TableRow key={key.accessKeyId}>
-                        <TableCell className="font-medium">{key.name}</TableCell>
-                        <TableCell>
+                        <TableCell className="font-medium truncate max-w-[150px]">{key.name}</TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <div className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-2 py-1 rounded">
+                            <code className="text-xs bg-muted px-2 py-1 rounded truncate max-w-[150px] block">
                               {key.accessKeyId}
                             </code>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
-                              onClick={() => navigator.clipboard.writeText(key.accessKeyId)}
+                              className="h-6 w-6 flex-shrink-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(key.accessKeyId);
+                                toast.success('Access Key ID copied to clipboard');
+                              }}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
@@ -238,11 +270,11 @@ export function AccessControl() {
                             {key.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatDate(key.createdAt)}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">{formatDate(key.createdAt)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           {key.lastUsed ? formatDate(key.lastUsed) : 'Never'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {key.permissions.slice(0, 2).map((perm, idx) => (
                               <Badge key={idx} variant="outline" className="text-xs">
@@ -265,18 +297,18 @@ export function AccessControl() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem>
-                                <Edit className="mr-2 h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleToggleKeyStatus(key)}>
                                 {key.status === 'active' ? (
                                   <>
-                                    <ShieldX className="mr-2 h-4 w-4" />
+                                    <ShieldX className="h-4 w-4" />
                                     Deactivate
                                   </>
                                 ) : (
                                   <>
-                                    <ShieldCheck className="mr-2 h-4 w-4" />
+                                    <ShieldCheck className="h-4 w-4" />
                                     Activate
                                   </>
                                 )}
@@ -352,7 +384,7 @@ export function AccessControl() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Actions</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {availableActions.map((action) => (
                   <label key={action} className="flex items-center gap-2 text-sm">
                     <input
