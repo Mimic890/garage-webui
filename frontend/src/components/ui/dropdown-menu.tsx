@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 interface DropdownMenuContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  triggerRef: React.RefObject<HTMLButtonElement>;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 const DropdownMenuContext = React.createContext<DropdownMenuContextValue | undefined>(undefined);
@@ -58,7 +58,7 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 }
 
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, children, align = 'start', ...props }, _ref) => {
+  ({ className, children, align = 'start', ...props }) => {
     const { open, setOpen, triggerRef } = useDropdownMenu();
     const contentRef = React.useRef<HTMLDivElement>(null);
 

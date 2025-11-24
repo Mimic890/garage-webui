@@ -43,7 +43,7 @@ dist-ssr
 
 # Editor directories and files
 .vscode/*
-../.idea
+.idea
 .DS_Store
 *.suo
 *.ntvs*

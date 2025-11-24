@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/layout/header';
-import { garageApi, analyticsApi, bucketsApi } from '@/lib/api';
+import { garageApi, bucketsApi } from '@/lib/api';
 import { formatBytes } from '@/lib/utils';
 import type { GarageMetrics, Bucket, ClusterHealth } from '@/types';
 import { Database, FolderOpen, HardDrive, Activity, Server, Zap, AlertCircle } from 'lucide-react';
@@ -12,11 +12,11 @@ export function Dashboard() {
   const [metrics, setMetrics] = useState<GarageMetrics | null>(null);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [clusterHealth, setClusterHealth] = useState<ClusterHealth | null>(null);
-  const [loading, setLoading] = useState(true);
+  // const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
+      // setLoading(true);
       const [garageMetrics, bucketsData, health] = await Promise.all([
         garageApi.getFullMetrics(),
         bucketsApi.list(),
@@ -25,7 +25,7 @@ export function Dashboard() {
       setMetrics(garageMetrics);
       setBuckets(bucketsData);
       setClusterHealth(health);
-      setLoading(false);
+      // setLoading(false);
     };
 
     fetchData();
