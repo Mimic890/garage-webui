@@ -1,0 +1,317 @@
+import axios from 'axios';
+import {toast} from 'sonner';
+import type {
+  AccessKey,
+  Bucket,
+  BucketDetails,
+  ClusterHealth,
+  ClusterStatistics,
+  ClusterStatus,
+  GarageMetrics,
+  MultiNodeResponse,
+  MultiNodeStatisticsResponse,
+  ObjectListResponse,
+  ObjectMetadata,
+  S3Object,
+  StorageMetrics,
+} from '@/types';
+
+// Configure axios instance with base URL
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor for authentication
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth-token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    // If response has success=false in data, treat it as an error
+    if (response.data && response.data.success === false && response.data.error) {
+      const error = response.data.error;
+      const errorMessage = error.message || 'An error occurred';
+      const errorCode = error.code || 'UNKNOWN_ERROR';
+
+      // Display toast with error details
+      toast.error(errorMessage, {
+        description: `Error Code: ${errorCode}`,
+      });
+
+      // Reject the promise so it's treated as an error
+      return Promise.reject(new Error(errorMessage));
+    }
+    return response;
+  },
+  (error) => {
+    // Handle axios errors
+    if (error.response) {
+      // Server responded with error status
+      const data = error.response.data;
+
+      if (data && data.error) {
+        const errorMessage = data.error.message || 'An error occurred';
+        const errorCode = data.error.code || 'UNKNOWN_ERROR';
+
+        toast.error(errorMessage, {
+          description: `Error Code: ${errorCode}`,
+        });
+      } else {
+        // Generic HTTP error
+        toast.error(`Request failed: ${error.response.status}`, {
+          description: error.response.statusText || 'Unknown error',
+        });
+      }
+    } else if (error.request) {
+      // Request made but no response received
+      toast.error('Network Error', {
+        description: 'Unable to reach the server. Please check your connection.',
+      });
+    } else {
+      // Something else happened
+      toast.error('Error', {
+        description: error.message || 'An unexpected error occurred',
+      });
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Bucket API
+export const bucketsApi = {
+  list: async (): Promise<Bucket[]> => {
+    const response = await api.get('/v1/buckets');
+    return response.data.data.buckets || [];
+  },
+
+  get: async (name: string): Promise<BucketDetails> => {
+    const response = await api.get(`/v1/buckets/${name}`);
+    return response.data.data;
+  },
+
+  create: async (bucketName: string, bucketRegion?: string): Promise<void> => {
+    await api.post('/v1/buckets', { name: bucketName, region: bucketRegion });
+  },
+
+  delete: async (name: string): Promise<void> => {
+    await api.delete(`/v1/buckets/${name}`);
+  },
+
+  grantPermission: async (
+    bucketName: string,
+    accessKeyId: string,
+    permissions: { read: boolean; write: boolean; owner: boolean }
+  ): Promise<void> => {
+    await api.post(`/v1/buckets/${bucketName}/permissions`, {
+      accessKeyId,
+      permissions,
+    });
+  },
+
+  updateSettings: async (name: string, settings: Partial<BucketDetails>): Promise<void> => {
+    // TODO: Implement when backend endpoint is ready
+    await api.patch(`/v1/buckets/${name}/settings`, settings);
+  },
+};
+
+// Objects API
+export const objectsApi = {
+  list: async (bucket: string, prefix?: string, maxKeys?: number, continuationToken?: string): Promise<ObjectListResponse> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any = {};
+    if (prefix) params.prefix = prefix;
+    if (maxKeys) params.max_keys = maxKeys;
+    if (continuationToken) params.continuation_token = continuationToken;
+
+    const response = await api.get(`/v1/buckets/${bucket}/objects`, { params });
+    const data = response.data.data;
+
+    // Combine objects and prefixes (folders)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const objects: S3Object[] = data.objects?.map((obj: any) => ({
+      key: obj.key,
+      size: obj.size,
+      lastModified: obj.last_modified,
+      etag: obj.etag,
+      storageClass: obj.storage_class,
+      isFolder: false,
+    })) || [];
+
+    const folders: S3Object[] = data.prefixes?.map((prefix: string) => ({
+      key: prefix,
+      size: 0,
+      lastModified: null,
+      isFolder: true,
+    })) || [];
+
+    return {
+      bucket: data.bucket,
+      objects: [...folders, ...objects],
+      prefixes: data.prefixes || [],
+      count: data.count,
+      isTruncated: data.is_truncated || false,
+      nextContinuationToken: data.next_continuation_token,
+    };
+  },
+
+  get: async (bucket: string, key: string): Promise<Blob> => {
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  getMetadata: async (bucket: string, key: string): Promise<ObjectMetadata> => {
+    const response = await api.head(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`);
+    return response.data.data;
+  },
+
+  upload: async (bucket: string, key: string, file: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('key', key);
+    await api.post(`/v1/buckets/${bucket}/objects`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  uploadStream: async (bucket: string, key: string, data: Blob | File, contentType?: string): Promise<void> => {
+    await api.put(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`, data, {
+      headers: { 'Content-Type': contentType || 'application/octet-stream' },
+    });
+  },
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  uploadMultiple: async (bucket: string, files: File[]): Promise<any> => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+    const response = await api.post(`/v1/buckets/${bucket}/objects/upload-multiple`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data;
+  },
+
+  delete: async (bucket: string, key: string): Promise<void> => {
+    await api.delete(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`);
+  },
+
+  deleteMultiple: async (bucket: string, keys: string[], prefix?: string): Promise<void> => {
+    const payload = { keys, ...(prefix && { prefix }) };
+    await api.post(`/v1/buckets/${bucket}/objects/delete-multiple`, payload);
+  },
+
+  getPresignedUrl: async (bucket: string, key: string, expiresIn: number = 3600): Promise<string> => {
+    const response = await api.post(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}/presign`, {}, {
+      params: { expires_in: expiresIn }
+    });
+    return response.data.data.url;
+  },
+};
+
+// Access Control API (Users/Keys)
+export const accessApi = {
+  listKeys: async (): Promise<AccessKey[]> => {
+    const response = await api.get('/v1/users');
+    return response.data.data.users || [];
+  },
+
+  getKey: async (accessKey: string): Promise<AccessKey> => {
+    const response = await api.get(`/v1/users/${accessKey}`);
+    return response.data.data;
+  },
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createKey: async (name: string, permissions?: any[]): Promise<AccessKey> => {
+    const response = await api.post('/v1/users', { name, permissions });
+    return response.data.data;
+  },
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updateKey: async (accessKey: string, updates: any): Promise<void> => {
+    await api.patch(`/v1/users/${accessKey}`, updates);
+  },
+
+  deleteKey: async (accessKey: string): Promise<void> => {
+    await api.delete(`/v1/users/${accessKey}`);
+  },
+};
+
+// Analytics API
+export const analyticsApi = {
+  getMetrics: async (): Promise<StorageMetrics> => {
+    const response = await api.get('/v1/monitoring/dashboard');
+    return response.data.data;
+  },
+};
+
+// Garage Cluster & Monitoring API
+export const garageApi = {
+  getClusterHealth: async (): Promise<ClusterHealth> => {
+    const response = await api.get('/v1/cluster/health');
+    return response.data.data;
+  },
+
+  getClusterStatus: async (): Promise<ClusterStatus> => {
+    const response = await api.get('/v1/cluster/status');
+    return response.data.data;
+  },
+
+  getClusterStatistics: async (): Promise<ClusterStatistics> => {
+    const response = await api.get('/v1/cluster/statistics');
+    return response.data.data;
+  },
+
+  getNodeInfo: async (nodeId: string = 'self'): Promise<MultiNodeResponse> => {
+    const response = await api.get(`/v1/cluster/nodes/${nodeId}`);
+    return response.data.data;
+  },
+
+  getNodeStatistics: async (nodeId: string): Promise<MultiNodeStatisticsResponse> => {
+    const response = await api.get(`/v1/cluster/nodes/${nodeId}/statistics`);
+    return response.data.data;
+  },
+
+  getFullMetrics: async (): Promise<GarageMetrics> => {
+    // Fetch all cluster-related metrics
+    const [health, statistics, storageMetrics] = await Promise.all([
+      garageApi.getClusterHealth(),
+      garageApi.getClusterStatistics(),
+      analyticsApi.getMetrics(),
+    ]);
+
+    return {
+      ...storageMetrics,
+      clusterHealth: health,
+      clusterStatistics: statistics,
+    };
+  },
+};
+
+// Monitoring API
+export const monitoringApi = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getMetrics: async (): Promise<any> => {
+    const response = await api.get('/v1/monitoring/metrics');
+    return response.data.data;
+  },
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  checkAdminHealth: async (): Promise<any> => {
+    const response = await api.get('/v1/monitoring/admin-health');
+    return response.data.data;
+  },
+};
+
+export default api;
