@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import type { ClusterHealth } from '@/types';
-import { grafanaColors, getTextColor, getGridColor, getTooltipStyle } from '@/lib/chart-colors';
+import {useEffect, useState} from 'react';
+import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
+import type {ClusterHealth} from '@/types';
+import {getGridColor, getTextColor, getTooltipStyle, grafanaColors} from '@/lib/chart-colors';
 
 interface ClusterHealthChartProps {
   data: ClusterHealth;
@@ -32,13 +32,13 @@ export function ClusterHealthChart({ data }: ClusterHealthChartProps) {
   const chartData = [
     {
       metric: 'Nodes',
-      healthy: data.healthyStorageNodes,
-      unhealthy: data.declaredStorageNodes - data.healthyStorageNodes,
+      healthy: data.storageNodesUp,
+      unhealthy: data.storageNodes - data.storageNodesUp,
     },
     {
       metric: 'Partitions',
-      healthy: data.healthyPartitions,
-      unhealthy: data.totalPartitions - data.healthyPartitions,
+      healthy: data.partitionsAllOk,
+      unhealthy: data.partitions - data.partitionsAllOk,
     },
     {
       metric: 'Connected',

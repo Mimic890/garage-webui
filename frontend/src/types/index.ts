@@ -160,10 +160,11 @@ export interface ClusterHealth {
   status: string;
   connectedNodes: number;
   knownNodes: number;
-  healthyStorageNodes: number;
-  declaredStorageNodes: number;
-  healthyPartitions: number;
-  totalPartitions: number;
+  storageNodes: number;
+  storageNodesUp: number;
+  partitions: number;
+  partitionsQuorum: number;
+  partitionsAllOk: number;
 }
 
 export interface ClusterStatistics {
@@ -171,6 +172,57 @@ export interface ClusterStatistics {
   uptime: number;
   freeform: string;
   [key: string]: any;
+}
+
+export interface ClusterStatus {
+  layoutVersion: number;
+  nodes: ClusterNode[];
+}
+
+export interface ClusterNode {
+  id: string;
+  isUp: boolean;
+  lastSeenSecsAgo?: number;
+  hostname?: string;
+  addr?: string;
+  garageVersion?: string;
+  role?: NodeRole;
+  draining: boolean;
+  dataPartition?: FreeSpaceInfo;
+  metadataPartition?: FreeSpaceInfo;
+}
+
+export interface NodeRole {
+  zone: string;
+  capacity?: number;
+  tags: string[];
+}
+
+export interface FreeSpaceInfo {
+  available: number;
+  total: number;
+}
+
+export interface LocalNodeInfo {
+  nodeId: string;
+  garageVersion: string;
+  rustVersion: string;
+  dbEngine: string;
+  garageFeatures?: string[];
+}
+
+export interface MultiNodeResponse {
+  success: Record<string, LocalNodeInfo>;
+  error: Record<string, string>;
+}
+
+export interface NodeStatistics {
+  freeform: string;
+}
+
+export interface MultiNodeStatisticsResponse {
+  success: Record<string, NodeStatistics>;
+  error: Record<string, string>;
 }
 
 export interface NodeInfo {

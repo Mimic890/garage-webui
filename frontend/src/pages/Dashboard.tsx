@@ -1,11 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Header } from '@/components/layout/header';
-import { formatBytes } from '@/lib/utils';
-import { Database, FolderOpen, HardDrive, Activity, Server, Zap, AlertCircle } from 'lucide-react';
-import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
-import { RequestMetricsChart } from '@/components/charts/RequestMetricsChart';
-import { useDashboardData } from '@/hooks/useApi';
-import type { ClusterHealth } from '@/types';
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import {Header} from '@/components/layout/header';
+import {formatBytes} from '@/lib/utils';
+import {AlertCircle, Database, FolderOpen, HardDrive, Server, Zap} from 'lucide-react';
+import {BucketUsageChart} from '@/components/charts/BucketUsageChart';
+import {useDashboardData} from '@/hooks/useApi';
+import type {ClusterHealth} from '@/types';
 
 export function Dashboard() {
   const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading } = useDashboardData();
@@ -17,15 +16,15 @@ export function Dashboard() {
   const getHealthStatus = (health: ClusterHealth | null) => {
     if (!health) return { color: 'text-gray-500', label: 'Unknown', icon: AlertCircle };
     if (
-      health.healthyStorageNodes === health.declaredStorageNodes &&
-      health.healthyPartitions === health.totalPartitions &&
+      health.storageNodesUp === health.storageNodes &&
+      health.partitionsAllOk === health.partitions &&
       health.connectedNodes === health.knownNodes
     ) {
       return { color: 'text-green-500', label: 'Healthy', icon: Zap };
     }
     if (
-      health.healthyStorageNodes > 0 &&
-      health.healthyPartitions > 0
+      health.storageNodesUp > 0 &&
+      health.partitionsQuorum > 0
     ) {
       return { color: 'text-yellow-500', label: 'Degraded', icon: AlertCircle };
     }
@@ -53,7 +52,7 @@ export function Dashboard() {
       <Header title="Dashboard" />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Top Stats Grid */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Storage</CardTitle>
@@ -96,28 +95,6 @@ export function Dashboard() {
               </p>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Requests (24h)</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics
-                  ? (
-                      metrics.requestMetrics.getRequests +
-                      metrics.requestMetrics.putRequests +
-                      metrics.requestMetrics.deleteRequests +
-                      metrics.requestMetrics.listRequests
-                    ).toLocaleString()
-                  : null}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                GET, PUT, DELETE, LIST
-              </p>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Cluster Status */}
@@ -146,7 +123,7 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {clusterHealth?.healthyStorageNodes || 0}/{clusterHealth?.declaredStorageNodes || 0}
+                {clusterHealth?.storageNodesUp || 0}/{clusterHealth?.storageNodes || 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 Healthy storage nodes
@@ -161,7 +138,7 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {clusterHealth?.healthyPartitions || 0}/{clusterHealth?.totalPartitions || 0}
+                {clusterHealth?.partitionsAllOk || 0}/{clusterHealth?.partitions || 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 Healthy partitions
@@ -187,59 +164,44 @@ export function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Request Metrics Chart */}
+          {/* Bucket Details Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Request Metrics</CardTitle>
-              <CardDescription>API request distribution (24h)</CardDescription>
+              <CardTitle>Storage Usage by Bucket (Table)</CardTitle>
+              <CardDescription>Detailed breakdown of storage across all buckets</CardDescription>
             </CardHeader>
             <CardContent>
-              {metrics?.requestMetrics ? (
-                <RequestMetricsChart data={metrics.requestMetrics} />
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">No data available</div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Bucket Details Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Storage Usage by Bucket (Table)</CardTitle>
-            <CardDescription>Detailed breakdown of storage across all buckets</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
-                metrics.usageByBucket.map((bucket) => (
-                  <div key={bucket.bucketName} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm flex-wrap gap-2">
-                      <span className="font-medium">{bucket.bucketName}</span>
-                      <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
+              <div className="space-y-4">
+                {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
+                    metrics.usageByBucket.map((bucket) => (
+                        <div key={bucket.bucketName} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm flex-wrap gap-2">
+                            <span className="font-medium">{bucket.bucketName}</span>
+                            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                         <span className="text-muted-foreground">
                           {bucket.objectCount.toLocaleString()} objects
                         </span>
-                        <span className="font-medium">{formatBytes(bucket.size)}</span>
-                        <span className="text-muted-foreground w-12 text-right">
+                              <span className="font-medium">{formatBytes(bucket.size)}</span>
+                              <span className="text-muted-foreground w-12 text-right">
                           {bucket.percentage.toFixed(1)}%
                         </span>
-                      </div>
-                    </div>
-                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${bucket.percentage}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">No buckets available</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                            </div>
+                          </div>
+                          <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                            <div
+                                className="h-full bg-primary transition-all"
+                                style={{ width: `${bucket.percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                    ))
+                ) : (
+                    <div className="text-center py-8 text-muted-foreground">No buckets available</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Recent Buckets */}
         <Card>

@@ -280,7 +280,7 @@ export function ObjectsTable({
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">
-                {obj.isFolder ? 'Folder' : getFileType(obj.key.replace(currentPath, ''))}
+                {obj.isFolder ? 'Directory' : getFileType(obj.key.replace(currentPath, ''))}
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 {obj.storageClass && (

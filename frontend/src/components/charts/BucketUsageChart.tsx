@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
-import type { BucketUsage } from '@/types';
-import { formatBytes } from '@/lib/utils';
-import { chartColorPalette, getTextColor, getTooltipStyle } from '@/lib/chart-colors';
+import {useEffect, useState} from 'react';
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
+import type {BucketUsage} from '@/types';
+import {formatBytes} from '@/lib/utils';
+import {chartColorPalette, getTextColor, getTooltipStyle} from '@/lib/chart-colors';
 
 interface BucketUsageChartProps {
   data: BucketUsage[];

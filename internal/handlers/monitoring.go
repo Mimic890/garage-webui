@@ -139,13 +139,6 @@ func (h *MonitoringHandler) GetDashboardMetrics(c fiber.Ctx) error {
 		ObjectCount:   totalObjects,
 		BucketCount:   len(buckets),
 		UsageByBucket: usageByBucket,
-		RequestMetrics: models.RequestMetrics{
-			GetRequests:    0,
-			PutRequests:    0,
-			DeleteRequests: 0,
-			ListRequests:   0,
-			Period:         "last-24h",
-		},
 	}
 
 	return c.JSON(models.SuccessResponse(dashboardMetrics))

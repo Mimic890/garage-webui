@@ -1,6 +1,6 @@
 import {Link, useLocation} from 'react-router-dom';
 import {cn} from '@/lib/utils';
-import {Database, Key, LayoutDashboard,} from 'lucide-react';
+import {Database, Key, LayoutDashboard, Server} from 'lucide-react';
 
 interface NavItem {
   title: string;
@@ -18,6 +18,11 @@ const navItems: NavItem[] = [
     title: 'Buckets',
     href: '/buckets',
     icon: Database,
+  },
+  {
+    title: 'Cluster',
+    href: '/cluster',
+    icon: Server,
   },
   {
     title: 'Access Control',
@@ -71,17 +76,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           );
         })}
       </nav>
-      <div className="border-t p-4">
-        <div className="flex items-center gap-3 rounded-lg bg-muted px-3 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-            AD
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-medium truncate">Admin User</p>
-            <p className="text-xs text-muted-foreground truncate">admin@garage.local</p>
-          </div>
-        </div>
-      </div>
+      {/*<div className="border-t p-4">*/}
+      {/*  <div className="flex items-center gap-3 rounded-lg bg-muted px-3 py-2">*/}
+      {/*    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">*/}
+      {/*      AD*/}
+      {/*    </div>*/}
+      {/*    <div className="flex-1 overflow-hidden">*/}
+      {/*      <p className="text-sm font-medium truncate">Admin User</p>*/}
+      {/*      <p className="text-xs text-muted-foreground truncate">admin@garage.local</p>*/}
+      {/*    </div>*/}
+      {/*  </div>*/}
+      {/*</div>*/}
     </div>
   );
 }

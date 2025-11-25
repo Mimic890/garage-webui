@@ -4,11 +4,10 @@ import "time"
 
 // DashboardMetrics represents aggregated metrics for the dashboard
 type DashboardMetrics struct {
-	TotalSize      int64            `json:"totalSize"`
-	ObjectCount    int64            `json:"objectCount"`
-	BucketCount    int              `json:"bucketCount"`
-	UsageByBucket  []BucketUsage    `json:"usageByBucket"`
-	RequestMetrics RequestMetrics   `json:"requestMetrics"`
+	TotalSize     int64         `json:"totalSize"`
+	ObjectCount   int64         `json:"objectCount"`
+	BucketCount   int           `json:"bucketCount"`
+	UsageByBucket []BucketUsage `json:"usageByBucket"`
 }
 
 // BucketUsage represents storage usage for a single bucket
@@ -17,15 +16,6 @@ type BucketUsage struct {
 	Size        int64   `json:"size"`
 	ObjectCount int64   `json:"objectCount"`
 	Percentage  float64 `json:"percentage"`
-}
-
-// RequestMetrics represents API request statistics
-type RequestMetrics struct {
-	GetRequests    int64  `json:"getRequests"`
-	PutRequests    int64  `json:"putRequests"`
-	DeleteRequests int64  `json:"deleteRequests"`
-	ListRequests   int64  `json:"listRequests"`
-	Period         string `json:"period"`
 }
 
 // APIResponse is the standard response structure for all API endpoints

@@ -6,8 +6,10 @@ import type {
   BucketDetails,
   ClusterHealth,
   ClusterStatistics,
+  ClusterStatus,
   GarageMetrics,
-  NodeInfo,
+  MultiNodeResponse,
+  MultiNodeStatisticsResponse,
   ObjectListResponse,
   ObjectMetadata,
   S3Object,
@@ -261,8 +263,7 @@ export const garageApi = {
     return response.data.data;
   },
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getClusterStatus: async (): Promise<any> => {
+  getClusterStatus: async (): Promise<ClusterStatus> => {
     const response = await api.get('/v1/cluster/status');
     return response.data.data;
   },
@@ -272,23 +273,21 @@ export const garageApi = {
     return response.data.data;
   },
 
-  getNodeInfo: async (nodeId: string = 'self'): Promise<NodeInfo> => {
+  getNodeInfo: async (nodeId: string = 'self'): Promise<MultiNodeResponse> => {
     const response = await api.get(`/v1/cluster/nodes/${nodeId}`);
     return response.data.data;
   },
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getNodeStatistics: async (nodeId: string): Promise<any> => {
+  getNodeStatistics: async (nodeId: string): Promise<MultiNodeStatisticsResponse> => {
     const response = await api.get(`/v1/cluster/nodes/${nodeId}/statistics`);
     return response.data.data;
   },
 
   getFullMetrics: async (): Promise<GarageMetrics> => {
     // Fetch all cluster-related metrics
-    const [health, statistics, nodeInfo, storageMetrics] = await Promise.all([
+    const [health, statistics, storageMetrics] = await Promise.all([
       garageApi.getClusterHealth(),
       garageApi.getClusterStatistics(),
-      garageApi.getNodeInfo(),
       analyticsApi.getMetrics(),
     ]);
 
@@ -296,7 +295,6 @@ export const garageApi = {
       ...storageMetrics,
       clusterHealth: health,
       clusterStatistics: statistics,
-      nodeInfo: nodeInfo,
     };
   },
 };
