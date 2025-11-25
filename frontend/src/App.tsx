@@ -1,25 +1,35 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from '@/components/theme-provider';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider, useTheme } from '@/components/theme-provider';
 import { Layout } from '@/components/layout/layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Buckets } from '@/pages/Buckets';
 import { AccessControl } from '@/pages/AccessControl';
 import { Toaster } from 'sonner';
+import { queryClient } from '@/lib/query-client';
+
+function ThemedToaster() {
+  const { theme } = useTheme();
+
+  return <Toaster richColors position="bottom-right" theme={theme} />;
+}
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="garage-ui-theme">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="buckets" element={<Buckets />} />
-            <Route path="access" element={<AccessControl />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-      <Toaster richColors position="bottom-right" />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system" storageKey="Noooste/garage-ui-theme">
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="buckets" element={<Buckets />} />
+              <Route path="access" element={<AccessControl />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+        <ThemedToaster />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

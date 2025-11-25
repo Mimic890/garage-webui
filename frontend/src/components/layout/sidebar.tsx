@@ -1,12 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import {
-  LayoutDashboard,
-  Database,
-  Key,
-  BarChart3,
-  Settings,
-} from 'lucide-react';
+import {Link, useLocation} from 'react-router-dom';
+import {cn} from '@/lib/utils';
+import {Database, Key, LayoutDashboard,} from 'lucide-react';
 
 interface NavItem {
   title: string;
@@ -30,16 +24,6 @@ const navItems: NavItem[] = [
     href: '/access',
     icon: Key,
   },
-  {
-    title: 'Analytics',
-    href: '/analytics',
-    icon: BarChart3,
-  },
-  {
-    title: 'Settings',
-    href: '/settings',
-    icon: Settings,
-  },
 ];
 
 interface SidebarProps {
@@ -57,7 +41,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         'fixed md:static z-50',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}
-      style={{ backgroundColor: 'hsl(var(--background))' }}
+      style={{ backgroundColor: 'var(--background)' }}
     >
       <div className="flex h-16 items-center border-b px-6">
         <img src="/garage.png" alt="Garage UI Logo" className="h-8 w-8 mr-2" />
@@ -76,9 +60,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-primary shadow-sm'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               )}
+              style={isActive ? { backgroundColor: 'var(--primary)', color: '#000000' } : undefined}
             >
               <Icon className="h-5 w-5" />
               {item.title}

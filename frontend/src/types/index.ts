@@ -37,6 +37,15 @@ export interface S3Object {
   isFolder?: boolean;
 }
 
+export interface ObjectListResponse {
+  bucket: string;
+  objects: S3Object[];
+  prefixes: string[];
+  count: number;
+  isTruncated: boolean;
+  nextContinuationToken?: string;
+}
+
 export interface ObjectMetadata {
   key: string;
   size: number;
@@ -54,7 +63,16 @@ export interface AccessKey {
   createdAt: string;
   lastUsed?: string;
   status: 'active' | 'inactive';
-  permissions: Permission[];
+  permissions: BucketPermission[];
+  expiration?: string;
+}
+
+export interface BucketPermission {
+  bucketId: string;
+  bucketName: string;
+  read: boolean;
+  write: boolean;
+  owner: boolean;
 }
 
 export interface Permission {

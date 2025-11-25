@@ -4,6 +4,7 @@ import (
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+
 	"github.com/gofiber/fiber/v3"
 )
 

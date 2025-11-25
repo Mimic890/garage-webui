@@ -1,46 +1,123 @@
 package handlers
 
 import (
+	"time"
+
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/services"
+
 	"github.com/gofiber/fiber/v3"
 )
 
-// UserHandler handles user/key management operations
-// Note: Garage user management typically requires administrative API access
-// This is a placeholder implementation that you'll need to extend based on
-// your Garage setup and how you manage keys/users
+// UserHandler handles user/key management operations using Garage Admin API
 type UserHandler struct {
-	// In a real implementation, you might have a Garage admin client here
-	// or interact with Garage's administrative API
+	adminService *services.GarageAdminService
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler() *UserHandler {
-	return &UserHandler{}
+func NewUserHandler(adminService *services.GarageAdminService) *UserHandler {
+	return &UserHandler{
+		adminService: adminService,
+	}
 }
 
-// ListUsers returns all users/keys
-// GET /api/v1/users
+// ListUsers lists all users/access keys
+//
+//	@Summary		List all users
+//	@Description	Retrieves a list of all users/access keys
+//	@Tags			Users
+//	@Produce		json
+//	@Success		200	{object}	models.APIResponse{data=models.UserListResponse}	"List of users retrieved successfully"
+//	@Failure		500	{object}	models.APIResponse{error=models.APIError}			"Failed to list users"
+//	@Router			/api/v1/users [get]
 func (h *UserHandler) ListUsers(c fiber.Ctx) error {
-	// NOTE: This is a placeholder implementation
-	// Garage manages keys/users through its administrative RPC interface
-	// You'll need to implement this based on your Garage setup
+	ctx := c.Context()
 
-	// For now, return a not implemented response
-	return c.Status(fiber.StatusNotImplemented).JSON(
-		models.ErrorResponse(models.ErrCodeInternalError,
-			"User management not yet implemented. Requires Garage Admin API integration."),
-	)
+	keys, err := h.adminService.ListKeys(ctx)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to list users: "+err.Error()),
+		)
+	}
+
+	// Convert to UserInfo format
+	users := make([]models.UserInfo, 0, len(keys))
+	for _, key := range keys {
+		// Get full key info to retrieve bucket permissions
+		keyInfo, err := h.adminService.GetKeyInfo(ctx, key.ID, false)
+		if err != nil {
+			// If we can't get full info, skip this key or use basic info
+			continue
+		}
+
+		// Convert bucket permissions to frontend format
+		bucketPermissions := convertBucketPermissionsToBucketPermissions(keyInfo.Buckets)
+
+		// Determine status based on expiration
+		status := "active"
+		if keyInfo.Expired {
+			status = "inactive"
+		}
+
+		users = append(users, models.UserInfo{
+			AccessKeyID:       keyInfo.AccessKeyID,
+			Name:              keyInfo.Name,
+			CreatedAt:         keyInfo.Created,
+			Status:            status,
+			BucketPermissions: bucketPermissions,
+			Expiration:        keyInfo.Expiration,
+			Expired:           keyInfo.Expired,
+		})
+	}
+
+	return c.JSON(models.SuccessResponse(models.UserListResponse{
+		Users: users,
+		Count: len(users),
+	}))
 }
 
-// CreateUser creates a new user/key pair
-// POST /api/v1/users
+// convertBucketPermissionsToBucketPermissions converts Garage bucket permissions to frontend BucketPermission format
+func convertBucketPermissionsToBucketPermissions(buckets []models.KeyBucketInfo) []models.BucketPermission {
+	permissions := make([]models.BucketPermission, 0, len(buckets))
+
+	for _, bucket := range buckets {
+		// Get bucket name from aliases
+		var bucketName string
+		if len(bucket.GlobalAliases) > 0 {
+			bucketName = bucket.GlobalAliases[0]
+		} else if len(bucket.LocalAliases) > 0 {
+			bucketName = bucket.LocalAliases[0]
+		} else {
+			bucketName = bucket.ID
+		}
+
+		// Create bucket permission with simple read/write/owner flags
+		permissions = append(permissions, models.BucketPermission{
+			BucketID:   bucket.ID,
+			BucketName: bucketName,
+			Read:       bucket.Permissions.Read,
+			Write:      bucket.Permissions.Write,
+			Owner:      bucket.Permissions.Owner,
+		})
+	}
+
+	return permissions
+}
+
+// CreateUser creates a new user/access key
+//
+//	@Summary		Create a new user
+//	@Description	Creates a new user/access key with optional name
+//	@Tags			Users
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		models.CreateUserRequest					true	"User creation request"
+//	@Success		201		{object}	models.APIResponse{data=models.UserInfo}	"User created successfully"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}	"Invalid request body"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}	"Failed to create user"
+//	@Router			/api/v1/users [post]
 func (h *UserHandler) CreateUser(c fiber.Ctx) error {
-	// NOTE: This is a placeholder implementation
-	// To implement this, you need to:
-	// 1. Connect to Garage's admin RPC interface
-	// 2. Call the appropriate key creation endpoint
-	// 3. Return the generated access key and secret key
+	ctx := c.Context()
 
 	var req models.CreateUserRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -49,16 +126,57 @@ func (h *UserHandler) CreateUser(c fiber.Ctx) error {
 		)
 	}
 
-	return c.Status(fiber.StatusNotImplemented).JSON(
-		models.ErrorResponse(models.ErrCodeInternalError,
-			"User creation not yet implemented. Requires Garage Admin API integration."),
-	)
+	// Prepare create key request
+	createReq := models.CreateKeyRequest{}
+	if req.Name != "" {
+		createReq.Name = &req.Name
+	}
+
+	// Create the key
+	keyInfo, err := h.adminService.CreateKey(ctx, createReq)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create user: "+err.Error()),
+		)
+	}
+
+	// Convert bucket permissions to frontend format
+	bucketPermissions := convertBucketPermissionsToBucketPermissions(keyInfo.Buckets)
+
+	// Determine status
+	status := "active"
+	if keyInfo.Expired {
+		status = "inactive"
+	}
+
+	// Convert to UserInfo format
+	userInfo := models.UserInfo{
+		AccessKeyID:       keyInfo.AccessKeyID,
+		SecretKey:         keyInfo.SecretAccessKey,
+		Name:              keyInfo.Name,
+		CreatedAt:         keyInfo.Created,
+		Status:            status,
+		BucketPermissions: bucketPermissions,
+		Expiration:        keyInfo.Expiration,
+		Expired:           keyInfo.Expired,
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(models.SuccessResponse(userInfo))
 }
 
-// DeleteUser deletes a user/key
-// DELETE /api/v1/users/:access_key
+// DeleteUser deletes a user/access key
+//
+//	@Summary		Delete a user
+//	@Description	Deletes a specific user/access key
+//	@Tags			Users
+//	@Produce		json
+//	@Param			access_key	path		string										true	"Access key of the user to delete"
+//	@Success		200			{object}	models.APIResponse{data=map[string]interface{}}	"User deleted successfully"
+//	@Failure		400			{object}	models.APIResponse{error=models.APIError}			"Access key is required"
+//	@Failure		500			{object}	models.APIResponse{error=models.APIError}			"Failed to delete user"
+//	@Router			/api/v1/users/{access_key} [delete]
 func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
-	// NOTE: This is a placeholder implementation
+	ctx := c.Context()
 	accessKey := c.Params("access_key")
 
 	if accessKey == "" {
@@ -67,15 +185,33 @@ func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
 		)
 	}
 
-	return c.Status(fiber.StatusNotImplemented).JSON(
-		models.ErrorResponse(models.ErrCodeInternalError,
-			"User deletion not yet implemented. Requires Garage Admin API integration."),
-	)
+	// Delete the key
+	err := h.adminService.DeleteKey(ctx, accessKey)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to delete user: "+err.Error()),
+		)
+	}
+
+	return c.JSON(models.SuccessResponse(map[string]interface{}{
+		"access_key": accessKey,
+		"deleted":    true,
+	}))
 }
 
-// GetUser returns information about a specific user/key
-// GET /api/v1/users/:access_key
+// GetUser retrieves information about a specific user/access key
+//
+//	@Summary		Get user information
+//	@Description	Retrieves information about a specific user/access key
+//	@Tags			Users
+//	@Produce		json
+//	@Param			access_key	path		string										true	"Access key of the user to retrieve"
+//	@Success		200			{object}	models.APIResponse{data=models.UserInfo}	"User information retrieved successfully"
+//	@Failure		400			{object}	models.APIResponse{error=models.APIError}	"Access key is required"
+//	@Failure		500			{object}	models.APIResponse{error=models.APIError}	"Failed to get user info"
+//	@Router			/api/v1/users/{access_key} [get]
 func (h *UserHandler) GetUser(c fiber.Ctx) error {
+	ctx := c.Context()
 	accessKey := c.Params("access_key")
 
 	if accessKey == "" {
@@ -84,15 +220,52 @@ func (h *UserHandler) GetUser(c fiber.Ctx) error {
 		)
 	}
 
-	return c.Status(fiber.StatusNotImplemented).JSON(
-		models.ErrorResponse(models.ErrCodeInternalError,
-			"User info not yet implemented. Requires Garage Admin API integration."),
-	)
+	// Get key information (without secret key)
+	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, false)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get user info: "+err.Error()),
+		)
+	}
+
+	// Convert bucket permissions to frontend format
+	bucketPermissions := convertBucketPermissionsToBucketPermissions(keyInfo.Buckets)
+
+	// Determine status
+	status := "active"
+	if keyInfo.Expired {
+		status = "inactive"
+	}
+
+	// Convert to UserInfo format
+	userInfo := models.UserInfo{
+		AccessKeyID:       keyInfo.AccessKeyID,
+		Name:              keyInfo.Name,
+		CreatedAt:         keyInfo.Created,
+		Status:            status,
+		BucketPermissions: bucketPermissions,
+		Expiration:        keyInfo.Expiration,
+		Expired:           keyInfo.Expired,
+	}
+
+	return c.JSON(models.SuccessResponse(userInfo))
 }
 
 // UpdateUserPermissions updates user permissions
-// PATCH /api/v1/users/:access_key
+//
+//	@Summary		Update user permissions
+//	@Description	Updates the permissions and settings for a specific user/access key
+//	@Tags			Users
+//	@Accept			json
+//	@Produce		json
+//	@Param			access_key	path		string										true	"Access key of the user to update"
+//	@Param			request		body		models.UpdateUserRequest					true	"User update request with new permissions"
+//	@Success		200			{object}	models.APIResponse{data=models.UserInfo}	"User updated successfully"
+//	@Failure		400			{object}	models.APIResponse{error=models.APIError}	"Access key is required or invalid request body"
+//	@Failure		500			{object}	models.APIResponse{error=models.APIError}	"Failed to update user"
+//	@Router			/api/v1/users/{access_key} [patch]
 func (h *UserHandler) UpdateUserPermissions(c fiber.Ctx) error {
+	ctx := c.Context()
 	accessKey := c.Params("access_key")
 
 	if accessKey == "" {
@@ -108,56 +281,61 @@ func (h *UserHandler) UpdateUserPermissions(c fiber.Ctx) error {
 		)
 	}
 
-	return c.Status(fiber.StatusNotImplemented).JSON(
-		models.ErrorResponse(models.ErrCodeInternalError,
-			"User permission update not yet implemented. Requires Garage Admin API integration."),
-	)
-}
+	// Prepare update request
+	updateReq := models.UpdateKeyRequest{}
 
-/*
-IMPLEMENTATION NOTES FOR USER MANAGEMENT:
-
-Garage uses an administrative RPC interface for managing keys and buckets.
-To implement user management, you need to:
-
-1. Install garage-admin client or use HTTP RPC calls
-2. Connect to Garage's admin port (typically 3903)
-3. Implement the following operations:
-
-   - List keys: GET /v1/key
-   - Create key: POST /v1/key
-   - Get key info: GET /v1/key?id=<access_key>
-   - Delete key: DELETE /v1/key?id=<access_key>
-   - Update key: POST /v1/key?id=<access_key>
-
-Example using HTTP client:
-
-import (
-	"bytes"
-	"encoding/json"
-	"net/http"
-)
-
-type GarageAdminClient struct {
-	baseURL string
-	token   string
-}
-
-func (g *GarageAdminClient) ListKeys() ([]KeyInfo, error) {
-	req, _ := http.NewRequest("GET", g.baseURL+"/v1/key", nil)
-	req.Header.Set("Authorization", "Bearer "+g.token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
+	// Handle status change (activate/deactivate)
+	if req.Status != nil {
+		if *req.Status == "inactive" {
+			// Deactivate by setting expiration to the past
+			pastTime := time.Now().Add(-24 * time.Hour)
+			updateReq.Expiration = &pastTime
+			updateReq.NeverExpires = false
+		} else if *req.Status == "active" {
+			// Activate by removing expiration (set to never expire)
+			updateReq.NeverExpires = true
+		}
 	}
-	defer resp.Body.Close()
 
-	var keys []KeyInfo
-	json.NewDecoder(resp.Body).Decode(&keys)
-	return keys, nil
+	// Handle explicit expiration date setting
+	if req.Expiration != nil && *req.Expiration != "" {
+		expirationTime, err := time.Parse(time.RFC3339, *req.Expiration)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(
+				models.ErrorResponse(models.ErrCodeBadRequest, "Invalid expiration date format: "+err.Error()),
+			)
+		}
+		updateReq.Expiration = &expirationTime
+		updateReq.NeverExpires = false
+	}
+
+	// Update the key
+	keyInfo, err := h.adminService.UpdateKey(ctx, accessKey, updateReq)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update user: "+err.Error()),
+		)
+	}
+
+	// Convert bucket permissions to frontend format
+	bucketPermissions := convertBucketPermissionsToBucketPermissions(keyInfo.Buckets)
+
+	// Determine status
+	status := "active"
+	if keyInfo.Expired {
+		status = "inactive"
+	}
+
+	// Convert to UserInfo format
+	userInfo := models.UserInfo{
+		AccessKeyID:       keyInfo.AccessKeyID,
+		Name:              keyInfo.Name,
+		CreatedAt:         keyInfo.Created,
+		Status:            status,
+		BucketPermissions: bucketPermissions,
+		Expiration:        keyInfo.Expiration,
+		Expired:           keyInfo.Expired,
+	}
+
+	return c.JSON(models.SuccessResponse(userInfo))
 }
-
-For more information, see:
-https://garagehq.deuxfleurs.fr/documentation/reference-manual/admin-api/
-*/

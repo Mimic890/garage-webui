@@ -6,6 +6,12 @@ type CreateBucketRequest struct {
 	Region string `json:"region,omitempty"`
 }
 
+// GrantBucketPermissionRequest represents a request to grant permissions on a bucket
+type GrantBucketPermissionRequest struct {
+	AccessKeyID string              `json:"accessKeyId" validate:"required"`
+	Permissions BucketKeyPermission `json:"permissions" validate:"required"`
+}
+
 // DeleteBucketRequest represents a request to delete a bucket
 type DeleteBucketRequest struct {
 	Name string `json:"name" validate:"required"`
@@ -13,10 +19,10 @@ type DeleteBucketRequest struct {
 
 // ListObjectsRequest represents a request to list objects in a bucket
 type ListObjectsRequest struct {
-	Bucket     string `json:"bucket" validate:"required"`
-	Prefix     string `json:"prefix,omitempty"`
-	MaxKeys    int    `json:"max_keys,omitempty"`
-	Marker     string `json:"marker,omitempty"`
+	Bucket  string `json:"bucket" validate:"required"`
+	Prefix  string `json:"prefix,omitempty"`
+	MaxKeys int    `json:"max_keys,omitempty"`
+	Marker  string `json:"marker,omitempty"`
 }
 
 // UploadObjectRequest represents metadata for an object upload
@@ -51,6 +57,6 @@ type DeleteUserRequest struct {
 
 // UpdateUserRequest represents a request to update user permissions
 type UpdateUserRequest struct {
-	AccessKey   string   `json:"access_key" validate:"required"`
-	Permissions []string `json:"permissions,omitempty"`
+	Status     *string `json:"status,omitempty"`     // "active" or "inactive"
+	Expiration *string `json:"expiration,omitempty"` // ISO 8601 date string
 }

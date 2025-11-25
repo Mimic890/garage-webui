@@ -13,10 +13,50 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/routes"
 	"Noooste/garage-ui/internal/services"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
+
+//	@title			Garage UI API
+//	@version		0.1.0
+//	@description	REST API for managing Garage distributed object storage system
+//	@description	This API provides endpoints for managing buckets, objects, users, and cluster operations.
+//	@termsOfService	http://swagger.io/terms/
+
+//	@contact.name	API Support
+//	@contact.email	support@garage-ui.io
+
+//	@license.name	MIT
+//	@license.url	https://opensource.org/licenses/MIT
+
+//	@host		localhost:8080
+//	@BasePath	/
+//	@schemes	http https
+
+//	@tag.name			Health
+//	@tag.description	Health check endpoints
+
+//	@tag.name			Buckets
+//	@tag.description	Bucket management operations
+
+//	@tag.name			Objects
+//	@tag.description	Object storage and retrieval operations
+
+//	@tag.name			Users
+//	@tag.description	User and access key management
+
+//	@tag.name			Cluster
+//	@tag.description	Cluster status and node management
+
+//	@tag.name			Monitoring
+//	@tag.description	Monitoring and metrics endpoints
+
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Type "Bearer" followed by a space and JWT token.
 
 const version = "0.1.0"
 
@@ -35,8 +75,11 @@ func main() {
 	log.Printf("Starting Garage UI Backend v%s in %s mode", version, cfg.Server.Environment)
 
 	// Initialize services
+	log.Println("Initializing Garage Admin service...")
+	adminService := services.NewGarageAdminService(&cfg.Garage)
+
 	log.Println("Initializing S3 service...")
-	s3Service := services.NewS3Service(&cfg.Garage)
+	s3Service := services.NewS3Service(&cfg.Garage, adminService)
 
 	log.Printf("Initializing authentication service (mode: %s)...", cfg.Auth.Mode)
 	authService, err := auth.NewAuthService(&cfg.Auth)
@@ -46,16 +89,18 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
-	bucketHandler := handlers.NewBucketHandler(s3Service)
+	bucketHandler := handlers.NewBucketHandler(adminService, s3Service)
 	objectHandler := handlers.NewObjectHandler(s3Service)
-	userHandler := handlers.NewUserHandler()
+	userHandler := handlers.NewUserHandler(adminService)
+	clusterHandler := handlers.NewClusterHandler(adminService)
+	monitoringHandler := handlers.NewMonitoringHandler(adminService, s3Service)
 
 	// Create Fiber app with configuration
 	app := fiber.New(fiber.Config{
-		AppName:               "Garage UI Backend v" + version,
-		DisableStartupMessage: false,
-		EnablePrintRoutes:     cfg.IsDevelopment(),
-		ErrorHandler:          customErrorHandler,
+		AppName: "Garage UI Backend v" + version,
+		//DisableStartupMessage: false,
+		//EnablePrintRoutes:     cfg.IsDevelopment(),
+		ErrorHandler: customErrorHandler,
 	})
 
 	// Apply global middleware
@@ -74,6 +119,8 @@ func main() {
 		bucketHandler,
 		objectHandler,
 		userHandler,
+		clusterHandler,
+		monitoringHandler,
 	)
 
 	// Start server in a goroutine

@@ -1,35 +1,18 @@
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/layout/header';
-import { garageApi, bucketsApi } from '@/lib/api';
 import { formatBytes } from '@/lib/utils';
-import type { GarageMetrics, Bucket, ClusterHealth } from '@/types';
 import { Database, FolderOpen, HardDrive, Activity, Server, Zap, AlertCircle } from 'lucide-react';
 import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
 import { RequestMetricsChart } from '@/components/charts/RequestMetricsChart';
+import { useDashboardData } from '@/hooks/useApi';
+import type { ClusterHealth } from '@/types';
 
 export function Dashboard() {
-  const [metrics, setMetrics] = useState<GarageMetrics | null>(null);
-  const [buckets, setBuckets] = useState<Bucket[]>([]);
-  const [clusterHealth, setClusterHealth] = useState<ClusterHealth | null>(null);
-  // const [loading, setLoading] = useState(true);
+  const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading } = useDashboardData();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      // setLoading(true);
-      const [garageMetrics, bucketsData, health] = await Promise.all([
-        garageApi.getFullMetrics(),
-        bucketsApi.list(),
-        garageApi.getClusterHealth(),
-      ]);
-      setMetrics(garageMetrics);
-      setBuckets(bucketsData);
-      setClusterHealth(health);
-      // setLoading(false);
-    };
-
-    fetchData();
-  }, []);
+  const metrics = metricsQuery.data;
+  const buckets = bucketsQuery.data || [];
+  const clusterHealth = healthQuery.data;
 
   const getHealthStatus = (health: ClusterHealth | null) => {
     if (!health) return { color: 'text-gray-500', label: 'Unknown', icon: AlertCircle };
@@ -49,7 +32,21 @@ export function Dashboard() {
     return { color: 'text-red-500', label: 'Unhealthy', icon: AlertCircle };
   };
 
-  const healthStatus = getHealthStatus(clusterHealth);
+  const healthStatus = getHealthStatus(clusterHealth ?? null);
+
+  if (isLoading) {
+    return (
+      <div>
+        <Header title="Dashboard" />
+        <div className="p-4 sm:p-6 flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+            <p className="mt-2 text-sm text-muted-foreground">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

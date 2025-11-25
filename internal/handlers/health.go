@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"Noooste/garage-ui/internal/models"
+
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -20,6 +21,14 @@ func NewHealthHandler(version string) *HealthHandler {
 }
 
 // Check returns the health status of the service
+//
+//	@Summary		Health check
+//	@Description	Returns the health status of the API service along with version information
+//	@Tags			Health
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	models.APIResponse{data=models.HealthResponse}	"Service is healthy"
+//	@Router			/api/v1/health [get]
 func (h *HealthHandler) Check(c fiber.Ctx) error {
 	response := models.HealthResponse{
 		Status:    "healthy",

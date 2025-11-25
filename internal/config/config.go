@@ -31,13 +31,15 @@ type GarageConfig struct {
 	SecretKey      string `mapstructure:"secret_key"`
 	UseSSL         bool   `mapstructure:"use_ssl"`
 	ForcePathStyle bool   `mapstructure:"force_path_style"`
+	AdminEndpoint  string `mapstructure:"admin_endpoint"`
+	AdminToken     string `mapstructure:"admin_token"`
 }
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Mode  string           `mapstructure:"mode"` // "none", "basic", or "oidc"
-	Basic BasicAuthConfig  `mapstructure:"basic"`
-	OIDC  OIDCConfig       `mapstructure:"oidc"`
+	Mode  string          `mapstructure:"mode"` // "none", "basic", or "oidc"
+	Basic BasicAuthConfig `mapstructure:"basic"`
+	OIDC  OIDCConfig      `mapstructure:"oidc"`
 }
 
 // BasicAuthConfig contains basic authentication settings
@@ -48,28 +50,28 @@ type BasicAuthConfig struct {
 
 // OIDCConfig contains OIDC authentication settings
 type OIDCConfig struct {
-	Enabled          bool     `mapstructure:"enabled"`
-	ProviderName     string   `mapstructure:"provider_name"`
-	ClientID         string   `mapstructure:"client_id"`
-	ClientSecret     string   `mapstructure:"client_secret"`
-	Scopes           []string `mapstructure:"scopes"`
-	IssuerURL        string   `mapstructure:"issuer_url"`
-	AuthURL          string   `mapstructure:"auth_url"`
-	TokenURL         string   `mapstructure:"token_url"`
-	UserinfoURL      string   `mapstructure:"userinfo_url"`
-	SkipIssuerCheck  bool     `mapstructure:"skip_issuer_check"`
-	SkipExpiryCheck  bool     `mapstructure:"skip_expiry_check"`
-	EmailAttribute   string   `mapstructure:"email_attribute"`
-	UsernameAttribute string  `mapstructure:"username_attribute"`
-	NameAttribute    string   `mapstructure:"name_attribute"`
-	RoleAttributePath string  `mapstructure:"role_attribute_path"`
-	AdminRole        string   `mapstructure:"admin_role"`
-	TLSSkipVerify    bool     `mapstructure:"tls_skip_verify"`
-	SessionMaxAge    int      `mapstructure:"session_max_age"`
-	CookieName       string   `mapstructure:"cookie_name"`
-	CookieSecure     bool     `mapstructure:"cookie_secure"`
-	CookieHTTPOnly   bool     `mapstructure:"cookie_http_only"`
-	CookieSameSite   string   `mapstructure:"cookie_same_site"`
+	Enabled           bool     `mapstructure:"enabled"`
+	ProviderName      string   `mapstructure:"provider_name"`
+	ClientID          string   `mapstructure:"client_id"`
+	ClientSecret      string   `mapstructure:"client_secret"`
+	Scopes            []string `mapstructure:"scopes"`
+	IssuerURL         string   `mapstructure:"issuer_url"`
+	AuthURL           string   `mapstructure:"auth_url"`
+	TokenURL          string   `mapstructure:"token_url"`
+	UserinfoURL       string   `mapstructure:"userinfo_url"`
+	SkipIssuerCheck   bool     `mapstructure:"skip_issuer_check"`
+	SkipExpiryCheck   bool     `mapstructure:"skip_expiry_check"`
+	EmailAttribute    string   `mapstructure:"email_attribute"`
+	UsernameAttribute string   `mapstructure:"username_attribute"`
+	NameAttribute     string   `mapstructure:"name_attribute"`
+	RoleAttributePath string   `mapstructure:"role_attribute_path"`
+	AdminRole         string   `mapstructure:"admin_role"`
+	TLSSkipVerify     bool     `mapstructure:"tls_skip_verify"`
+	SessionMaxAge     int      `mapstructure:"session_max_age"`
+	CookieName        string   `mapstructure:"cookie_name"`
+	CookieSecure      bool     `mapstructure:"cookie_secure"`
+	CookieHTTPOnly    bool     `mapstructure:"cookie_http_only"`
+	CookieSameSite    string   `mapstructure:"cookie_same_site"`
 }
 
 // CORSConfig contains CORS settings for frontend communication
@@ -142,6 +144,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Garage.SecretKey == "" {
 		return fmt.Errorf("garage secret_key is required")
+	}
+	if c.Garage.AdminEndpoint == "" {
+		return fmt.Errorf("garage admin_endpoint is required")
+	}
+	if c.Garage.AdminToken == "" {
+		return fmt.Errorf("garage admin_token is required")
 	}
 
 	// Validate auth mode

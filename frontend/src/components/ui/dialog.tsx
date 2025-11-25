@@ -82,7 +82,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         <div className="fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%] w-[calc(100%-2rem)] sm:w-full max-w-lg">
           <div
             ref={ref}
-            style={{ backgroundColor: 'hsl(var(--background))' }}
+            style={{ backgroundColor: 'var(--background)' }}
             className={cn(
               'relative p-4 sm:p-6 shadow-lg duration-200 rounded-lg border',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',

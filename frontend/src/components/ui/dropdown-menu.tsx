@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import {createPortal} from 'react-dom';
+import {cn} from '@/lib/utils';
 
 interface DropdownMenuContextValue {
   open: boolean;
@@ -61,6 +62,42 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
   ({ className, children, align = 'start', ...props }) => {
     const { open, setOpen, triggerRef } = useDropdownMenu();
     const contentRef = React.useRef<HTMLDivElement>(null);
+    const [position, setPosition] = React.useState({ top: 0, left: 0 });
+
+    // Calculate position based on trigger element
+    React.useEffect(() => {
+      const updatePosition = () => {
+        if (open && triggerRef.current) {
+          const rect = triggerRef.current.getBoundingClientRect();
+          const scrollY = window.scrollY || document.documentElement.scrollTop;
+          const scrollX = window.scrollX || document.documentElement.scrollLeft;
+
+          let left = rect.left + scrollX;
+          const top = rect.bottom + scrollY + 8; // 8px gap (mt-2)
+
+          // Adjust horizontal alignment
+          if (align === 'end') {
+            left = rect.right + scrollX - 224; // 224px = w-56
+          } else if (align === 'center') {
+            left = rect.left + scrollX + (rect.width / 2) - 112; // 112px = half of w-56
+          }
+
+          setPosition({ top, left });
+        }
+      };
+
+      updatePosition();
+
+      if (open) {
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+      }
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }, [open, align, triggerRef]);
 
     React.useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -83,19 +120,17 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
 
     if (!open) return null;
 
-    const alignmentClasses = {
-      start: 'left-0',
-      end: 'right-0',
-      center: 'left-1/2 -translate-x-1/2',
-    };
-
-    return (
+    const content = (
       <div
         ref={contentRef}
-        style={{ backgroundColor: 'hsl(var(--popover))' }}
+        style={{
+          backgroundColor: 'var(--popover)',
+          position: 'fixed',
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+        }}
         className={cn(
-          'absolute z-50 mt-2 w-56 origin-top-right rounded-md text-popover-foreground shadow-lg ring-1 ring-border border border-border focus:outline-none',
-          alignmentClasses[align],
+          'z-50 w-56 origin-top-right rounded-md text-popover-foreground shadow-lg ring-1 ring-border border border-border focus:outline-none',
           className
         )}
         {...props}
@@ -103,6 +138,8 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
         <div className="py-1">{children}</div>
       </div>
     );
+
+    return createPortal(content, document.body);
   }
 );
 DropdownMenuContent.displayName = 'DropdownMenuContent';

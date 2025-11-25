@@ -8,7 +8,7 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'hsl(var(--background))' }}>
+    <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'var(--background)' }}>
       <div className="flex h-16 items-center gap-2 sm:gap-4 px-4 sm:px-6 md:pl-6">
         <div className="flex-1 min-w-0 md:ml-0 ml-12">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold truncate">{title}</h1>

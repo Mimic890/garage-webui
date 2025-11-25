@@ -5,7 +5,13 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
+
 	"github.com/gofiber/fiber/v3"
+
+	// Swagger imports
+	_ "Noooste/garage-ui/docs"
+
+	"github.com/Noooste/swagger"
 )
 
 // SetupRoutes configures all API routes
@@ -17,6 +23,8 @@ func SetupRoutes(
 	bucketHandler *handlers.BucketHandler,
 	objectHandler *handlers.ObjectHandler,
 	userHandler *handlers.UserHandler,
+	clusterHandler *handlers.ClusterHandler,
+	monitoringHandler *handlers.MonitoringHandler,
 ) {
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
@@ -24,6 +32,9 @@ func SetupRoutes(
 	// Health check endpoint (no auth required)
 	app.Get("/health", healthHandler.Check)
 	app.Get("/api/v1/health", healthHandler.Check)
+
+	// Swagger documentation endpoint (no auth required)
+	app.Get("/docs/*", swagger.HandlerDefault)
 
 	// API v1 group
 	api := app.Group("/api/v1")
@@ -34,23 +45,25 @@ func SetupRoutes(
 	// Bucket routes
 	buckets := api.Group("/buckets")
 	{
-		buckets.Get("/", bucketHandler.ListBuckets)          // List all buckets
-		buckets.Post("/", bucketHandler.CreateBucket)        // Create a new bucket
-		buckets.Get("/:name", bucketHandler.GetBucketInfo)   // Get bucket info
-		buckets.Delete("/:name", bucketHandler.DeleteBucket) // Delete a bucket
+		buckets.Get("/", bucketHandler.ListBuckets)                             // List all buckets
+		buckets.Post("/", bucketHandler.CreateBucket)                           // Create a new bucket
+		buckets.Get("/:name", bucketHandler.GetBucketInfo)                      // Get bucket info
+		buckets.Delete("/:name", bucketHandler.DeleteBucket)                    // Delete a bucket
+		buckets.Post("/:name/permissions", bucketHandler.GrantBucketPermission) // Grant bucket permissions
 	}
 
 	// Object routes
 	objects := api.Group("/buckets/:bucket/objects")
 	{
-		objects.Get("/", objectHandler.ListObjects)                  // List objects in bucket
-		objects.Post("/", objectHandler.UploadObject)                // Upload object (multipart)
-		objects.Delete("/", objectHandler.DeleteMultipleObjects)     // Delete multiple objects
-		objects.Get("/:key", objectHandler.GetObject)                // Download object
-		objects.Put("/:key", objectHandler.UploadObjectStream)       // Upload object (stream)
-		objects.Delete("/:key", objectHandler.DeleteObject)          // Delete object
-		objects.Head("/:key", objectHandler.GetObjectMetadata)       // Get object metadata
-		objects.Post("/:key/presign", objectHandler.GetPresignedURL) // Generate pre-signed URL
+		objects.Get("/", objectHandler.ListObjects)                           // List objects in bucket
+		objects.Post("/", objectHandler.UploadObject)                         // Upload object (multipart)
+		objects.Post("/upload-multiple", objectHandler.UploadMultipleObjects) // Upload multiple objects
+		objects.Post("/delete-multiple", objectHandler.DeleteMultipleObjects) // Delete multiple objects
+		objects.Get("/:key", objectHandler.GetObject)                         // Download object
+		objects.Put("/:key", objectHandler.UploadObjectStream)                // Upload object (stream)
+		objects.Delete("/:key", objectHandler.DeleteObject)                   // Delete object
+		objects.Head("/:key", objectHandler.GetObjectMetadata)                // Get object metadata
+		objects.Post("/:key/presign", objectHandler.GetPresignedURL)          // Generate pre-signed URL
 	}
 
 	// User/Key management routes
@@ -61,6 +74,24 @@ func SetupRoutes(
 		users.Get("/:access_key", userHandler.GetUser)                 // Get user info
 		users.Delete("/:access_key", userHandler.DeleteUser)           // Delete user/key
 		users.Patch("/:access_key", userHandler.UpdateUserPermissions) // Update user permissions
+	}
+
+	// Cluster management routes
+	cluster := api.Group("/cluster")
+	{
+		cluster.Get("/health", clusterHandler.GetHealth)                            // Get cluster health
+		cluster.Get("/status", clusterHandler.GetStatus)                            // Get cluster status
+		cluster.Get("/statistics", clusterHandler.GetStatistics)                    // Get cluster statistics
+		cluster.Get("/nodes/:node_id", clusterHandler.GetNodeInfo)                  // Get node info
+		cluster.Get("/nodes/:node_id/statistics", clusterHandler.GetNodeStatistics) // Get node statistics
+	}
+
+	// Monitoring routes
+	monitoring := api.Group("/monitoring")
+	{
+		monitoring.Get("/metrics", monitoringHandler.GetMetrics)            // Get Prometheus metrics
+		monitoring.Get("/admin-health", monitoringHandler.CheckAdminHealth) // Check Admin API health
+		monitoring.Get("/dashboard", monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
 	}
 
 	// OIDC authentication routes (only if OIDC is enabled)
