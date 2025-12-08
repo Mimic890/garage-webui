@@ -78,18 +78,8 @@ func handleOIDCAuth(c fiber.Ctx, authService *auth.AuthService, oidcCfg *config.
 		)
 	}
 
-	// In a production implementation, you would:
-	// 1. Validate the session token from the cookie
-	// 2. Look up the session in a session store (Redis, memory, etc.)
-	// 3. Verify the session hasn't expired
-	// 4. Extract user information from the session
-	//
-	// For now, we'll implement a basic token verification
-	// You should extend this based on your session management strategy
-
-	// Verify ID token if it's stored in the session
-	ctx := c.Context()
-	userInfo, err := authService.VerifyIDToken(ctx, sessionCookie)
+	// Validate JWT session token
+	userInfo, err := authService.ValidateSessionToken(sessionCookie)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(
 			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid or expired session"),
@@ -104,8 +94,6 @@ func handleOIDCAuth(c fiber.Ctx, authService *auth.AuthService, oidcCfg *config.
 	return c.Next()
 }
 
-// RequireAuth is a simpler middleware that just checks if auth is enabled
-// Use this for routes that should only be accessible when any auth is active
 func RequireAuth(cfg *config.AuthConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if cfg.Mode == "none" {
@@ -117,10 +105,8 @@ func RequireAuth(cfg *config.AuthConfig) fiber.Handler {
 	}
 }
 
-// RequireAdmin is middleware that checks if the user has admin role (OIDC only)
 func RequireAdmin(authService *auth.AuthService) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Get user info from context (set by AuthMiddleware)
 		userInfoInterface := c.Locals("userInfo")
 		if userInfoInterface == nil {
 			return c.Status(fiber.StatusForbidden).JSON(

@@ -170,10 +170,10 @@ func (h *UserHandler) CreateUser(c fiber.Ctx) error {
 //	@Description	Deletes a specific user/access key
 //	@Tags			Users
 //	@Produce		json
-//	@Param			access_key	path		string										true	"Access key of the user to delete"
+//	@Param			access_key	path		string											true	"Access key of the user to delete"
 //	@Success		200			{object}	models.APIResponse{data=map[string]interface{}}	"User deleted successfully"
-//	@Failure		400			{object}	models.APIResponse{error=models.APIError}			"Access key is required"
-//	@Failure		500			{object}	models.APIResponse{error=models.APIError}			"Failed to delete user"
+//	@Failure		400			{object}	models.APIResponse{error=models.APIError}		"Access key is required"
+//	@Failure		500			{object}	models.APIResponse{error=models.APIError}		"Failed to delete user"
 //	@Router			/api/v1/users/{access_key} [delete]
 func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
 	ctx := c.Context()

@@ -199,10 +199,8 @@ export function AccessControl() {
     try {
       const updates: { status?: string; expiration?: string } = {};
 
-      // Add status change
       updates.status = keyStatus;
 
-      // Add expiration if set and not "never expires"
       if (!neverExpires && expirationDate) {
         updates.expiration = new Date(expirationDate).toISOString();
       } else if (neverExpires) {

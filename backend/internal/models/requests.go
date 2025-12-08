@@ -26,7 +26,6 @@ type ListObjectsRequest struct {
 }
 
 // UploadObjectRequest represents metadata for an object upload
-// Note: The actual file data comes from multipart form or request body
 type UploadObjectRequest struct {
 	Bucket      string `json:"bucket" validate:"required"`
 	Key         string `json:"key" validate:"required"`

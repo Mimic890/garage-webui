@@ -26,8 +26,8 @@ func NewClusterHandler(adminService *services.GarageAdminService) *ClusterHandle
 //	@Tags			Cluster
 //	@Accept			json
 //	@Produce		json
-//	@Success		200		{object}	models.APIResponse{data=object}				"Successfully retrieved cluster health"
-//	@Failure		500		{object}	models.APIResponse{error=models.APIError}	"Failed to get cluster health"
+//	@Success		200	{object}	models.APIResponse{data=object}				"Successfully retrieved cluster health"
+//	@Failure		500	{object}	models.APIResponse{error=models.APIError}	"Failed to get cluster health"
 //	@Router			/api/v1/cluster/health [get]
 func (h *ClusterHandler) GetHealth(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -49,8 +49,8 @@ func (h *ClusterHandler) GetHealth(c fiber.Ctx) error {
 //	@Tags			Cluster
 //	@Accept			json
 //	@Produce		json
-//	@Success		200		{object}	models.APIResponse{data=object}				"Successfully retrieved cluster status"
-//	@Failure		500		{object}	models.APIResponse{error=models.APIError}	"Failed to get cluster status"
+//	@Success		200	{object}	models.APIResponse{data=object}				"Successfully retrieved cluster status"
+//	@Failure		500	{object}	models.APIResponse{error=models.APIError}	"Failed to get cluster status"
 //	@Router			/api/v1/cluster/status [get]
 func (h *ClusterHandler) GetStatus(c fiber.Ctx) error {
 	ctx := c.Context()

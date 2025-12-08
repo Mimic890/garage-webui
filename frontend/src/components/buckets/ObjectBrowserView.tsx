@@ -100,7 +100,6 @@ export function ObjectBrowserView({
     return new Promise((resolve) => {
       if (item.isFile) {
         item.file((file: File) => {
-          // Add the relative path to the file object
           const fullPath = path + file.name;
           Object.defineProperty(file, 'webkitRelativePath', {
             value: fullPath,

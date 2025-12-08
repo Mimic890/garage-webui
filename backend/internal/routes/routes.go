@@ -63,7 +63,6 @@ func SetupRoutes(
 		objects.Post("/upload-multiple", objectHandler.UploadMultipleObjects) // Upload multiple objects
 		objects.Post("/delete-multiple", objectHandler.DeleteMultipleObjects) // Delete multiple objects
 		objects.Get("/:key", objectHandler.GetObject)                         // Download object
-		objects.Put("/:key", objectHandler.UploadObjectStream)                // Upload object (stream)
 		objects.Delete("/:key", objectHandler.DeleteObject)                   // Delete object
 		objects.Head("/:key", objectHandler.GetObjectMetadata)                // Get object metadata
 		objects.Post("/:key/presign", objectHandler.GetPresignedURL)          // Generate pre-signed URL
@@ -103,8 +102,13 @@ func SetupRoutes(
 		{
 			// Login endpoint - redirects to OIDC provider
 			authRoutes.Get("/login", func(c fiber.Ctx) error {
-				// Generate state token for CSRF protection
-				state := "random-state-token" // In production, use a secure random token
+				state, err := authService.GenerateStateToken()
+				if err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+						"error": "Failed to generate state token",
+					})
+				}
+
 				authURL, err := authService.GetAuthorizationURL(state)
 				if err != nil {
 					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -116,6 +120,14 @@ func SetupRoutes(
 
 			// Callback endpoint - handles OIDC redirect after login
 			authRoutes.Get("/callback", func(c fiber.Ctx) error {
+				// Get and validate state token
+				state := c.Query("state")
+				if !authService.ValidateAndConsumeState(state) {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+						"error": "Invalid or expired state token",
+					})
+				}
+
 				// Get authorization code from query
 				code := c.Query("code")
 				if code == "" {
@@ -149,15 +161,18 @@ func SetupRoutes(
 					})
 				}
 
-				// In production, you should:
-				// 1. Create a session and store it in Redis/memory
-				// 2. Set a secure session cookie
-				// 3. Redirect to the frontend with the session
+				// Generate JWT session token
+				sessionToken, err := authService.GenerateSessionToken(userInfo)
+				if err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+						"error": "Failed to create session",
+					})
+				}
 
-				// For now, just set the ID token as a cookie (not recommended for production)
+				// Set JWT session token as secure cookie
 				c.Cookie(&fiber.Cookie{
 					Name:     cfg.Auth.OIDC.CookieName,
-					Value:    rawIDToken,
+					Value:    sessionToken,
 					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
 					Secure:   cfg.Auth.OIDC.CookieSecure,
 					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,

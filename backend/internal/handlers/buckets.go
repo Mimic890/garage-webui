@@ -87,11 +87,11 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 //	@Tags			Buckets
 //	@Accept			json
 //	@Produce		json
-//	@Param			payload	body		models.CreateBucketRequest						true	"Bucket creation payload"
+//	@Param			payload	body		models.CreateBucketRequest										true	"Bucket creation payload"
 //	@Success		201		{object}	models.APIResponse{data=object{bucket=string,message=string}}	"Bucket created successfully"
-//	@Failure		400		{object}	models.APIResponse{error=models.APIError}				"Invalid request body or bucket name is required"
-//	@Failure		409		{object}	models.APIResponse{error=models.APIError}				"Bucket already exists"
-//	@Failure		500		{object}	models.APIResponse{error=models.APIError}				"Failed to create bucket"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}						"Invalid request body or bucket name is required"
+//	@Failure		409		{object}	models.APIResponse{error=models.APIError}						"Bucket already exists"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}						"Failed to create bucket"
 //	@Router			/api/v1/buckets [post]
 func (h *BucketHandler) CreateBucket(c fiber.Ctx) error {
 	ctx := c.Context()

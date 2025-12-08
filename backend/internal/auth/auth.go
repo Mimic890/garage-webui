@@ -19,6 +19,7 @@ type AuthService struct {
 	oidcProvider *oidc.Provider
 	oidcVerifier *oidc.IDTokenVerifier
 	oauth2Config *oauth2.Config
+	jwtService   *JWTService
 }
 
 // UserInfo represents authenticated user information
@@ -31,8 +32,14 @@ type UserInfo struct {
 
 // NewAuthService creates a new authentication service
 func NewAuthService(cfg *config.AuthConfig) (*AuthService, error) {
+	jwtService, err := NewJWTService()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize JWT service: %w", err)
+	}
+
 	service := &AuthService{
-		config: cfg,
+		config:     cfg,
+		jwtService: jwtService,
 	}
 
 	// Initialize OIDC if enabled
@@ -265,7 +272,6 @@ func extractRoles(claims map[string]interface{}, path string) []string {
 			return nil
 		}
 
-		// If this is the last part, it should be the roles array
 		if i == len(parts)-1 {
 			return extractStringArray(value)
 		}
@@ -300,4 +306,34 @@ func extractStringArray(value interface{}) []string {
 	}
 
 	return nil
+}
+
+// GenerateStateToken generates a secure CSRF state token
+func (a *AuthService) GenerateStateToken() (string, error) {
+	return a.jwtService.GenerateStateToken()
+}
+
+// ValidateAndConsumeState validates and consumes a CSRF state token
+func (a *AuthService) ValidateAndConsumeState(token string) bool {
+	return a.jwtService.ValidateAndConsumeState(token)
+}
+
+// GenerateSessionToken generates a JWT session token for the user
+func (a *AuthService) GenerateSessionToken(userInfo *UserInfo) (string, error) {
+	return a.jwtService.GenerateToken(userInfo, a.config.OIDC.SessionMaxAge)
+}
+
+// ValidateSessionToken validates a JWT session token and returns user info
+func (a *AuthService) ValidateSessionToken(tokenString string) (*UserInfo, error) {
+	claims, err := a.jwtService.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UserInfo{
+		Username: claims.Username,
+		Email:    claims.Email,
+		Name:     claims.Name,
+		Roles:    claims.Roles,
+	}, nil
 }

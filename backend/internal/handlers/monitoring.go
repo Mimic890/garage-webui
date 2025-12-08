@@ -28,7 +28,7 @@ func NewMonitoringHandler(adminService *services.GarageAdminService, s3Service *
 //	@Tags			Monitoring
 //	@Accept			json
 //	@Produce		text/plain
-//	@Success		200	{string}	string	"System metrics in plain text format"
+//	@Success		200	{string}	string										"System metrics in plain text format"
 //	@Failure		500	{object}	models.APIResponse{error=models.APIError}	"Failed to retrieve metrics"
 //	@Router			/api/v1/monitoring/metrics [get]
 func (h *MonitoringHandler) GetMetrics(c fiber.Ctx) error {

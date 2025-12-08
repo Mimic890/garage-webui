@@ -174,36 +174,39 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 
 	// Set default max keys if not specified
 	if maxKeys <= 0 {
-		maxKeys = 100
+		maxKeys = 1000
 	}
 
-	// Create list objects options
+	// Use ListObjectsV2 for proper pagination support
 	opts := minio.ListObjectsOptions{
-		Prefix:    prefix,
-		Recursive: false, // Use delimiter to get folders
-		MaxKeys:   maxKeys,
+		Prefix:     prefix,
+		Recursive:  false,
+		MaxKeys:    maxKeys,
+		StartAfter: continuationToken,
+		UseV1:      false,
 	}
-
-	// Note: MinIO SDK v7 doesn't directly support continuation tokens in the same way
-	// We'll use the ListObjects which returns a channel
 
 	objects := make([]models.ObjectInfo, 0)
-	prefixes := make(map[string]bool) // Use map to deduplicate prefixes
+	prefixesMap := make(map[string]bool)
 
-	// List objects
-	objectCh := client.ListObjects(ctx, bucketName, opts)
+	var lastKey string
+	isTruncated := false
+	itemCount := 0
 
-	count := 0
-	for object := range objectCh {
+	// List objects using the channel-based API
+	for object := range client.ListObjects(ctx, bucketName, opts) {
 		if object.Err != nil {
 			return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, object.Err)
 		}
 
 		// Check if this is a prefix (directory)
-		if object.Key[len(object.Key)-1:] == "/" && object.Size == 0 {
-			prefixes[object.Key] = true
+		if len(object.Key) > 0 && object.Key[len(object.Key)-1:] == "/" && object.Size == 0 {
+			prefixesMap[object.Key] = true
 			continue
 		}
+
+		// Track the last key for pagination
+		lastKey = object.Key
 
 		// Add to objects list
 		objects = append(objects, models.ObjectInfo{
@@ -215,16 +218,23 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 			StorageClass: object.StorageClass,
 		})
 
-		count++
-		if count >= maxKeys {
+		itemCount++
+		if itemCount >= maxKeys {
+			isTruncated = true
 			break
 		}
 	}
 
 	// Convert prefixes map to slice
-	prefixList := make([]string, 0, len(prefixes))
-	for p := range prefixes {
+	prefixList := make([]string, 0, len(prefixesMap))
+	for p := range prefixesMap {
 		prefixList = append(prefixList, p)
+	}
+
+	// Prepare next continuation token
+	var nextToken string
+	if isTruncated && lastKey != "" {
+		nextToken = lastKey
 	}
 
 	return &models.ObjectListResponse{
@@ -232,8 +242,8 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		Objects:               objects,
 		Prefixes:              prefixList,
 		Count:                 len(objects),
-		IsTruncated:           count >= maxKeys,
-		NextContinuationToken: "", // MinIO SDK handles this differently
+		IsTruncated:           isTruncated,
+		NextContinuationToken: nextToken,
 	}, nil
 }
 

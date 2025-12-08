@@ -30,14 +30,14 @@ func NewObjectHandler(s3Service *services.S3Service) *ObjectHandler {
 //	@Tags			Objects
 //	@Accept			json
 //	@Produce		json
-//	@Param			bucket				path		string													true	"Name of the bucket to list objects from"
-//	@Param			prefix				query		string													false	"Filter objects by prefix"
-//	@Param			max_keys			query		int														false	"Maximum number of objects to return (default: 100)"
-//	@Param			continuation_token	query		string													false	"Token for pagination to retrieve next page of results"
+//	@Param			bucket				path		string												true	"Name of the bucket to list objects from"
+//	@Param			prefix				query		string												false	"Filter objects by prefix"
+//	@Param			max_keys			query		int													false	"Maximum number of objects to return (default: 100)"
+//	@Param			continuation_token	query		string												false	"Token for pagination to retrieve next page of results"
 //	@Success		200					{object}	models.APIResponse{data=models.ObjectListResponse}	"Successfully retrieved list of objects and prefixes"
-//	@Failure		400					{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
-//	@Failure		404					{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
-//	@Failure		500					{object}	models.APIResponse{error=models.APIError}				"Failed to list objects"
+//	@Failure		400					{object}	models.APIResponse{error=models.APIError}			"Invalid request parameters"
+//	@Failure		404					{object}	models.APIResponse{error=models.APIError}			"Bucket not found"
+//	@Failure		500					{object}	models.APIResponse{error=models.APIError}			"Failed to list objects"
 //	@Router			/api/v1/buckets/{bucket}/objects [get]
 func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -80,13 +80,13 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 //	@Tags			Objects
 //	@Accept			multipart/form-data
 //	@Produce		json
-//	@Param			bucket		path		string										true	"Name of the bucket to upload the object to"
-//	@Param			file		formData	file										true	"File to upload"
-//	@Param			key			formData	string										false	"Object key (path in bucket). If not provided, the filename will be used"
-//	@Success		201			{object}	models.APIResponse{data=models.ObjectUploadResponse}	"Object uploaded successfully"
-//	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
-//	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
-//	@Failure		500			{object}	models.APIResponse{error=models.APIError}				"Failed to upload object"
+//	@Param			bucket	path		string													true	"Name of the bucket to upload the object to"
+//	@Param			file	formData	file													true	"File to upload"
+//	@Param			key		formData	string													false	"Object key (path in bucket). If not provided, the filename will be used"
+//	@Success		201		{object}	models.APIResponse{data=models.ObjectUploadResponse}	"Object uploaded successfully"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
+//	@Failure		404		{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}				"Failed to upload object"
 //	@Router			/api/v1/buckets/{bucket}/objects [post]
 func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -195,12 +195,12 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 //	@Tags			Objects
 //	@Accept			json
 //	@Produce		json
-//	@Param			bucket		path		string										true	"Name of the bucket containing the object"
-//	@Param			key			path		string										true	"Key (path) of the object"
-//	@Success		200			{object}	models.APIResponse{data=models.ObjectDeleteResponse}	"Successfully deleted the object"
-//	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Bucket name and object key are required"
-//	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Object not found"
-//	@Failure		500			{object}	models.APIResponse{error=models.APIError}				"Failed to delete object"
+//	@Param			bucket	path		string													true	"Name of the bucket containing the object"
+//	@Param			key		path		string													true	"Key (path) of the object"
+//	@Success		200		{object}	models.APIResponse{data=models.ObjectDeleteResponse}	"Successfully deleted the object"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}				"Bucket name and object key are required"
+//	@Failure		404		{object}	models.APIResponse{error=models.APIError}				"Object not found"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}				"Failed to delete object"
 //	@Router			/api/v1/buckets/{bucket}/objects/{key} [delete]
 func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -290,9 +290,9 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 //	@Tags			Objects
 //	@Accept			json
 //	@Produce		json
-//	@Param			bucket		path		string										true	"Name of the bucket containing the object"
-//	@Param			key			path		string										true	"Key (path) of the object"
-//	@Param			expires_in	query		int											false	"Expiration time in seconds for the pre-signed URL (default: 3600 seconds)"
+//	@Param			bucket		path		string													true	"Name of the bucket containing the object"
+//	@Param			key			path		string													true	"Key (path) of the object"
+//	@Param			expires_in	query		int														false	"Expiration time in seconds for the pre-signed URL (default: 3600 seconds)"
 //	@Success		200			{object}	models.APIResponse{data=models.PresignedURLResponse}	"Successfully generated pre-signed URL"
 //	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
 //	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Object not found"
@@ -366,12 +366,12 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 //	@Tags			Objects
 //	@Accept			json
 //	@Produce		json
-//	@Param			bucket		path		string										true	"Name of the bucket containing the objects"
-//	@Param			request		body		object{keys=[]string,prefix=string}			true	"List of object keys to delete and optional prefix for path context"
-//	@Success		200			{object}	models.APIResponse{data=models.ObjectDeleteMultipleResponse}	"Successfully deleted the objects"
-//	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
-//	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
-//	@Failure		500			{object}	models.APIResponse{error=models.APIError}				"Failed to delete objects"
+//	@Param			bucket	path		string															true	"Name of the bucket containing the objects"
+//	@Param			request	body		object{keys=[]string,prefix=string}								true	"List of object keys to delete and optional prefix for path context"
+//	@Success		200		{object}	models.APIResponse{data=models.ObjectDeleteMultipleResponse}	"Successfully deleted the objects"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}						"Invalid request parameters"
+//	@Failure		404		{object}	models.APIResponse{error=models.APIError}						"Bucket not found"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}						"Failed to delete objects"
 //	@Router			/api/v1/buckets/{bucket}/objects/delete-multiple [post]
 func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -417,52 +417,6 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 	return c.JSON(models.SuccessResponse(response))
 }
 
-// UploadObjectStream uploads an object from request body stream (for large files)
-//
-//	@Summary		Upload object via stream
-//	@Description	Uploads an object directly from the request body stream, suitable for large files
-//	@Tags			Objects
-//	@Accept			application/octet-stream
-//	@Produce		json
-//	@Param			bucket			path		string													true	"Name of the bucket to upload the object to"
-//	@Param			key				path		string													true	"Object key (path in bucket)"
-//	@Param			Content-Type	header		string													false	"Content type of the object being uploaded"
-//	@Param			body			body		string													true	"Raw binary data of the object"
-//	@Success		201				{object}	models.APIResponse{data=models.ObjectUploadResponse}	"Object uploaded successfully"
-//	@Failure		400				{object}	models.APIResponse{error=models.APIError}				"Bucket name and object key are required"
-//	@Failure		404				{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
-//	@Failure		500				{object}	models.APIResponse{error=models.APIError}				"Failed to upload object"
-//	@Router			/api/v1/buckets/{bucket}/objects/{key} [put]
-func (h *ObjectHandler) UploadObjectStream(c fiber.Ctx) error {
-	ctx := c.Context()
-
-	// Get bucket name and object key from URL parameters
-	bucketName := c.Params("bucket")
-	key := c.Params("key")
-
-	if bucketName == "" || key == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(
-			models.ErrorResponse(models.ErrCodeBadRequest, "Bucket name and object key are required"),
-		)
-	}
-
-	// Get content type from header
-	contentType := c.Get("Content-Type", "application/octet-stream")
-
-	// Get request body as reader
-	bodyReader := c.Request().BodyStream()
-
-	// Upload to Garage
-	uploadResult, err := h.s3Service.UploadObject(ctx, bucketName, key, io.NopCloser(bodyReader), contentType)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to upload object: "+err.Error()),
-		)
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(models.SuccessResponse(uploadResult))
-}
-
 // UploadMultipleObjects uploads multiple objects to a bucket
 //
 //	@Summary		Upload multiple objects to bucket
@@ -470,12 +424,12 @@ func (h *ObjectHandler) UploadObjectStream(c fiber.Ctx) error {
 //	@Tags			Objects
 //	@Accept			multipart/form-data
 //	@Produce		json
-//	@Param			bucket		path		string										true	"Name of the bucket to upload the objects to"
-//	@Param			files		formData	file										true	"Files to upload (can be multiple)"
-//	@Success		201			{object}	models.APIResponse{data=models.ObjectUploadMultipleResponse}	"Objects uploaded successfully (including partial failures)"
-//	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
-//	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
-//	@Failure		500			{object}	models.APIResponse{error=models.APIError}				"Failed to upload objects"
+//	@Param			bucket	path		string															true	"Name of the bucket to upload the objects to"
+//	@Param			files	formData	file															true	"Files to upload (can be multiple)"
+//	@Success		201		{object}	models.APIResponse{data=models.ObjectUploadMultipleResponse}	"Objects uploaded successfully (including partial failures)"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}						"Invalid request parameters"
+//	@Failure		404		{object}	models.APIResponse{error=models.APIError}						"Bucket not found"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}						"Failed to upload objects"
 //	@Router			/api/v1/buckets/{bucket}/objects/upload-multiple [post]
 func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	ctx := c.Context()
@@ -496,7 +450,6 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 		)
 	}
 
-	// Get all files from the form (they should all be under "files" field)
 	files := form.File["files"]
 	if len(files) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(

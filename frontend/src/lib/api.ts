@@ -16,7 +16,6 @@ import type {
   StorageMetrics,
 } from '@/types';
 
-// Configure axios instance with base URL
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
   headers: {
@@ -24,7 +23,6 @@ const api = axios.create({
   },
 });
 
-// Add request interceptor for authentication
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
@@ -33,7 +31,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
     // If response has success=false in data, treat it as an error
@@ -119,7 +116,6 @@ export const bucketsApi = {
   },
 
   updateSettings: async (name: string, settings: Partial<BucketDetails>): Promise<void> => {
-    // TODO: Implement when backend endpoint is ready
     await api.patch(`/v1/buckets/${name}/settings`, settings);
   },
 };
@@ -182,12 +178,6 @@ export const objectsApi = {
     formData.append('key', key);
     await api.post(`/v1/buckets/${bucket}/objects`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-
-  uploadStream: async (bucket: string, key: string, data: Blob | File, contentType?: string): Promise<void> => {
-    await api.put(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`, data, {
-      headers: { 'Content-Type': contentType || 'application/octet-stream' },
     });
   },
 
