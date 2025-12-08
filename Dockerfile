@@ -8,8 +8,6 @@ RUN npm ci
 
 COPY frontend/ .
 
-COPY frontend/.env.production .env
-
 RUN npm run build
 
 FROM golang:1.25.4-alpine3.22 AS backend-builder
