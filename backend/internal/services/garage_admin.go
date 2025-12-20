@@ -210,7 +210,7 @@ func (s *GarageAdminService) GetBucketInfoByAlias(ctx context.Context, globalAli
 	}
 
 	var result models.GarageBucketInfo
-	if err := decodeResponse(resp, &result); err != nil {
+	if err = decodeResponse(resp, &result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 

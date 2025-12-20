@@ -251,6 +251,41 @@ func (h *UserHandler) GetUser(c fiber.Ctx) error {
 	return c.JSON(models.SuccessResponse(userInfo))
 }
 
+// GetUserSecretKey retrieves the secret key for a specific user/access key
+//
+//	@Summary		Get user secret key
+//	@Description	Retrieves the secret access key for a specific user/access key
+//	@Tags			Users
+//	@Produce		json
+//	@Param			access_key	path		string										true	"Access key of the user to retrieve secret for"
+//	@Success		200			{object}	models.APIResponse{data=map[string]string}	"Secret key retrieved successfully"
+//	@Failure		400			{object}	models.APIResponse{error=models.APIError}	"Access key is required"
+//	@Failure		500			{object}	models.APIResponse{error=models.APIError}	"Failed to get secret key"
+//	@Router			/api/v1/users/{access_key}/secret [get]
+func (h *UserHandler) GetUserSecretKey(c fiber.Ctx) error {
+	ctx := c.Context()
+	accessKey := c.Params("access_key")
+
+	if accessKey == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Access key is required"),
+		)
+	}
+
+	// Get key information WITH secret key
+	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, true)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get secret key: "+err.Error()),
+		)
+	}
+
+	// Return only the secret key
+	return c.JSON(models.SuccessResponse(map[string]string{
+		"secretKey": *keyInfo.SecretAccessKey,
+	}))
+}
+
 // UpdateUserPermissions updates user permissions
 //
 //	@Summary		Update user permissions

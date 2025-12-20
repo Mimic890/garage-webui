@@ -111,25 +111,12 @@ func (h *BucketHandler) CreateBucket(c fiber.Ctx) error {
 		)
 	}
 
-	// Check if bucket already exists
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, req.Name)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check bucket existence: "+err.Error()),
-		)
-	}
-
-	if bucketInfo != nil {
-		return c.Status(fiber.StatusConflict).JSON(
-			models.ErrorResponse(models.ErrCodeBucketExists, "Bucket already exists"),
-		)
-	}
-
 	// Create the bucket
 	createBucketReq := models.CreateBucketAdminRequest{
 		GlobalAlias: &req.Name,
 	}
-	if bucketInfo, err = h.adminService.CreateBucket(ctx, createBucketReq); err != nil {
+
+	if _, err := h.adminService.CreateBucket(ctx, createBucketReq); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create bucket: "+err.Error()),
 		)

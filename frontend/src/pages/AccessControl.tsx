@@ -46,6 +46,7 @@ export function AccessControl() {
   const [createPermissionWrite, setCreatePermissionWrite] = useState(false);
   const [createPermissionOwner, setCreatePermissionOwner] = useState(false);
   const [createGrantPermissions, setCreateGrantPermissions] = useState(false);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<AccessKey | null>(null);
 
   // Edit permissions state
   const [editPermissionsDialogOpen, setEditPermissionsDialogOpen] = useState(false);
@@ -68,6 +69,11 @@ export function AccessControl() {
   const [keyStatus, setKeyStatus] = useState<'active' | 'inactive'>('active');
   const [expirationDate, setExpirationDate] = useState<string>('');
   const [neverExpires, setNeverExpires] = useState(true);
+
+  // Secret key dialog state
+  const [secretKeyDialogOpen, setSecretKeyDialogOpen] = useState(false);
+  const [revealedSecretKey, setRevealedSecretKey] = useState<string>('');
+  const [isLoadingSecretKey, setIsLoadingSecretKey] = useState(false);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -120,13 +126,8 @@ export function AccessControl() {
         }
       }
 
-      setCreateDialogOpen(false);
-      setNewKeyName('');
-      setCreateSelectedBucket('');
-      setCreatePermissionRead(false);
-      setCreatePermissionWrite(false);
-      setCreatePermissionOwner(false);
-      setCreateGrantPermissions(false);
+      // Store the newly created key to show the secret key
+      setNewlyCreatedKey(newKey);
 
       // Refresh keys list
       const data = await accessApi.listKeys();
@@ -136,6 +137,17 @@ export function AccessControl() {
       // Error toast is handled by API interceptor
       console.error('Create key error:', error);
     }
+  };
+
+  const handleCloseCreateDialog = () => {
+    setCreateDialogOpen(false);
+    setNewKeyName('');
+    setCreateSelectedBucket('');
+    setCreatePermissionRead(false);
+    setCreatePermissionWrite(false);
+    setCreatePermissionOwner(false);
+    setCreateGrantPermissions(false);
+    setNewlyCreatedKey(null);
   };
 
   const handleOpenCreateDialog = async () => {
@@ -219,6 +231,23 @@ export function AccessControl() {
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Update key settings error:', error);
+    }
+  };
+
+  const handleRevealSecretKey = async (key: AccessKey) => {
+    setSelectedKey(key);
+    setIsLoadingSecretKey(true);
+    setSecretKeyDialogOpen(true);
+    setRevealedSecretKey('');
+
+    try {
+      const secretKey = await accessApi.getSecretKey(key.accessKeyId);
+      setRevealedSecretKey(secretKey);
+    } catch (error) {
+      console.error('Failed to fetch secret key:', error);
+      setSecretKeyDialogOpen(false);
+    } finally {
+      setIsLoadingSecretKey(false);
     }
   };
 
@@ -466,6 +495,11 @@ export function AccessControl() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleRevealSecretKey(key)}>
+                                <Key className="h-4 w-4" />
+                                View Secret Key
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleOpenEditPermissions(key)}>
                                 <Edit className="h-4 w-4" />
                                 Edit Permissions
@@ -525,122 +559,200 @@ export function AccessControl() {
       </div>
 
       {/* Create Key Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={handleCloseCreateDialog}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create API Key</DialogTitle>
-            <DialogDescription>
-              Create a new API key with optional bucket permissions
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Key Name</label>
-              <Input
-                placeholder="My Application Key"
-                value={newKeyName}
-                onChange={(e) => setNewKeyName(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                A friendly name to identify this API key
-              </p>
-            </div>
-
-            {/* Optional: Grant permissions during creation */}
-            <div className="space-y-3 border-t pt-4">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <Checkbox
-                  id="grant-permissions-on-create"
-                  checked={createGrantPermissions}
-                  onCheckedChange={(checked) => {
-                    setCreateGrantPermissions(checked as boolean);
-                    if (!checked) {
-                      setCreateSelectedBucket('');
-                      setCreatePermissionRead(false);
-                      setCreatePermissionWrite(false);
-                      setCreatePermissionOwner(false);
-                    }
-                  }}
-                />
-                <span className="text-sm font-medium">Grant bucket permissions now</span>
-              </label>
-              <p className="text-xs text-muted-foreground">
-                You can also grant permissions later from the Edit Permissions menu
-              </p>
-
-              {createGrantPermissions && (
-                <div className="space-y-4 pl-6 pt-2">
-                  {/* Bucket Selection */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Select Bucket</label>
-                    <Select
-                      value={createSelectedBucket}
-                      onChange={(value) => setCreateSelectedBucket(value)}
+          {newlyCreatedKey ? (
+            // Success state - show the secret key
+            <>
+              <DialogHeader>
+                <DialogTitle>API Key Created Successfully</DialogTitle>
+                <DialogDescription>
+                  Save your secret access key now. You won't be able to see it again.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Key Name</label>
+                  <div className="text-sm text-muted-foreground">{newlyCreatedKey.name}</div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Access Key ID</label>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1">
+                      {newlyCreatedKey.accessKeyId}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(newlyCreatedKey.accessKeyId);
+                        toast.success('Access Key ID copied to clipboard');
+                      }}
                     >
-                      <SelectOption value="">-- Select a bucket --</SelectOption>
-                      {createAvailableBuckets.map((bucket) => (
-                        <SelectOption key={bucket.name} value={bucket.name}>
-                          {bucket.name}
-                        </SelectOption>
-                      ))}
-                    </Select>
+                      <Copy className="h-4 w-4" />
+                    </Button>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Secret Access Key</label>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all">
+                      {newlyCreatedKey.secretKey}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (newlyCreatedKey.secretKey) {
+                          navigator.clipboard.writeText(newlyCreatedKey.secretKey);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="border rounded-lg p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900">
+                  <div className="flex gap-2">
+                    <ShieldX className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        Important: Save This Key Now
+                      </p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                        This is the only time you'll see the secret access key. Make sure to copy and save it securely.
+                        If you lose it, you'll need to create a new key.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleCloseCreateDialog}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // Creation form
+            <>
+              <DialogHeader>
+                <DialogTitle>Create API Key</DialogTitle>
+                <DialogDescription>
+                  Create a new API key with optional bucket permissions
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Key Name</label>
+                  <Input
+                    placeholder="My Application Key"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A friendly name to identify this API key
+                  </p>
+                </div>
 
-                  {/* Permissions */}
-                  {createSelectedBucket && (
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium">Permissions</label>
-                      <div className="space-y-2 border rounded-lg p-3">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <Checkbox
-                            id="create-permission-read"
-                            checked={createPermissionRead}
-                            onCheckedChange={(checked) => setCreatePermissionRead(checked as boolean)}
-                          />
-                          <div>
-                            <span className="text-sm font-medium">Read</span>
-                            <p className="text-xs text-muted-foreground">GetObject, HeadObject, ListObjects</p>
-                          </div>
-                        </label>
+                {/* Optional: Grant permissions during creation */}
+                <div className="space-y-3 border-t pt-4">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <Checkbox
+                      id="grant-permissions-on-create"
+                      checked={createGrantPermissions}
+                      onCheckedChange={(checked) => {
+                        setCreateGrantPermissions(checked as boolean);
+                        if (!checked) {
+                          setCreateSelectedBucket('');
+                          setCreatePermissionRead(false);
+                          setCreatePermissionWrite(false);
+                          setCreatePermissionOwner(false);
+                        }
+                      }}
+                    />
+                    <span className="text-sm font-medium">Grant bucket permissions now</span>
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    You can also grant permissions later from the Edit Permissions menu
+                  </p>
 
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <Checkbox
-                            id="create-permission-write"
-                            checked={createPermissionWrite}
-                            onCheckedChange={(checked) => setCreatePermissionWrite(checked as boolean)}
-                          />
-                          <div>
-                            <span className="text-sm font-medium">Write</span>
-                            <p className="text-xs text-muted-foreground">PutObject, DeleteObject</p>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <Checkbox
-                            id="create-permission-owner"
-                            checked={createPermissionOwner}
-                            onCheckedChange={(checked) => setCreatePermissionOwner(checked as boolean)}
-                          />
-                          <div>
-                            <span className="text-sm font-medium">Owner</span>
-                            <p className="text-xs text-muted-foreground">DeleteBucket, PutBucketPolicy</p>
-                          </div>
-                        </label>
+                  {createGrantPermissions && (
+                    <div className="space-y-4 pl-6 pt-2">
+                      {/* Bucket Selection */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Select Bucket</label>
+                        <Select
+                          value={createSelectedBucket}
+                          onChange={(value) => setCreateSelectedBucket(value)}
+                        >
+                          <SelectOption value="">-- Select a bucket --</SelectOption>
+                          {createAvailableBuckets.map((bucket) => (
+                            <SelectOption key={bucket.name} value={bucket.name}>
+                              {bucket.name}
+                            </SelectOption>
+                          ))}
+                        </Select>
                       </div>
+
+                      {/* Permissions */}
+                      {createSelectedBucket && (
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium">Permissions</label>
+                          <div className="space-y-2 border rounded-lg p-3">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <Checkbox
+                                id="create-permission-read"
+                                checked={createPermissionRead}
+                                onCheckedChange={(checked) => setCreatePermissionRead(checked as boolean)}
+                              />
+                              <div>
+                                <span className="text-sm font-medium">Read</span>
+                                <p className="text-xs text-muted-foreground">GetObject, HeadObject, ListObjects</p>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <Checkbox
+                                id="create-permission-write"
+                                checked={createPermissionWrite}
+                                onCheckedChange={(checked) => setCreatePermissionWrite(checked as boolean)}
+                              />
+                              <div>
+                                <span className="text-sm font-medium">Write</span>
+                                <p className="text-xs text-muted-foreground">PutObject, DeleteObject</p>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <Checkbox
+                                id="create-permission-owner"
+                                checked={createPermissionOwner}
+                                onCheckedChange={(checked) => setCreatePermissionOwner(checked as boolean)}
+                              />
+                              <div>
+                                <span className="text-sm font-medium">Owner</span>
+                                <p className="text-xs text-muted-foreground">DeleteBucket, PutBucketPolicy</p>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateKey} disabled={!newKeyName}>
-              Create Key
-            </Button>
-          </DialogFooter>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseCreateDialog}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreateKey} disabled={!newKeyName}>
+                  Create Key
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -660,6 +772,92 @@ export function AccessControl() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteKey}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Secret Key Dialog */}
+      <Dialog open={secretKeyDialogOpen} onOpenChange={setSecretKeyDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Secret Access Key</DialogTitle>
+            <DialogDescription>
+              Copy your secret access key now. For security reasons, it cannot be viewed again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Key Name</label>
+              <div className="text-sm text-muted-foreground">{selectedKey?.name}</div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Access Key ID</label>
+              <div className="flex items-center gap-2">
+                <code className="text-sm bg-muted px-3 py-2 rounded flex-1">
+                  {selectedKey?.accessKeyId}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (selectedKey?.accessKeyId) {
+                      navigator.clipboard.writeText(selectedKey.accessKeyId);
+                      toast.success('Access Key ID copied to clipboard');
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Secret Access Key</label>
+              <div className="flex items-center gap-2">
+                {isLoadingSecretKey ? (
+                  <div className="flex items-center gap-2 text-muted-foreground flex-1 bg-muted px-3 py-2 rounded">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading secret key...</span>
+                  </div>
+                ) : (
+                  <>
+                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all">
+                      {revealedSecretKey}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (revealedSecretKey) {
+                          navigator.clipboard.writeText(revealedSecretKey);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                      disabled={!revealedSecretKey}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="border rounded-lg p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900">
+              <div className="flex gap-2">
+                <ShieldX className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Security Warning
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    Keep this secret key secure. Anyone with access to it can perform operations on your behalf.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSecretKeyDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

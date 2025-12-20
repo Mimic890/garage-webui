@@ -60,6 +60,7 @@ export interface ObjectMetadata {
 export interface AccessKey {
   accessKeyId: string;
   name: string;
+  secretKey?: string;
   createdAt: string;
   lastUsed?: string;
   status: 'active' | 'inactive';

@@ -60,3 +60,4 @@ meta/
 garage.toml
 
 backend/docs/
+config.yaml

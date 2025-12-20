@@ -4,7 +4,7 @@ WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json* ./
 
-RUN npm ci
+RUN npm install
 
 COPY frontend/ .
 

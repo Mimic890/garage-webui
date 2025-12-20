@@ -74,6 +74,7 @@ func SetupRoutes(
 		users.Get("/", userHandler.ListUsers)                          // List all users/keys
 		users.Post("/", userHandler.CreateUser)                        // Create new user/key
 		users.Get("/:access_key", userHandler.GetUser)                 // Get user info
+		users.Get("/:access_key/secret", userHandler.GetUserSecretKey) // Get user secret key
 		users.Delete("/:access_key", userHandler.DeleteUser)           // Delete user/key
 		users.Patch("/:access_key", userHandler.UpdateUserPermissions) // Update user permissions
 	}
@@ -217,10 +218,10 @@ func SetupRoutes(
 		}
 	}
 
+	cfg.Server.FrontendPath = "./frontend/dist"
+
 	// Check if frontend path exists
 	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
-		fmt.Println("Serving frontend from:", cfg.Server.FrontendPath)
-
 		// SPA fallback - serve index.html for all non-API routes
 		app.Use(func(c fiber.Ctx) error {
 			path := c.Path()

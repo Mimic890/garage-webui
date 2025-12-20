@@ -222,6 +222,11 @@ export const accessApi = {
     return response.data.data;
   },
 
+  getSecretKey: async (accessKey: string): Promise<string> => {
+    const response = await api.get(`/v1/users/${accessKey}/secret`);
+    return response.data.data.secretKey;
+  },
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createKey: async (name: string, permissions?: any[]): Promise<AccessKey> => {
     const response = await api.post('/v1/users', { name, permissions });

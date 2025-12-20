@@ -194,7 +194,7 @@ type ClusterHealth struct {
 	KnownNodes       int    `json:"knownNodes"`
 	ConnectedNodes   int    `json:"connectedNodes"`
 	StorageNodes     int    `json:"storageNodes"`
-	StorageNodesUp   int    `json:"storageNodesUp"`
+	StorageNodesUp   int    `json:"storageNodesOk"`
 	Partitions       int    `json:"partitions"`
 	PartitionsQuorum int    `json:"partitionsQuorum"`
 	PartitionsAllOk  int    `json:"partitionsAllOk"`
