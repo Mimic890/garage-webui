@@ -3,7 +3,7 @@ name: garage-ui
 description: A Helm chart for Garage UI - Web interface for Garage S3 object storage
 type: application
 version: 0.1.0
-appVersion: "v0.0.4"
+appVersion: "v0.0.5"
 keywords:
   - garage
   - s3
