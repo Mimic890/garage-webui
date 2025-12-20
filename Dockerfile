@@ -4,7 +4,8 @@ WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json* ./
 
-RUN npm install
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
 
 COPY frontend/ .
 
@@ -14,17 +15,23 @@ FROM golang:1.25.4-alpine3.22 AS backend-builder
 
 WORKDIR /app
 
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go install github.com/swaggo/swag/cmd/swag@latest
 
 COPY backend/go.mod backend/go.sum ./
 
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY backend .
 
-RUN swag init
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    swag init
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o garage-ui .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o garage-ui .
 
 FROM alpine:3.22
 
