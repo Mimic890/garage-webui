@@ -35,6 +35,17 @@ spec:
         - name: http
           containerPort: 8080
           protocol: TCP
+        env:
+        - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              {{- if .Values.config.garage.existingSecret.name }}
+              name: {{ .Values.config.garage.existingSecret.name }}
+              key: {{ .Values.config.garage.existingSecret.key }}
+              {{- else }}
+              name: {{ include "garage-ui.fullname" . }}-admin-token
+              key: admin-token
+              {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           httpGet:

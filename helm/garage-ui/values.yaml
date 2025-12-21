@@ -87,7 +87,21 @@ config:
     # REQUIRED: Obtain this from your Garage server configuration
     # This token grants administrative access - keep it secure!
     # To generate: See Garage documentation for admin token setup
+    # NOTE: If existingSecret is configured, this value will be ignored
     admin_token: ""
+
+    # Use an existing Kubernetes secret for the admin token (recommended for production)
+    # When configured, this takes precedence over the admin_token value above
+    # The secret should contain a key with the admin token value
+    existingSecret:
+      # Name of the existing secret containing the admin token
+      # Leave empty to use the admin_token value above instead
+      # Example: "garage-admin-token"
+      name: ""
+
+      # Key within the secret that contains the admin token value
+      # Default: "admin-token"
+      key: "admin-token"
 
   # ========================================
   # Authentication Configuration

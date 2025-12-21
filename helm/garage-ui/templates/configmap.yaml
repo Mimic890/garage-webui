@@ -6,4 +6,6 @@ metadata:
     {{- include "garage-ui.labels" . | nindent 4 }}
 data:
   config.yaml: |
-{{- .Values.config | toYaml | nindent 4 }}
+{{- $config := deepCopy .Values.config }}
+{{- $_ := unset $config.garage "admin_token" }}
+{{- $config | toYaml | nindent 4 }}
