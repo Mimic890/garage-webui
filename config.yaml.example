@@ -9,7 +9,7 @@ server:
 # Garage S3 Configuration
 garage:
   endpoint: "http://localhost:3900" # Garage S3 API endpoint
-  region: "eu-west-1" # S3 region (can be any value for Garage)
+  region: "eu-west-1" # S3 region (ensure it matches Garage S3 configuration)
 
   # Garage Admin API configuration
   admin_endpoint: "http://localhost:3903" # Garage Admin API endpoint

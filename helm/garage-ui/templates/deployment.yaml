@@ -33,7 +33,7 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - name: http
-          containerPort: 8080
+          containerPort: {{ .Values.config.server.port }}
           protocol: TCP
         env:
         - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
