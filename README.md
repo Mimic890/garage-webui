@@ -85,11 +85,6 @@ docker run -d \
 docker pull noooste/garage-ui:latest
 ```
 
-**Available tags:**
-- `latest` - Latest stable release
-- `v0.0.4` - Specific version
-- `0.0` - Minor version track
-
 The Docker image is multi-platform, supporting `linux/amd64` and `linux/arm64`.
 
 ### Kubernetes Deployment with Helm
@@ -156,8 +151,8 @@ server:
 
 # Garage S3 Configuration
 garage:
-  endpoint: "http://garage:3900"
-  region: "eu-west-1"
+  endpoint: "garage:3900" 
+  region: "eu-west-1" # Ensure to match Garage region from garage.toml
   admin_endpoint: "http://garage:3903"
   admin_token: "your-admin-token-here"
 
@@ -622,8 +617,6 @@ GARAGE_UI_LOGGING_LEVEL=debug
 ## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 Noste
 
 ---
 
