@@ -1,6 +1,8 @@
 import {Link, useLocation} from 'react-router-dom';
 import {cn} from '@/lib/utils';
-import {Database, Key, LayoutDashboard, Server} from 'lucide-react';
+import {Database, Key, LayoutDashboard, LogOut, Server, User} from 'lucide-react';
+import {useAuthStore} from '@/store/auth-store';
+import {Button} from '@/components/ui/button';
 
 interface NavItem {
   title: string;
@@ -38,6 +40,11 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
+  const { user, config, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <div
@@ -76,17 +83,30 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           );
         })}
       </nav>
-      {/*<div className="border-t p-4">*/}
-      {/*  <div className="flex items-center gap-3 rounded-lg bg-muted px-3 py-2">*/}
-      {/*    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">*/}
-      {/*      AD*/}
-      {/*    </div>*/}
-      {/*    <div className="flex-1 overflow-hidden">*/}
-      {/*      <p className="text-sm font-medium truncate">Admin User</p>*/}
-      {/*      <p className="text-xs text-muted-foreground truncate">admin@garage.local</p>*/}
-      {/*    </div>*/}
-      {/*  </div>*/}
-      {/*</div>*/}
+      {config && (config.admin.enabled || config.oidc.enabled) && user && (
+        <div className="border-t p-4 space-y-2">
+          <div className="flex items-center gap-3 rounded-lg bg-muted px-3 py-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+              <User className="h-4 w-4" />
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">{user.name || user.username}</p>
+              {user.email && (
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              )}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -156,18 +156,18 @@ garage:
   admin_endpoint: "http://garage:3903"
   admin_token: "your-admin-token-here"
 
-# Authentication (none, basic, oidc)
+# Authentication Configuration
+# You can enable one or both authentication methods
 auth:
-  mode: "none"
-
-  # Basic auth example
-  basic:
+  # Admin authentication (username/password)
+  admin:
+    enabled: false  # Set to true to enable admin login
     username: "admin"
     password: "secure-password"
 
-  # OIDC example (Keycloak, Auth0, etc.)
+  # OIDC authentication (Keycloak, Auth0, etc.)
   oidc:
-    enabled: true
+    enabled: false  # Set to true to enable OIDC login
     provider_name: "Keycloak"
     client_id: "garage-ui"
     client_secret: "your-client-secret"
@@ -187,9 +187,10 @@ GARAGE_UI_SERVER_PORT=8080
 GARAGE_UI_GARAGE_ENDPOINT=http://garage:3900
 GARAGE_UI_GARAGE_ADMIN_ENDPOINT=http://garage:3903
 GARAGE_UI_GARAGE_ADMIN_TOKEN=your-token
-GARAGE_UI_AUTH_MODE=basic
-GARAGE_UI_AUTH_BASIC_USERNAME=admin
-GARAGE_UI_AUTH_BASIC_PASSWORD=password
+GARAGE_UI_AUTH_ADMIN_ENABLED=true
+GARAGE_UI_AUTH_ADMIN_USERNAME=admin
+GARAGE_UI_AUTH_ADMIN_PASSWORD=password
+GARAGE_UI_AUTH_OIDC_ENABLED=false
 GARAGE_UI_LOGGING_LEVEL=info
 ```
 
@@ -356,38 +357,44 @@ Once the backend is running, access the Swagger UI documentation at:
 
 ---
 
-## Authentication Modes
+## Authentication
 
-Garage UI supports three authentication modes:
+Garage UI supports flexible authentication with the ability to enable one or both methods simultaneously:
 
-### 1. None (Default)
+### No Authentication
 
-No authentication required - suitable for private networks or development.
+If neither admin nor OIDC authentication is enabled, the application runs without authentication - suitable for private networks or development.
 
 ```yaml
 auth:
-  mode: "none"
+  admin:
+    enabled: false
+  oidc:
+    enabled: false
 ```
 
-### 2. Basic Authentication
+### Admin Authentication
 
-Simple username/password authentication.
+Simple username/password authentication using JWT tokens.
 
 ```yaml
 auth:
-  mode: "basic"
-  basic:
+  admin:
+    enabled: true
     username: "admin"
     password: "your-secure-password"
+  oidc:
+    enabled: false
 ```
 
-### 3. OIDC (OpenID Connect)
+### OIDC (OpenID Connect) Authentication
 
 Enterprise-grade authentication with providers like Keycloak, Auth0, Okta, etc.
 
 ```yaml
 auth:
-  mode: "oidc"
+  admin:
+    enabled: false
   oidc:
     enabled: true
     provider_name: "Keycloak"
@@ -399,6 +406,29 @@ auth:
     userinfo_url: "https://auth.example.com/realms/master/protocol/openid-connect/userinfo"
     session_max_age: 86400  # 24 hours
     cookie_secure: true      # Enable in production with HTTPS
+```
+
+### Both Authentication Methods
+
+You can enable both admin and OIDC authentication simultaneously. Users will be presented with both options on the login page:
+
+```yaml
+auth:
+  admin:
+    enabled: true
+    username: "admin"
+    password: "your-secure-password"
+  oidc:
+    enabled: true
+    provider_name: "Keycloak"
+    client_id: "garage-ui"
+    client_secret: "your-client-secret"
+    issuer_url: "https://auth.example.com/realms/master"
+    auth_url: "https://auth.example.com/realms/master/protocol/openid-connect/auth"
+    token_url: "https://auth.example.com/realms/master/protocol/openid-connect/token"
+    userinfo_url: "https://auth.example.com/realms/master/protocol/openid-connect/userinfo"
+    session_max_age: 86400
+    cookie_secure: true
 ```
 
 **Role-Based Access (Optional):**
@@ -492,12 +522,15 @@ ingress:
       hosts:
         - garage-ui.example.com
 
-auth:
-  mode: oidc
-  oidc:
-    clientId: garage-ui
-    clientSecret: secret
-    issuerUrl: https://auth.example.com/realms/master
+config:
+  auth:
+    admin:
+      enabled: false
+    oidc:
+      enabled: true
+      client_id: garage-ui
+      client_secret: secret
+      issuer_url: https://auth.example.com/realms/master
 ```
 
 Install with:

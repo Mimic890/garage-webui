@@ -15,6 +15,7 @@ import type {
   S3Object,
   StorageMetrics,
 } from '@/types';
+import type { AuthUser } from '@/types/auth';
 
 const api = axios.create({
   baseURL: '/api',
@@ -23,7 +24,23 @@ const api = axios.create({
   },
 });
 
+// Separate axios instance for auth endpoints (which are not under /api)
+const authApiClient = axios.create({
+  baseURL: '/auth',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth-token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+authApiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -50,6 +67,19 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Handle 401 Unauthorized - redirect to login
+    if (error.response?.status === 401) {
+      // Clear auth token
+      localStorage.removeItem('auth-token');
+
+      // Only redirect if not already on login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+
+      return Promise.reject(error);
+    }
+
     // Handle axios errors
     if (error.response) {
       // Server responded with error status
@@ -83,6 +113,44 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Auth API
+export const authApi = {
+  getConfig: async () => {
+    const response = await authApiClient.get<{
+      admin: { enabled: boolean };
+      oidc: { enabled: boolean; provider?: string };
+    }>('/config');
+    return response;
+  },
+
+  loginAdmin: async (username: string, password: string) => {
+    const response = await authApiClient.post<{ success: boolean; token: string; user: AuthUser }>('/login', {
+      username,
+      password,
+    });
+    return response;
+  },
+
+  me: async () => {
+    const response = await authApiClient.get<{ success: boolean; user: AuthUser }>('/me');
+    return response;
+  },
+
+  logoutAdmin: async () => {
+    // For admin, just clear local storage (no server logout needed)
+    return Promise.resolve();
+  },
+
+  logoutOIDC: async () => {
+    const response = await authApiClient.post('/oidc/logout');
+    return response;
+  },
+
+  loginOIDC: () => {
+    window.location.href = '/auth/oidc/login';
+  },
+};
 
 // Bucket API
 export const bucketsApi = {

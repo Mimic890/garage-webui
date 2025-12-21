@@ -3,6 +3,7 @@ package services
 import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/pkg/utils"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,17 +32,30 @@ func NewGarageAdminService(cfg *config.GarageConfig) *GarageAdminService {
 	}
 }
 
-// doRequest performs an HTTP request to the Admin API
+// doRequest performs an HTTP request to the Admin API with retry logic for connection refused errors
 func (s *GarageAdminService) doRequest(ctx context.Context, method, path string, body interface{}) (*azuretls.Response, error) {
-	return s.httpClient.Do(&azuretls.Request{
-		Method:     method,
-		Url:        s.baseURL + path,
-		Body:       body,
-		IgnoreBody: true, // decodeResponse will handle body reading
-		OrderedHeaders: azuretls.OrderedHeaders{
-			{"Authorization", fmt.Sprintf("Bearer %s", s.token)},
-		},
-	}, ctx)
+	var resp *azuretls.Response
+
+	retryConfig := utils.DefaultRetryConfig()
+	err := utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var reqErr error
+		resp, reqErr = s.httpClient.Do(&azuretls.Request{
+			Method:     method,
+			Url:        s.baseURL + path,
+			Body:       body,
+			IgnoreBody: true, // decodeResponse will handle body reading
+			OrderedHeaders: azuretls.OrderedHeaders{
+				{"Authorization", fmt.Sprintf("Bearer %s", s.token)},
+			},
+		}, ctx)
+		return reqErr
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 // decodeResponse decodes a JSON response into the target structure

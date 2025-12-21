@@ -15,7 +15,8 @@ import (
 
 // AuthService handles authentication operations
 type AuthService struct {
-	config       *config.AuthConfig
+	authConfig   *config.AuthConfig
+	serverConfig *config.ServerConfig
 	oidcProvider *oidc.Provider
 	oidcVerifier *oidc.IDTokenVerifier
 	oauth2Config *oauth2.Config
@@ -31,19 +32,20 @@ type UserInfo struct {
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(cfg *config.AuthConfig) (*AuthService, error) {
+func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) (*AuthService, error) {
 	jwtService, err := NewJWTService()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize JWT service: %w", err)
 	}
 
 	service := &AuthService{
-		config:     cfg,
-		jwtService: jwtService,
+		authConfig:   authCfg,
+		serverConfig: serverCfg,
+		jwtService:   jwtService,
 	}
 
 	// Initialize OIDC if enabled
-	if cfg.Mode == "oidc" && cfg.OIDC.Enabled {
+	if authCfg.OIDC.Enabled {
 		if err := service.initOIDC(); err != nil {
 			return nil, fmt.Errorf("failed to initialize OIDC: %w", err)
 		}
@@ -57,7 +59,7 @@ func (a *AuthService) initOIDC() error {
 	ctx := context.Background()
 
 	// Create OIDC provider
-	provider, err := oidc.NewProvider(ctx, a.config.OIDC.IssuerURL)
+	provider, err := oidc.NewProvider(ctx, a.authConfig.OIDC.IssuerURL)
 	if err != nil {
 		return fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
@@ -66,18 +68,23 @@ func (a *AuthService) initOIDC() error {
 
 	// Create ID token verifier
 	verifierConfig := &oidc.Config{
-		ClientID:        a.config.OIDC.ClientID,
-		SkipIssuerCheck: a.config.OIDC.SkipIssuerCheck,
-		SkipExpiryCheck: a.config.OIDC.SkipExpiryCheck,
+		ClientID:        a.authConfig.OIDC.ClientID,
+		SkipIssuerCheck: a.authConfig.OIDC.SkipIssuerCheck,
+		SkipExpiryCheck: a.authConfig.OIDC.SkipExpiryCheck,
 	}
 	a.oidcVerifier = provider.Verifier(verifierConfig)
 
+	// Construct redirect URL from server config
+	// Use root_url if set, otherwise construct from protocol/domain
+	redirectURL := a.serverConfig.RootURL + "/auth/oidc/callback"
+
 	// Create OAuth2 config
 	a.oauth2Config = &oauth2.Config{
-		ClientID:     a.config.OIDC.ClientID,
-		ClientSecret: a.config.OIDC.ClientSecret,
+		ClientID:     a.authConfig.OIDC.ClientID,
+		ClientSecret: a.authConfig.OIDC.ClientSecret,
+		RedirectURL:  redirectURL,
 		Endpoint:     provider.Endpoint(),
-		Scopes:       a.config.OIDC.Scopes,
+		Scopes:       a.authConfig.OIDC.Scopes,
 	}
 
 	return nil
@@ -88,12 +95,12 @@ func (a *AuthService) ValidateBasicAuth(username, password string) bool {
 	// Use constant-time comparison to prevent timing attacks
 	usernameMatch := subtle.ConstantTimeCompare(
 		[]byte(username),
-		[]byte(a.config.Basic.Username),
+		[]byte(a.authConfig.Admin.Username),
 	) == 1
 
 	passwordMatch := subtle.ConstantTimeCompare(
 		[]byte(password),
-		[]byte(a.config.Basic.Password),
+		[]byte(a.authConfig.Admin.Password),
 	) == 1
 
 	return usernameMatch && passwordMatch
@@ -171,14 +178,14 @@ func (a *AuthService) VerifyIDToken(ctx context.Context, rawIDToken string) (*Us
 
 	// Extract user information using configured attributes
 	userInfo := &UserInfo{
-		Username: extractClaim(claims, a.config.OIDC.UsernameAttribute),
-		Email:    extractClaim(claims, a.config.OIDC.EmailAttribute),
-		Name:     extractClaim(claims, a.config.OIDC.NameAttribute),
+		Username: extractClaim(claims, a.authConfig.OIDC.UsernameAttribute),
+		Email:    extractClaim(claims, a.authConfig.OIDC.EmailAttribute),
+		Name:     extractClaim(claims, a.authConfig.OIDC.NameAttribute),
 	}
 
 	// Extract roles if configured
-	if a.config.OIDC.RoleAttributePath != "" {
-		userInfo.Roles = extractRoles(claims, a.config.OIDC.RoleAttributePath)
+	if a.authConfig.OIDC.RoleAttributePath != "" {
+		userInfo.Roles = extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
 	}
 
 	return userInfo, nil
@@ -207,14 +214,14 @@ func (a *AuthService) GetUserInfo(ctx context.Context, token *oauth2.Token) (*Us
 
 	// Build user info
 	userInfo := &UserInfo{
-		Username: extractClaim(claims, a.config.OIDC.UsernameAttribute),
-		Email:    extractClaim(claims, a.config.OIDC.EmailAttribute),
-		Name:     extractClaim(claims, a.config.OIDC.NameAttribute),
+		Username: extractClaim(claims, a.authConfig.OIDC.UsernameAttribute),
+		Email:    extractClaim(claims, a.authConfig.OIDC.EmailAttribute),
+		Name:     extractClaim(claims, a.authConfig.OIDC.NameAttribute),
 	}
 
 	// Extract roles if configured
-	if a.config.OIDC.RoleAttributePath != "" {
-		userInfo.Roles = extractRoles(claims, a.config.OIDC.RoleAttributePath)
+	if a.authConfig.OIDC.RoleAttributePath != "" {
+		userInfo.Roles = extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
 	}
 
 	return userInfo, nil
@@ -222,12 +229,12 @@ func (a *AuthService) GetUserInfo(ctx context.Context, token *oauth2.Token) (*Us
 
 // IsAdmin checks if the user has admin role
 func (a *AuthService) IsAdmin(userInfo *UserInfo) bool {
-	if a.config.OIDC.AdminRole == "" {
+	if a.authConfig.OIDC.AdminRole == "" {
 		return false
 	}
 
 	for _, role := range userInfo.Roles {
-		if role == a.config.OIDC.AdminRole {
+		if role == a.authConfig.OIDC.AdminRole {
 			return true
 		}
 	}
@@ -320,7 +327,7 @@ func (a *AuthService) ValidateAndConsumeState(token string) bool {
 
 // GenerateSessionToken generates a JWT session token for the user
 func (a *AuthService) GenerateSessionToken(userInfo *UserInfo) (string, error) {
-	return a.jwtService.GenerateToken(userInfo, a.config.OIDC.SessionMaxAge)
+	return a.jwtService.GenerateToken(userInfo, a.authConfig.OIDC.SessionMaxAge)
 }
 
 // ValidateSessionToken validates a JWT session token and returns user info

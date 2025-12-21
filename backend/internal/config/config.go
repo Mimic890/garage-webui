@@ -23,6 +23,9 @@ type ServerConfig struct {
 	Port         int    `mapstructure:"port"`
 	Environment  string `mapstructure:"environment"`
 	FrontendPath string `mapstructure:"frontend_path"` // Path to frontend dist directory
+	Domain       string `mapstructure:"domain"`        // Domain name (e.g., garage-ui.example.com)
+	Protocol     string `mapstructure:"protocol"`      // Protocol for internal communication (http/https)
+	RootURL      string `mapstructure:"root_url"`      // Full external URL for redirects (e.g., https://garage-ui.example.com)
 }
 
 // GarageConfig contains Garage S3 connection settings
@@ -37,13 +40,13 @@ type GarageConfig struct {
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Mode  string          `mapstructure:"mode"` // "none", "basic", or "oidc"
-	Basic BasicAuthConfig `mapstructure:"basic"`
+	Admin AdminAuthConfig `mapstructure:"admin"`
 	OIDC  OIDCConfig      `mapstructure:"oidc"`
 }
 
-// BasicAuthConfig contains basic authentication settings
-type BasicAuthConfig struct {
+// AdminAuthConfig contains admin authentication settings
+type AdminAuthConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 }
@@ -139,6 +142,9 @@ func bindEnvVars() {
 	viper.BindEnv("server.port", "GARAGE_UI_SERVER_PORT")
 	viper.BindEnv("server.environment", "GARAGE_UI_SERVER_ENVIRONMENT")
 	viper.BindEnv("server.frontend_path", "GARAGE_UI_SERVER_FRONTEND_PATH")
+	viper.BindEnv("server.domain", "GARAGE_UI_SERVER_DOMAIN")
+	viper.BindEnv("server.protocol", "GARAGE_UI_SERVER_PROTOCOL")
+	viper.BindEnv("server.root_url", "GARAGE_UI_SERVER_ROOT_URL")
 
 	// Garage config
 	viper.BindEnv("garage.endpoint", "GARAGE_UI_GARAGE_ENDPOINT")
@@ -149,9 +155,9 @@ func bindEnvVars() {
 	viper.BindEnv("garage.admin_token", "GARAGE_UI_GARAGE_ADMIN_TOKEN")
 
 	// Auth config
-	viper.BindEnv("auth.mode", "GARAGE_UI_AUTH_MODE")
-	viper.BindEnv("auth.basic.username", "GARAGE_UI_AUTH_BASIC_USERNAME")
-	viper.BindEnv("auth.basic.password", "GARAGE_UI_AUTH_BASIC_PASSWORD")
+	viper.BindEnv("auth.admin.enabled", "GARAGE_UI_AUTH_ADMIN_ENABLED")
+	viper.BindEnv("auth.admin.username", "GARAGE_UI_AUTH_ADMIN_USERNAME")
+	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
 
 	// OIDC config
 	viper.BindEnv("auth.oidc.enabled", "GARAGE_UI_AUTH_OIDC_ENABLED")
@@ -208,28 +214,26 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("garage admin_token is required")
 	}
 
-	// Validate auth mode
-	if c.Auth.Mode != "none" && c.Auth.Mode != "basic" && c.Auth.Mode != "oidc" {
-		return fmt.Errorf("auth mode must be 'none', 'basic', or 'oidc', got: %s", c.Auth.Mode)
-	}
-
-	// Validate basic auth if enabled
-	if c.Auth.Mode == "basic" {
-		if c.Auth.Basic.Username == "" || c.Auth.Basic.Password == "" {
-			return fmt.Errorf("basic auth username and password are required when auth mode is 'basic'")
+	// Validate admin auth if enabled
+	if c.Auth.Admin.Enabled {
+		if c.Auth.Admin.Username == "" || c.Auth.Admin.Password == "" {
+			return fmt.Errorf("admin auth username and password are required when admin auth is enabled")
 		}
 	}
 
 	// Validate OIDC config if enabled
-	if c.Auth.Mode == "oidc" {
+	if c.Auth.OIDC.Enabled {
 		if c.Auth.OIDC.ClientID == "" {
-			return fmt.Errorf("oidc client_id is required when auth mode is 'oidc'")
+			return fmt.Errorf("oidc client_id is required when oidc is enabled")
 		}
 		if c.Auth.OIDC.IssuerURL == "" {
-			return fmt.Errorf("oidc issuer_url is required when auth mode is 'oidc'")
+			return fmt.Errorf("oidc issuer_url is required when oidc is enabled")
+		}
+		if c.Server.RootURL == "" {
+			return fmt.Errorf("server.root_url is required when oidc is enabled")
 		}
 		if len(c.Auth.OIDC.Scopes) == 0 {
-			return fmt.Errorf("oidc scopes are required when auth mode is 'oidc'")
+			return fmt.Errorf("oidc scopes are required when oidc is enabled")
 		}
 	}
 

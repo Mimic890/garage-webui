@@ -9,94 +9,63 @@ import (
 )
 
 // AuthMiddleware returns a Fiber middleware for authentication
-// It handles different auth modes: none, basic, and OIDC
+// It handles multiple auth methods: admin and OIDC
 func AuthMiddleware(cfg *config.AuthConfig, authService *auth.AuthService) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// If auth mode is "none", allow all requests
-		if cfg.Mode == "none" {
+		// If no auth is enabled, allow all requests
+		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled {
 			return c.Next()
 		}
 
-		// Handle basic authentication
-		if cfg.Mode == "basic" {
-			return handleBasicAuth(c, authService)
+		// Get Authorization header
+		authHeader := c.Get("Authorization")
+
+		// Try admin auth if enabled and header is present
+		if cfg.Admin.Enabled && authHeader != "" {
+			// Check if it's a Bearer token (JWT from admin login)
+			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+				token := authHeader[7:]
+
+				// Validate JWT session token
+				userInfo, err := authService.ValidateSessionToken(token)
+				if err == nil {
+					// Valid admin token
+					c.Locals("userInfo", userInfo)
+					c.Locals("username", userInfo.Username)
+					if userInfo.Email != "" {
+						c.Locals("email", userInfo.Email)
+					}
+					return c.Next()
+				}
+			}
 		}
 
-		// Handle OIDC authentication
-		if cfg.Mode == "oidc" {
-			return handleOIDCAuth(c, authService, &cfg.OIDC)
+		// Try OIDC auth if enabled
+		if cfg.OIDC.Enabled {
+			sessionCookie := c.Cookies(cfg.OIDC.CookieName)
+			if sessionCookie != "" {
+				// Validate JWT session token from cookie
+				userInfo, err := authService.ValidateSessionToken(sessionCookie)
+				if err == nil {
+					// Valid OIDC token
+					c.Locals("userInfo", userInfo)
+					c.Locals("username", userInfo.Username)
+					c.Locals("email", userInfo.Email)
+					return c.Next()
+				}
+			}
 		}
 
-		// Unknown auth mode - deny access
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid authentication mode"),
-		)
-	}
-}
-
-// handleBasicAuth validates basic authentication credentials
-func handleBasicAuth(c fiber.Ctx, authService *auth.AuthService) error {
-	// Get Authorization header
-	authHeader := c.Get("Authorization")
-	if authHeader == "" {
-		c.Set("WWW-Authenticate", `Basic realm="Restricted"`)
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Authorization header required"),
-		)
-	}
-
-	// Parse basic auth credentials
-	username, password, ok := auth.ParseBasicAuth(authHeader)
-	if !ok {
-		c.Set("WWW-Authenticate", `Basic realm="Restricted"`)
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid Authorization header format"),
-		)
-	}
-
-	// Validate credentials
-	if !authService.ValidateBasicAuth(username, password) {
-		c.Set("WWW-Authenticate", `Basic realm="Restricted"`)
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
-		)
-	}
-
-	// Store username in context for later use
-	c.Locals("username", username)
-
-	return c.Next()
-}
-
-// handleOIDCAuth validates OIDC session/token
-func handleOIDCAuth(c fiber.Ctx, authService *auth.AuthService, oidcCfg *config.OIDCConfig) error {
-	// Get session cookie
-	sessionCookie := c.Cookies(oidcCfg.CookieName)
-	if sessionCookie == "" {
+		// No valid authentication found
 		return c.Status(fiber.StatusUnauthorized).JSON(
 			models.ErrorResponse(models.ErrCodeUnauthorized, "Authentication required"),
 		)
 	}
-
-	// Validate JWT session token
-	userInfo, err := authService.ValidateSessionToken(sessionCookie)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid or expired session"),
-		)
-	}
-
-	// Store user info in context for handlers to use
-	c.Locals("userInfo", userInfo)
-	c.Locals("username", userInfo.Username)
-	c.Locals("email", userInfo.Email)
-
-	return c.Next()
 }
 
 func RequireAuth(cfg *config.AuthConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		if cfg.Mode == "none" {
+		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled {
 			return c.Status(fiber.StatusForbidden).JSON(
 				models.ErrorResponse(models.ErrCodeForbidden, "Authentication is required but not configured"),
 			)

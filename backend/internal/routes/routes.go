@@ -39,6 +39,12 @@ func SetupRoutes(
 	// Swagger documentation endpoint (no auth required)
 	app.Get("/docs/*", swagger.HandlerDefault)
 
+	// Create auth handler
+	authHandler := handlers.NewAuthHandler(cfg, authService)
+
+	// Auth configuration endpoint (always accessible, no auth required)
+	app.Get("/auth/config", authHandler.GetAuthConfig)
+
 	// API v1 group
 	api := app.Group("/api/v1")
 
@@ -97,12 +103,22 @@ func SetupRoutes(
 		monitoring.Get("/dashboard", monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
 	}
 
+	// Admin auth login endpoint (only if admin is enabled)
+	if cfg.Auth.Admin.Enabled {
+		app.Post("/auth/login", authHandler.LoginAdmin)
+	}
+
+	// Auth "me" endpoint (if any auth is enabled)
+	if cfg.Auth.Admin.Enabled || cfg.Auth.OIDC.Enabled {
+		app.Get("/auth/me", middleware.AuthMiddleware(&cfg.Auth, authService), authHandler.GetMe)
+	}
+
 	// OIDC authentication routes (only if OIDC is enabled)
-	if cfg.Auth.Mode == "oidc" && cfg.Auth.OIDC.Enabled {
-		authRoutes := app.Group("/auth")
+	if cfg.Auth.OIDC.Enabled {
+		oidcRoutes := app.Group("/auth/oidc")
 		{
 			// Login endpoint - redirects to OIDC provider
-			authRoutes.Get("/login", func(c fiber.Ctx) error {
+			oidcRoutes.Get("/login", func(c fiber.Ctx) error {
 				state, err := authService.GenerateStateToken()
 				if err != nil {
 					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -120,7 +136,7 @@ func SetupRoutes(
 			})
 
 			// Callback endpoint - handles OIDC redirect after login
-			authRoutes.Get("/callback", func(c fiber.Ctx) error {
+			oidcRoutes.Get("/callback", func(c fiber.Ctx) error {
 				// Get and validate state token
 				state := c.Query("state")
 				if !authService.ValidateAndConsumeState(state) {
@@ -180,14 +196,12 @@ func SetupRoutes(
 					SameSite: cfg.Auth.OIDC.CookieSameSite,
 				})
 
-				return c.JSON(fiber.Map{
-					"success": true,
-					"user":    userInfo,
-				})
+				// Redirect to frontend with success indicator
+				return c.Redirect().To("/?login=success")
 			})
 
 			// Logout endpoint
-			authRoutes.Post("/logout", func(c fiber.Ctx) error {
+			oidcRoutes.Post("/logout", func(c fiber.Ctx) error {
 				// Clear session cookie
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.CookieName,
@@ -198,21 +212,6 @@ func SetupRoutes(
 				return c.JSON(fiber.Map{
 					"success": true,
 					"message": "Logged out successfully",
-				})
-			})
-
-			// User info endpoint
-			authRoutes.Get("/me", middleware.AuthMiddleware(&cfg.Auth, authService), func(c fiber.Ctx) error {
-				userInfo := c.Locals("userInfo")
-				if userInfo == nil {
-					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-						"error": "Not authenticated",
-					})
-				}
-
-				return c.JSON(fiber.Map{
-					"success": true,
-					"user":    userInfo,
 				})
 			})
 		}
@@ -227,6 +226,7 @@ func SetupRoutes(
 			path := c.Path()
 
 			if strings.HasPrefix(path, "/api/") ||
+				strings.HasPrefix(path, "/auth") ||
 				strings.HasPrefix(path, "/health") ||
 				strings.HasPrefix(path, "/docs") {
 				fmt.Println("API or health check route, skipping SPA fallback:", path)

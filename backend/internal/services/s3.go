@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -122,8 +123,15 @@ func (s *S3Service) getMinioClient(ctx context.Context, bucketName string) (*min
 
 // ListBuckets retrieves all buckets from Garage
 func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse, error) {
-	// Call MinIO ListBuckets API
-	bucketInfos, err := s.client.ListBuckets(ctx)
+	var bucketInfos []minio.BucketInfo
+
+	// Call MinIO ListBuckets API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err := utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var listErr error
+		bucketInfos, listErr = s.client.ListBuckets(ctx)
+		return listErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list buckets: %w", err)
 	}
@@ -150,9 +158,12 @@ func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Call MinIO MakeBucket API
-	err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{
-		Region: s.config.Region,
+	// Call MinIO MakeBucket API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		return client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{
+			Region: s.config.Region,
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
@@ -168,8 +179,11 @@ func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Call MinIO RemoveBucket API
-	err = client.RemoveBucket(ctx, bucketName)
+	// Call MinIO RemoveBucket API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		return client.RemoveBucket(ctx, bucketName)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to delete bucket %s: %w", bucketName, err)
 	}
@@ -273,8 +287,15 @@ func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, bo
 		ContentType: contentType,
 	}
 
-	// Call MinIO PutObject API
-	info, err := client.PutObject(ctx, bucketName, key, body, -1, opts)
+	var info minio.UploadInfo
+
+	// Call MinIO PutObject API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var uploadErr error
+		info, uploadErr = client.PutObject(ctx, bucketName, key, body, -1, opts)
+		return uploadErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload object %s to bucket %s: %w", key, bucketName, err)
 	}
@@ -290,8 +311,15 @@ func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, bo
 
 // GetObject retrieves an object from a bucket
 func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error) {
-	// Call MinIO GetObject API
-	object, err := s.client.GetObject(ctx, bucketName, key, minio.GetObjectOptions{})
+	var object *minio.Object
+
+	// Call MinIO GetObject API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err := utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var getErr error
+		object, getErr = s.client.GetObject(ctx, bucketName, key, minio.GetObjectOptions{})
+		return getErr
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get object %s from bucket %s: %w", key, bucketName, err)
 	}
@@ -317,8 +345,11 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 
 // DeleteObject deletes an object from a bucket
 func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) error {
-	// Call MinIO RemoveObject API
-	err := s.client.RemoveObject(ctx, bucketName, key, minio.RemoveObjectOptions{})
+	// Call MinIO RemoveObject API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err := utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		return s.client.RemoveObject(ctx, bucketName, key, minio.RemoveObjectOptions{})
+	})
 	if err != nil {
 		return fmt.Errorf("failed to delete object %s from bucket %s: %w", key, bucketName, err)
 	}
@@ -334,7 +365,15 @@ func (s *S3Service) ObjectExists(ctx context.Context, bucketName, key string) (b
 		return false, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	_, err = client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
+	var statErr error
+
+	// Call MinIO StatObject API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		_, statErr = client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
+		return statErr
+	})
+
 	if err != nil {
 		// Check if error is "object not found"
 		errResponse := minio.ToErrorResponse(err)
@@ -354,7 +393,15 @@ func (s *S3Service) GetObjectMetadata(ctx context.Context, bucketName, key strin
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	stat, err := client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
+	var stat minio.ObjectInfo
+
+	// Call MinIO StatObject API with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var statErr error
+		stat, statErr = client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
+		return statErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata for object %s in bucket %s: %w", key, bucketName, err)
 	}
@@ -415,8 +462,15 @@ func (s *S3Service) GetPresignedURL(ctx context.Context, bucketName, key string,
 		return "", fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Generate presigned GET URL
-	presignedURL, err := client.PresignedGetObject(ctx, bucketName, key, expiresIn, nil)
+	var presignedURL *url.URL
+
+	// Generate presigned GET URL with retry logic
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var presignErr error
+		presignedURL, presignErr = client.PresignedGetObject(ctx, bucketName, key, expiresIn, nil)
+		return presignErr
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL for %s/%s: %w", bucketName, key, err)
 	}

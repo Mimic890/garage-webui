@@ -147,30 +147,53 @@ config:
     environment: production # Environment (production/development/staging)
 ```
 
-#### Authentication Modes
+#### Authentication Configuration
 
 **No Authentication** (default, suitable for private networks):
 ```yaml
 config:
   auth:
-    mode: "none"
+    admin:
+      enabled: false
+    oidc:
+      enabled: false
 ```
 
-**Basic Authentication**:
+**Admin Authentication** (username/password with JWT):
 ```yaml
 config:
   auth:
-    mode: "basic"
-    basic:
+    admin:
+      enabled: true
       username: "admin"
       password: "your-secure-password"
+    oidc:
+      enabled: false
 ```
 
 **OIDC/SSO** (recommended for production):
 ```yaml
 config:
   auth:
-    mode: "oidc"
+    admin:
+      enabled: false
+    oidc:
+      enabled: true
+      provider_name: "Keycloak"
+      client_id: "garage-ui"
+      client_secret: "your-oidc-secret"
+      issuer_url: "https://auth.example.com/realms/master"
+      # ... additional OIDC settings
+```
+
+**Both Authentication Methods** (admin and OIDC simultaneously):
+```yaml
+config:
+  auth:
+    admin:
+      enabled: true
+      username: "admin"
+      password: "your-secure-password"
     oidc:
       enabled: true
       provider_name: "Keycloak"
@@ -324,10 +347,10 @@ Install:
 helm install garage-ui ./helm/garage-ui -f values-ingress.yaml
 ```
 
-### Example 3: With Basic Authentication
+### Example 3: With Admin Authentication
 
 ```yaml
-# values-basic-auth.yaml
+# values-admin-auth.yaml
 config:
   garage:
     endpoint: "http://garage:3900"
@@ -335,10 +358,12 @@ config:
     admin_token: "your-admin-token"
 
   auth:
-    mode: "basic"
-    basic:
+    admin:
+      enabled: true
       username: "admin"
       password: "super-secret-password-change-me"
+    oidc:
+      enabled: false
 
 ingress:
   enabled: true
@@ -352,7 +377,7 @@ ingress:
 
 Install:
 ```bash
-helm install garage-ui ./helm/garage-ui -f values-basic-auth.yaml
+helm install garage-ui ./helm/garage-ui -f values-admin-auth.yaml
 ```
 
 ### Example 4: Production Setup with OIDC (Keycloak)
@@ -372,7 +397,8 @@ config:
     region: "us-east-1"
 
   auth:
-    mode: "oidc"
+    admin:
+      enabled: false
     oidc:
       enabled: true
       provider_name: "Keycloak"
@@ -640,7 +666,7 @@ Common issues:
 - **Missing admin token**: Ensure `config.garage.admin_token` is set or `config.garage.existingSecret.name` points to a valid secret
 - **Secret not found**: If using `existingSecret`, verify the secret exists: `kubectl get secret <secret-name>`
 - **Unreachable Garage**: Verify endpoints are accessible from within the cluster
-- **Invalid OIDC config**: Check all OIDC URLs and credentials when using `auth.mode: oidc`
+- **Invalid OIDC config**: Check all OIDC URLs and credentials when using `auth.oidc.enabled: true`
 
 ### Cannot Access the UI
 
@@ -684,14 +710,17 @@ curl http://garage:3903/health
 
 ### Authentication Issues
 
-**Basic Auth:**
-- Verify username/password in `config.auth.basic`
+**Admin Auth:**
+- Verify username/password in `config.auth.admin`
+- Ensure `config.auth.admin.enabled` is set to `true`
 - Check browser developer tools for 401 errors
+- Verify JWT token is being sent in Authorization header
 
 **OIDC:**
+- Ensure `config.auth.oidc.enabled` is set to `true`
 - Verify all OIDC URLs are accessible
 - Check OIDC provider logs
-- Ensure redirect URI is registered: `https://your-domain/auth/callback`
+- Ensure redirect URI is registered: `https://your-domain/auth/oidc/callback`
 - Verify client ID and secret
 
 ### View Application Logs

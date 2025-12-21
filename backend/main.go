@@ -25,9 +25,6 @@ import (
 //	@description	This API provides endpoints for managing buckets, objects, users, and cluster operations.
 //	@termsOfService	http://swagger.io/terms/
 
-//	@contact.name	API Support
-//	@contact.email	support@garage-ui.io
-
 //	@license.name	MIT
 //	@license.url	https://opensource.org/licenses/MIT
 
@@ -81,8 +78,19 @@ func main() {
 	log.Println("Initializing S3 service...")
 	s3Service := services.NewS3Service(&cfg.Garage, adminService)
 
-	log.Printf("Initializing authentication service (mode: %s)...", cfg.Auth.Mode)
-	authService, err := auth.NewAuthService(&cfg.Auth)
+	// Determine enabled auth methods for logging
+	authMethods := []string{}
+	if cfg.Auth.Admin.Enabled {
+		authMethods = append(authMethods, "admin")
+	}
+	if cfg.Auth.OIDC.Enabled {
+		authMethods = append(authMethods, "oidc")
+	}
+	if len(authMethods) == 0 {
+		authMethods = append(authMethods, "none")
+	}
+	log.Printf("Initializing authentication service (enabled: %v)...", authMethods)
+	authService, err := auth.NewAuthService(&cfg.Auth, &cfg.Server)
 	if err != nil {
 		log.Fatalf("Failed to initialize auth service: %v", err)
 	}
