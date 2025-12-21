@@ -502,7 +502,7 @@ replicaCount: 2
 
 image:
   repository: noooste/garage-ui
-  tag: v0.0.4
+  tag: latest
 
 garage:
   endpoint: "http://garage.storage.svc.cluster.local:3900"

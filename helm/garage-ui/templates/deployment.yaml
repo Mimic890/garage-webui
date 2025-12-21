@@ -46,6 +46,30 @@ spec:
               name: {{ include "garage-ui.fullname" . }}-admin-token
               key: admin-token
               {{- end }}
+        {{- if .Values.config.auth.oidc.enabled }}
+        - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              {{- if .Values.config.auth.oidc.existingSecret.name }}
+              name: {{ .Values.config.auth.oidc.existingSecret.name }}
+              key: {{ .Values.config.auth.oidc.existingSecret.key }}
+              {{- else }}
+              name: {{ include "garage-ui.fullname" . }}-oidc-client-secret
+              key: client-secret
+              {{- end }}
+        {{- end }}
+        {{- if .Values.config.auth.admin.enabled }}
+        - name: GARAGE_UI_AUTH_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              {{- if .Values.config.auth.admin.existingSecret.name }}
+              name: {{ .Values.config.auth.admin.existingSecret.name }}
+              key: {{ .Values.config.auth.admin.existingSecret.key }}
+              {{- else }}
+              name: {{ include "garage-ui.fullname" . }}-admin-password
+              key: admin-password
+              {{- end }}
+        {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
