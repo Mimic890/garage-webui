@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"Noooste/garage-ui/internal/config"
@@ -24,6 +25,16 @@ type S3Service struct {
 // NewS3Service creates a new S3 service instance using MinIO SDK
 func NewS3Service(cfg *config.GarageConfig, adminService *GarageAdminService) *S3Service {
 	// Create MinIO client for Garage
+	// trim http or https from endpoint
+	if strings.HasPrefix(cfg.Endpoint, "http://") {
+		cfg.Endpoint = strings.TrimPrefix(cfg.Endpoint, "http://")
+	}
+
+	if strings.HasPrefix(cfg.Endpoint, "https://") {
+		cfg.Endpoint = strings.TrimPrefix(cfg.Endpoint, "https://")
+		cfg.UseSSL = true
+	}
+
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
 		//Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
