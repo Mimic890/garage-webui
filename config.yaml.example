@@ -9,6 +9,12 @@ server:
   protocol: "http" # Protocol for internal communication (http/https)
   root_url: "http://localhost:8080" # Full external URL for OAuth2 redirects (adjust for production)
 
+  # Request size limits (in bytes)
+  max_body_size: 314572800 # 300MB - Maximum request body size (increase for large file uploads)
+  max_header_size: 1048576 # 1MB - Maximum request header size
+  read_buffer_size: 4096 # 4KB - Read buffer size
+  write_buffer_size: 4096 # 4KB - Write buffer size
+
 # Garage S3 Configuration
 garage:
   endpoint: "http://localhost:3900" # Garage S3 API endpoint
@@ -21,6 +27,13 @@ garage:
 # Authentication Configuration
 # You can enable one or both authentication methods
 auth:
+  # JWT Configuration
+  # Ed25519 private key in PEM format for JWT token signing
+  # If not specified, a new key will be generated on each startup (tokens won't persist across restarts)
+  # Generate with: openssl genpkey -algorithm ED25519 -out jwt-key.pem
+  # The key is a 64-byte Ed25519 private key
+  jwt_private_key: "" # Leave empty to auto-generate, or provide PEM-encoded Ed25519 private key
+
   # Admin Authentication (username/password)
   admin:
     enabled: false # Set to true to enable admin login

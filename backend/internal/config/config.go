@@ -19,13 +19,17 @@ type Config struct {
 
 // ServerConfig contains server-related configuration
 type ServerConfig struct {
-	Host         string `mapstructure:"host"`
-	Port         int    `mapstructure:"port"`
-	Environment  string `mapstructure:"environment"`
-	FrontendPath string `mapstructure:"frontend_path"` // Path to frontend dist directory
-	Domain       string `mapstructure:"domain"`        // Domain name (e.g., garage-ui.example.com)
-	Protocol     string `mapstructure:"protocol"`      // Protocol for internal communication (http/https)
-	RootURL      string `mapstructure:"root_url"`      // Full external URL for redirects (e.g., https://garage-ui.example.com)
+	Host            string `mapstructure:"host"`
+	Port            int    `mapstructure:"port"`
+	Environment     string `mapstructure:"environment"`
+	FrontendPath    string `mapstructure:"frontend_path"`     // Path to frontend dist directory
+	Domain          string `mapstructure:"domain"`            // Domain name (e.g., garage-ui.example.com)
+	Protocol        string `mapstructure:"protocol"`          // Protocol for internal communication (http/https)
+	RootURL         string `mapstructure:"root_url"`          // Full external URL for redirects (e.g., https://garage-ui.example.com)
+	MaxBodySize     int64  `mapstructure:"max_body_size"`     // Maximum request body size in bytes (default: 300MB)
+	MaxHeaderSize   int    `mapstructure:"max_header_size"`   // Maximum request header size in bytes (default: 1MB)
+	ReadBufferSize  int    `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
+	WriteBufferSize int    `mapstructure:"write_buffer_size"` // Write buffer size in bytes (default: 4KB)
 }
 
 // GarageConfig contains Garage S3 connection settings
@@ -40,8 +44,9 @@ type GarageConfig struct {
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Admin AdminAuthConfig `mapstructure:"admin"`
-	OIDC  OIDCConfig      `mapstructure:"oidc"`
+	Admin      AdminAuthConfig `mapstructure:"admin"`
+	OIDC       OIDCConfig      `mapstructure:"oidc"`
+	JWTPrivKey string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
 }
 
 // AdminAuthConfig contains admin authentication settings
@@ -110,8 +115,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetEnvPrefix("GARAGE_UI")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Bind environment variables to config keys
-	// This ensures env vars override config file values
+	// Env vars override config file values
 	bindEnvVars()
 
 	// Read the config file (optional - will use defaults and env vars if not found)
@@ -145,6 +149,10 @@ func bindEnvVars() {
 	viper.BindEnv("server.domain", "GARAGE_UI_SERVER_DOMAIN")
 	viper.BindEnv("server.protocol", "GARAGE_UI_SERVER_PROTOCOL")
 	viper.BindEnv("server.root_url", "GARAGE_UI_SERVER_ROOT_URL")
+	viper.BindEnv("server.max_body_size", "GARAGE_UI_SERVER_MAX_BODY_SIZE")
+	viper.BindEnv("server.max_header_size", "GARAGE_UI_SERVER_MAX_HEADER_SIZE")
+	viper.BindEnv("server.read_buffer_size", "GARAGE_UI_SERVER_READ_BUFFER_SIZE")
+	viper.BindEnv("server.write_buffer_size", "GARAGE_UI_SERVER_WRITE_BUFFER_SIZE")
 
 	// Garage config
 	viper.BindEnv("garage.endpoint", "GARAGE_UI_GARAGE_ENDPOINT")
@@ -158,6 +166,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.admin.enabled", "GARAGE_UI_AUTH_ADMIN_ENABLED")
 	viper.BindEnv("auth.admin.username", "GARAGE_UI_AUTH_ADMIN_USERNAME")
 	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
+	viper.BindEnv("auth.jwt_private_key", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY")
 
 	// OIDC config
 	viper.BindEnv("auth.oidc.enabled", "GARAGE_UI_AUTH_OIDC_ENABLED")

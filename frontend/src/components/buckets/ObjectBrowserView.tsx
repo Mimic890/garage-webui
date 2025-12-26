@@ -6,9 +6,10 @@ import {Header} from '@/components/layout/header';
 import {ObjectsTable} from './ObjectsTable';
 import {CreateDirectoryDialog} from './CreateDirectoryDialog';
 import {DeleteObjectDialog} from './DeleteObjectDialog';
+import {UploadProgress} from './UploadProgress';
 import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload} from 'lucide-react';
 import {getBreadcrumbs} from '@/lib/file-utils';
-import type {S3Object} from '@/types';
+import type {S3Object, UploadTask} from '@/types';
 
 interface ObjectBrowserViewProps {
   bucketName: string;
@@ -23,6 +24,7 @@ interface ObjectBrowserViewProps {
   onNavigateToFolder: (path: string) => void;
   onBackToBuckets: () => void;
   onUploadFiles: (files: File[]) => Promise<boolean>;
+  uploadTasks: UploadTask[];
   onDeleteObject: (key: string) => Promise<boolean>;
   onDeleteMultipleObjects: (keys: string[]) => Promise<boolean>;
   onCreateDirectory: (name: string) => Promise<boolean>;
@@ -48,6 +50,7 @@ export function ObjectBrowserView({
   onNavigateToFolder,
   onBackToBuckets,
   onUploadFiles,
+  uploadTasks,
   onDeleteObject,
   onDeleteMultipleObjects,
   onCreateDirectory,
@@ -233,7 +236,7 @@ export function ObjectBrowserView({
         </div>
 
         {/* Upload Zone */}
-        {showUploadZone && (
+        {showUploadZone && uploadTasks.length === 0 && (
           <div className="border rounded-lg p-6 bg-muted/30 space-y-4">
             <div className="flex gap-6">
               <div className="flex-shrink-0 flex items-center justify-center">
@@ -312,6 +315,9 @@ export function ObjectBrowserView({
           </div>
         )}
 
+        {/* Upload Progress */}
+        {uploadTasks.length > 0 && <UploadProgress tasks={uploadTasks} />}
+
         {/* Objects Table with Drag & Drop */}
         <div
           {...getRootProps()}
@@ -344,6 +350,7 @@ export function ObjectBrowserView({
           )}
 
           <ObjectsTable
+            bucketName={bucketName}
             objects={objects}
             currentPath={currentPath}
             searchQuery={searchQuery}

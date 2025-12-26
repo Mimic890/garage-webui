@@ -33,7 +33,7 @@ type UserInfo struct {
 
 // NewAuthService creates a new authentication service
 func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) (*AuthService, error) {
-	jwtService, err := NewJWTService()
+	jwtService, err := NewJWTServiceWithKey(authCfg.JWTPrivKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize JWT service: %w", err)
 	}

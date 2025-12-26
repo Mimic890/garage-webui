@@ -103,12 +103,35 @@ func main() {
 	clusterHandler := handlers.NewClusterHandler(adminService)
 	monitoringHandler := handlers.NewMonitoringHandler(adminService, s3Service)
 
+	// Set default values for buffer sizes if not configured
+	maxBodySize := cfg.Server.MaxBodySize
+	if maxBodySize == 0 {
+		maxBodySize = 300 * 1024 * 1024 // 300MB default
+	}
+	maxHeaderSize := cfg.Server.MaxHeaderSize
+	if maxHeaderSize == 0 {
+		maxHeaderSize = 1 * 1024 * 1024 // 1MB default
+	}
+	readBufferSize := cfg.Server.ReadBufferSize
+	if readBufferSize == 0 {
+		readBufferSize = 4096 // 4KB default
+	}
+	writeBufferSize := cfg.Server.WriteBufferSize
+	if writeBufferSize == 0 {
+		writeBufferSize = 4096 // 4KB default
+	}
+
+	log.Printf("Server limits - Max body: %d bytes (%.2fMB), Max header: %d bytes (%.2fKB)",
+		maxBodySize, float64(maxBodySize)/(1024*1024),
+		maxHeaderSize, float64(maxHeaderSize)/1024)
+
 	// Create Fiber app with configuration
 	app := fiber.New(fiber.Config{
-		AppName: "Garage UI Backend v" + version,
-		//DisableStartupMessage: false,
-		//EnablePrintRoutes:     cfg.IsDevelopment(),
-		ErrorHandler: customErrorHandler,
+		AppName:         "Garage UI Backend v" + version,
+		BodyLimit:       int(maxBodySize),
+		ReadBufferSize:  readBufferSize,
+		WriteBufferSize: writeBufferSize,
+		ErrorHandler:    customErrorHandler,
 	})
 
 	// Apply global middleware

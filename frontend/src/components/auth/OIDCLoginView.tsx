@@ -13,9 +13,11 @@ export function OIDCLoginView() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <LogIn className="h-6 w-6 text-primary" />
-            </div>
+            <img
+              src="/garage.png"
+              alt="Garage Logo"
+              className="h-16 w-16 object-contain"
+            />
           </div>
           <CardTitle className="text-2xl text-center">Sign in to Garage UI</CardTitle>
           <CardDescription className="text-center">

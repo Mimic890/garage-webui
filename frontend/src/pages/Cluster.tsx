@@ -1,6 +1,6 @@
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Header} from '@/components/layout/header';
-import {formatBytes} from '@/lib/utils';
+import {formatBytes} from '@/lib/file-utils';
 import {Activity, AlertCircle, CheckCircle2, Clock, Cpu, Database, Info, Network, Server, XCircle,} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
 import {garageApi} from '@/lib/api';

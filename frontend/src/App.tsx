@@ -8,6 +8,7 @@ import {Buckets} from '@/pages/Buckets';
 import {Cluster} from '@/pages/Cluster';
 import {AccessControl} from '@/pages/AccessControl';
 import {Login} from '@/pages/Login';
+import {ObjectDetailsView} from '@/components/buckets/ObjectDetailsView';
 import {Toaster} from 'sonner';
 import {queryClient} from '@/lib/query-client';
 import {useAuthStore} from '@/store/auth-store';
@@ -48,6 +49,7 @@ function App() {
             >
               <Route index element={<Dashboard />} />
               <Route path="buckets" element={<Buckets />} />
+              <Route path="buckets/:bucketName/objects/*" element={<ObjectDetailsView />} />
               <Route path="cluster" element={<Cluster />} />
               <Route path="access" element={<AccessControl />} />
             </Route>

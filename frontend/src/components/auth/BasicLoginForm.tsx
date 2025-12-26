@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lock, LogIn } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogIn } from 'lucide-react';
 import type { AuthConfig } from '@/types/auth';
 
 interface BasicLoginFormProps {
@@ -43,16 +43,15 @@ export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps
     <Card className="w-full">
       <CardHeader className="space-y-1">
         <div className="flex items-center justify-center mb-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Lock className="h-6 w-6 text-primary" />
-          </div>
+          <img
+            src="/garage.png"
+            alt="Garage Logo"
+            className="h-16 w-16 object-contain"
+          />
         </div>
         <CardTitle className="text-2xl text-center">
-          {showOIDC ? 'Sign in to Garage UI' : 'Admin Login'}
+          Welcome to Garage UI
         </CardTitle>
-        <CardDescription className="text-center">
-          {showOIDC ? 'Enter your credentials or use SSO' : 'Enter your credentials to access the dashboard'}
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,11 +93,8 @@ export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps
         {showOIDC && (
           <div className="mt-4">
             <div className="relative mb-4">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or</span>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-2 text-muted-foreground">or</span>
               </div>
             </div>
             <Button

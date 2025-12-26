@@ -41,8 +41,8 @@ type HealthResponse struct {
 // BucketInfo represents information about a bucket
 type BucketInfo struct {
 	Name         string    `json:"name"`
-	CreationDate time.Time `json:"creation_date"`
-	ObjectCount  *int64    `json:"object_count,omitempty"`
+	CreationDate time.Time `json:"creationDate"`
+	ObjectCount  *int64    `json:"objectCount,omitempty"`
 	Size         *int64    `json:"size,omitempty"`
 	Region       string    `json:"region,omitempty"`
 }
@@ -55,12 +55,13 @@ type BucketListResponse struct {
 
 // ObjectInfo represents information about an object
 type ObjectInfo struct {
-	Key          string    `json:"key"`
-	Size         int64     `json:"size"`
-	LastModified time.Time `json:"last_modified"`
-	ETag         string    `json:"etag"`
-	ContentType  string    `json:"content_type,omitempty"`
-	StorageClass string    `json:"storage_class,omitempty"`
+	Key          string            `json:"key"`
+	Size         int64             `json:"size"`
+	LastModified time.Time         `json:"last_modified"`
+	ETag         string            `json:"etag"`
+	ContentType  string            `json:"content_type,omitempty"`
+	StorageClass string            `json:"storage_class,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 // ObjectListResponse represents a list of objects in a bucket
@@ -120,7 +121,6 @@ type UserInfo struct {
 	Name              string             `json:"name"`
 	SecretKey         *string            `json:"secretKey,omitempty"`
 	CreatedAt         *time.Time         `json:"createdAt,omitempty"`
-	LastUsed          *time.Time         `json:"lastUsed,omitempty"`
 	Status            string             `json:"status"`      // "active" or "inactive"
 	BucketPermissions []BucketPermission `json:"permissions"` // Array of bucket permissions
 	Expiration        *time.Time         `json:"expiration,omitempty"`

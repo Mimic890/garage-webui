@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FolderIcon, Loader2, MoreVertical, Plus, Search, Settings, Trash2 } from 'lucide-react';
-import { formatBytes, formatDate } from '@/lib/utils';
+import { formatBytes } from '@/lib/file-utils';
+import { formatDate } from '@/lib/utils';
 import type { Bucket } from '@/types';
 
 interface BucketListViewProps {

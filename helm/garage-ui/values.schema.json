@@ -101,6 +101,30 @@
               "description": "Full external URL for OAuth2 redirects (REQUIRED when OIDC is enabled)",
               "pattern": "^https?://",
               "default": "https://garage-ui.example.com"
+            },
+            "max_body_size": {
+              "type": "integer",
+              "description": "Maximum request body size in bytes (for file uploads)",
+              "minimum": 1,
+              "default": 314572800
+            },
+            "max_header_size": {
+              "type": "integer",
+              "description": "Maximum request header size in bytes",
+              "minimum": 1,
+              "default": 1048576
+            },
+            "read_buffer_size": {
+              "type": "integer",
+              "description": "Read buffer size for request data in bytes",
+              "minimum": 1,
+              "default": 4096
+            },
+            "write_buffer_size": {
+              "type": "integer",
+              "description": "Write buffer size for response data in bytes",
+              "minimum": 1,
+              "default": 4096
             }
           }
         },
@@ -154,6 +178,27 @@
           "description": "Authentication configuration (one or both methods can be enabled)",
           "required": ["admin", "oidc"],
           "properties": {
+            "jwt_private_key": {
+              "type": "string",
+              "description": "Ed25519 private key for JWT signing in PEM format (EdDSA algorithm). Generate with: openssl genpkey -algorithm ED25519. If not provided, auto-generated on each restart (not recommended for production)",
+              "default": ""
+            },
+            "jwt_private_key_secret": {
+              "type": "object",
+              "description": "Use an existing Kubernetes secret for the JWT private key (recommended)",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the existing secret containing the JWT private key",
+                  "default": ""
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Key within the secret that contains the JWT private key value",
+                  "default": "jwt-key.pem"
+                }
+              }
+            },
             "admin": {
               "type": "object",
               "description": "Admin authentication settings (username/password)",

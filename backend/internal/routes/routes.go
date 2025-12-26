@@ -6,6 +6,7 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,11 +69,73 @@ func SetupRoutes(
 		objects.Post("/", objectHandler.UploadObject)                         // Upload object (multipart)
 		objects.Post("/upload-multiple", objectHandler.UploadMultipleObjects) // Upload multiple objects
 		objects.Post("/delete-multiple", objectHandler.DeleteMultipleObjects) // Delete multiple objects
-		objects.Get("/:key", objectHandler.GetObject)                         // Download object
-		objects.Delete("/:key", objectHandler.DeleteObject)                   // Delete object
-		objects.Head("/:key", objectHandler.GetObjectMetadata)                // Get object metadata
-		objects.Post("/:key/presign", objectHandler.GetPresignedURL)          // Generate pre-signed URL
 	}
+
+	// Object-specific routes with wildcard key parameter (supports paths with slashes)
+	// These need to be registered on the main app with auth middleware applied
+	objectWildcardHandler := func(c fiber.Ctx) error {
+		// Get the full path from wildcard parameter
+		// Note: Fiber v3 does NOT automatically decode params, we need to do it manually
+		path := c.Params("*")
+
+		// Decode the full path using QueryUnescape (handles %20, %2F, etc.)
+		decodedPath, err := url.QueryUnescape(path)
+		if err != nil {
+			// If decoding fails, use the original path
+			decodedPath = path
+		}
+
+		// Check if it's a metadata request
+		if strings.HasSuffix(decodedPath, "/metadata") {
+			// Remove /metadata suffix to get the actual key
+			key := strings.TrimSuffix(decodedPath, "/metadata")
+			c.Locals("objectKey", key)
+			return objectHandler.GetObjectMetadata(c)
+		}
+		// Check if it's a presign request
+		if strings.HasSuffix(decodedPath, "/presign") {
+			// Remove /presign suffix to get the actual key
+			key := strings.TrimSuffix(decodedPath, "/presign")
+			c.Locals("objectKey", key)
+			return objectHandler.GetPresignedURL(c)
+		}
+		// Otherwise, it's a regular object download
+		c.Locals("objectKey", decodedPath)
+		return objectHandler.GetObject(c)
+	}
+
+	objectDeleteHandler := func(c fiber.Ctx) error {
+		path := c.Params("*")
+
+		// Decode the full path using QueryUnescape
+		key, err := url.QueryUnescape(path)
+		if err != nil {
+			// If decoding fails, use the original path
+			key = path
+		}
+
+		c.Locals("objectKey", key)
+		return objectHandler.DeleteObject(c)
+	}
+
+	objectHeadHandler := func(c fiber.Ctx) error {
+		path := c.Params("*")
+
+		// Decode the full path using QueryUnescape
+		key, err := url.QueryUnescape(path)
+		if err != nil {
+			// If decoding fails, use the original path
+			key = path
+		}
+
+		c.Locals("objectKey", key)
+		return objectHandler.GetObjectMetadata(c)
+	}
+
+	// Register with auth middleware
+	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectWildcardHandler)
+	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectDeleteHandler)
+	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectHeadHandler)
 
 	// User/Key management routes
 	users := api.Group("/users")
@@ -197,7 +260,7 @@ func SetupRoutes(
 				})
 
 				// Redirect to frontend with success indicator
-				return c.Redirect().To("/?login=success")
+				return c.Redirect().To("/login?login=success")
 			})
 
 			// Logout endpoint

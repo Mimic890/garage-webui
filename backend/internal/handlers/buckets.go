@@ -54,19 +54,24 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 			continue
 		}
 
+		// Get detailed bucket info from Admin API to retrieve object count and size
+		detailedInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+		if err != nil {
+			// If we can't get detailed info, return basic info without stats
+			buckets = append(buckets, models.BucketInfo{
+				Name:         bucketName,
+				CreationDate: adminBucket.Created,
+				Region:       "",
+			})
+			continue
+		}
+
 		bucketInfo := models.BucketInfo{
 			Name:         bucketName,
 			CreationDate: adminBucket.Created,
 			Region:       "", // Garage doesn't have regions
-		}
-
-		// Try to get bucket statistics (object count and size)
-		// This is done asynchronously to avoid blocking the response
-		// If it fails, we still return the bucket info without stats
-		stats, err := h.s3Service.GetBucketStatistics(ctx, bucketName)
-		if err == nil && stats != nil {
-			bucketInfo.ObjectCount = &stats.ObjectCount
-			bucketInfo.Size = &stats.TotalSize
+			ObjectCount:  &detailedInfo.Objects,
+			Size:         &detailedInfo.Bytes,
 		}
 
 		buckets = append(buckets, bucketInfo)

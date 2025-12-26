@@ -8,8 +8,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// AuthMiddleware returns a Fiber middleware for authentication
-// It handles multiple auth methods: admin and OIDC
+// AuthMiddleware supports admin and OIDC authentication
 func AuthMiddleware(cfg *config.AuthConfig, authService *auth.AuthService) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// If no auth is enabled, allow all requests

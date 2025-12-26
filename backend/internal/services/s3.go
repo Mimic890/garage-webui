@@ -52,8 +52,6 @@ func NewS3Service(cfg *config.GarageConfig, adminService *GarageAdminService) *S
 	}
 }
 
-// getBucketCredentials retrieves credentials for a specific bucket
-// It checks the cache first, then queries the Garage Admin API
 func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string) (*credentials.Credentials, error) {
 	cacheKey := fmt.Sprintf("key:%s", bucketName)
 	cacheData := utils.GlobalCache.Get(cacheKey)
@@ -204,64 +202,72 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		maxKeys = 1000
 	}
 
-	// Use ListObjectsV2 for proper pagination support
-	opts := minio.ListObjectsOptions{
-		Prefix:     prefix,
-		Recursive:  false,
-		MaxKeys:    maxKeys,
-		StartAfter: continuationToken,
-		UseV1:      false,
+	// Create Core client for low-level API access
+	core := &minio.Core{Client: client}
+
+	// Use Core.ListObjectsV2 for proper pagination with continuation tokens
+	result, err := core.ListObjectsV2(
+		bucketName,
+		prefix,            // objectPrefix
+		"",                // startAfter (empty when using continuationToken)
+		continuationToken, // continuationToken (proper S3 token)
+		"/",               // delimiter (for folder listing)
+		maxKeys,           // maxkeys
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
 	}
 
-	objects := make([]models.ObjectInfo, 0)
-	prefixesMap := make(map[string]bool)
+	// Process objects from result.Contents
+	// Note: ListObjectsV2 doesn't return ContentType, so we need to fetch it separately
+	objects := make([]models.ObjectInfo, len(result.Contents))
 
-	var lastKey string
-	isTruncated := false
-	itemCount := 0
+	// Use goroutines to fetch ContentType concurrently for better performance
+	type statResult struct {
+		index       int
+		contentType string
+		err         error
+	}
 
-	// List objects using the channel-based API
-	for object := range client.ListObjects(ctx, bucketName, opts) {
-		if object.Err != nil {
-			return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, object.Err)
-		}
+	statChan := make(chan statResult, len(result.Contents))
 
-		// Check if this is a prefix (directory)
-		if len(object.Key) > 0 && object.Key[len(object.Key)-1:] == "/" && object.Size == 0 {
-			prefixesMap[object.Key] = true
-			continue
-		}
+	for i, obj := range result.Contents {
+		go func(idx int, objKey string) {
+			// Fetch object metadata to get ContentType
+			stat, err := client.StatObject(ctx, bucketName, objKey, minio.StatObjectOptions{})
+			if err != nil {
+				// If StatObject fails, we still include the object but without ContentType
+				statChan <- statResult{index: idx, contentType: "", err: err}
+				return
+			}
+			statChan <- statResult{index: idx, contentType: stat.ContentType, err: nil}
+		}(i, obj.Key)
 
-		// Track the last key for pagination
-		lastKey = object.Key
-
-		// Add to objects list
-		objects = append(objects, models.ObjectInfo{
-			Key:          object.Key,
-			Size:         object.Size,
-			LastModified: object.LastModified,
-			ETag:         object.ETag,
-			ContentType:  object.ContentType,
-			StorageClass: object.StorageClass,
-		})
-
-		itemCount++
-		if itemCount >= maxKeys {
-			isTruncated = true
-			break
+		// Initialize the object with basic info from ListObjectsV2
+		objects[i] = models.ObjectInfo{
+			Key:          obj.Key,
+			Size:         obj.Size,
+			LastModified: obj.LastModified,
+			ETag:         obj.ETag,
+			StorageClass: obj.StorageClass,
 		}
 	}
 
-	// Convert prefixes map to slice
-	prefixList := make([]string, 0, len(prefixesMap))
-	for p := range prefixesMap {
-		prefixList = append(prefixList, p)
+	// Collect results from goroutines
+	for range result.Contents {
+		res := <-statChan
+		if res.err == nil {
+			objects[res.index].ContentType = res.contentType
+		}
+		// If there was an error, ContentType remains empty, which is acceptable
 	}
+	close(statChan)
 
-	// Prepare next continuation token
-	var nextToken string
-	if isTruncated && lastKey != "" {
-		nextToken = lastKey
+	// Process folders from result.CommonPrefixes
+	prefixList := make([]string, 0, len(result.CommonPrefixes))
+	for _, p := range result.CommonPrefixes {
+		prefixList = append(prefixList, p.Prefix)
 	}
 
 	return &models.ObjectListResponse{
@@ -269,8 +275,8 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		Objects:               objects,
 		Prefixes:              prefixList,
 		Count:                 len(objects),
-		IsTruncated:           isTruncated,
-		NextContinuationToken: nextToken,
+		IsTruncated:           result.IsTruncated,
+		NextContinuationToken: result.NextContinuationToken,
 	}, nil
 }
 
@@ -412,6 +418,8 @@ func (s *S3Service) GetObjectMetadata(ctx context.Context, bucketName, key strin
 		LastModified: stat.LastModified,
 		ETag:         stat.ETag,
 		ContentType:  stat.ContentType,
+		StorageClass: stat.StorageClass,
+		Metadata:     stat.UserMetadata,
 	}, nil
 }
 
@@ -488,9 +496,6 @@ type UploadResult struct {
 	ContentType string
 }
 
-// UploadMultipleObjects uploads multiple objects to a bucket
-// It handles uploads in batches to respect any S3/Garage limits
-// Returns results for each file, including both successes and failures
 func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string, files []struct {
 	Key         string
 	Body        io.Reader

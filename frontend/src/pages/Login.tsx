@@ -49,10 +49,6 @@ export function Login() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold">Sign in to Garage UI</h1>
-            <p className="text-muted-foreground mt-2">Enter your credentials to continue</p>
-          </div>
           <BasicLoginForm showOIDC={true} config={config} />
         </div>
       </div>

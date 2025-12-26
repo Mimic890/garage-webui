@@ -154,9 +154,14 @@ func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	// Get bucket name and object key from URL parameters
+	// Get bucket name from URL parameters
 	bucketName := c.Params("bucket")
-	key := c.Params("key")
+
+	// Get object key from locals (set by route handler) or from params
+	key, ok := c.Locals("objectKey").(string)
+	if !ok || key == "" {
+		key = c.Params("key")
+	}
 
 	if bucketName == "" || key == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(
@@ -205,9 +210,14 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	// Get bucket name and object key from URL parameters
+	// Get bucket name from URL parameters
 	bucketName := c.Params("bucket")
-	key := c.Params("key")
+
+	// Get object key from locals (set by route handler) or from params
+	key, ok := c.Locals("objectKey").(string)
+	if !ok || key == "" {
+		key = c.Params("key")
+	}
 
 	if bucketName == "" || key == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(
@@ -262,9 +272,14 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	// Get bucket name and object key from URL parameters
+	// Get bucket name from URL parameters
 	bucketName := c.Params("bucket")
-	key := c.Params("key")
+
+	// Get object key from locals (set by route handler) or from params
+	key, ok := c.Locals("objectKey").(string)
+	if !ok || key == "" {
+		key = c.Params("key")
+	}
 
 	if bucketName == "" || key == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(
@@ -301,9 +316,14 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	// Get bucket name and object key from URL parameters
+	// Get bucket name from URL parameters
 	bucketName := c.Params("bucket")
-	key := c.Params("key")
+
+	// Get object key from locals (set by route handler) or from params
+	key, ok := c.Locals("objectKey").(string)
+	if !ok || key == "" {
+		key = c.Params("key")
+	}
 
 	if bucketName == "" || key == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(

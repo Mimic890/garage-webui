@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Header } from '@/components/layout/header';
-import { useBuckets } from '@/hooks/useBuckets';
+import { useBuckets, useCreateBucket, useDeleteBucket, useGrantBucketPermission } from '@/hooks/useApi';
 import { useBucketObjects } from '@/hooks/useBucketObjects';
 import { BucketListView } from '@/components/buckets/BucketListView';
 import { ObjectBrowserView } from '@/components/buckets/ObjectBrowserView';
@@ -51,7 +51,10 @@ export function Buckets() {
   }, [searchParams]);
 
   // Custom hooks
-  const { buckets, isLoading: bucketsLoading, createBucket, deleteBucket, grantPermission } = useBuckets();
+  const { data: buckets = [], isLoading: bucketsLoading } = useBuckets();
+  const createBucketMutation = useCreateBucket();
+  const deleteBucketMutation = useDeleteBucket();
+  const grantPermissionMutation = useGrantBucketPermission();
   const {
     objects,
     isLoading: objectsLoading,
@@ -62,6 +65,7 @@ export function Buckets() {
     itemsPerPage,
     setItemsPerPage,
     uploadFiles,
+    uploadTasks,
     deleteObject,
     deleteMultipleObjects,
     createDirectory,
@@ -145,6 +149,38 @@ export function Buckets() {
     }
   };
 
+  // Wrapper functions for mutations to match dialog APIs
+  const createBucket = async (name: string, region?: string) => {
+    try {
+      await createBucketMutation.mutateAsync({ name, region });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const deleteBucket = async (name: string) => {
+    try {
+      await deleteBucketMutation.mutateAsync(name);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const grantPermission = async (
+    bucketName: string,
+    accessKeyId: string,
+    permissions: { read: boolean; write: boolean; owner: boolean }
+  ) => {
+    try {
+      await grantPermissionMutation.mutateAsync({ bucketName, accessKeyId, permissions });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
   // If viewing a bucket's objects, show the object browser view
   if (viewingBucket) {
     return (
@@ -161,6 +197,7 @@ export function Buckets() {
         onNavigateToFolder={handleNavigateToFolder}
         onBackToBuckets={handleBackToBuckets}
         onUploadFiles={uploadFiles}
+        uploadTasks={uploadTasks}
         onDeleteObject={deleteObject}
         onDeleteMultipleObjects={deleteMultipleObjects}
         onCreateDirectory={createDirectory}

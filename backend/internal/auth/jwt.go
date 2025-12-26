@@ -1,9 +1,8 @@
 package auth
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
@@ -14,9 +13,10 @@ import (
 )
 
 type JWTService struct {
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
+	privateKey ed25519.PrivateKey
+	publicKey  ed25519.PublicKey
 	stateStore *StateStore
+	mu         sync.RWMutex
 }
 
 type StateStore struct {
@@ -38,18 +38,51 @@ type SessionClaims struct {
 }
 
 func NewJWTService() (*JWTService, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate RSA key: %w", err)
+	return NewJWTServiceWithKey("")
+}
+
+func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
+	var privateKey ed25519.PrivateKey
+	var publicKey ed25519.PublicKey
+	var err error
+
+	if privateKeyPEM != "" {
+		// Parse the provided PEM-encoded private key
+		privateKey, err = parseEd25519PrivateKeyFromPEM(privateKeyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse Ed25519 private key: %w", err)
+		}
+		publicKey = privateKey.Public().(ed25519.PublicKey)
+	} else {
+		// Generate a new Ed25519 key pair if no key is provided
+		publicKey, privateKey, err = ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate Ed25519 key: %w", err)
+		}
 	}
 
 	return &JWTService{
 		privateKey: privateKey,
-		publicKey:  &privateKey.PublicKey,
+		publicKey:  publicKey,
 		stateStore: &StateStore{
 			states: make(map[string]StateData),
 		},
 	}, nil
+}
+
+func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+
+	// Check if it's raw Ed25519 private key bytes (64 bytes)
+	if len(block.Bytes) == ed25519.PrivateKeySize {
+		return ed25519.PrivateKey(block.Bytes), nil
+	}
+
+	return nil, fmt.Errorf("invalid Ed25519 private key format: expected %d bytes, got %d",
+		ed25519.PrivateKeySize, len(block.Bytes))
 }
 
 func (j *JWTService) GenerateStateToken() (string, error) {
@@ -105,6 +138,13 @@ func (j *JWTService) cleanupExpiredStates() {
 }
 
 func (j *JWTService) GenerateToken(userInfo *UserInfo, sessionMaxAge int) (string, error) {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	if j.privateKey == nil {
+		return "", fmt.Errorf("private key not initialized")
+	}
+
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(sessionMaxAge) * time.Second)
 
@@ -120,7 +160,7 @@ func (j *JWTService) GenerateToken(userInfo *UserInfo, sessionMaxAge int) (strin
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 	tokenString, err := token.SignedString(j.privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign token: %w", err)
@@ -130,8 +170,15 @@ func (j *JWTService) GenerateToken(userInfo *UserInfo, sessionMaxAge int) (strin
 }
 
 func (j *JWTService) ValidateToken(tokenString string) (*SessionClaims, error) {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	if j.publicKey == nil {
+		return nil, fmt.Errorf("public key not initialized")
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodEd25519); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return j.publicKey, nil
@@ -149,15 +196,29 @@ func (j *JWTService) ValidateToken(tokenString string) (*SessionClaims, error) {
 }
 
 func (j *JWTService) GetPublicKeyPEM() (string, error) {
-	pubKeyBytes, err := x509.MarshalPKIXPublicKey(j.publicKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal public key: %w", err)
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	if j.publicKey == nil {
+		return "", fmt.Errorf("public key not initialized")
 	}
 
 	pubKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PUBLIC KEY",
-		Bytes: pubKeyBytes,
+		Type:  "PUBLIC KEY",
+		Bytes: []byte(j.publicKey),
 	})
 
 	return string(pubKeyPEM), nil
+}
+
+// GetPublicKeyBase64 returns the base64url-encoded public key for JWKS
+func (j *JWTService) GetPublicKeyBase64() (string, error) {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+
+	if j.publicKey == nil {
+		return "", fmt.Errorf("public key not initialized")
+	}
+
+	return base64.RawURLEncoding.EncodeToString(j.publicKey), nil
 }

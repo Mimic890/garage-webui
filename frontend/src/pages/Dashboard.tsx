@@ -1,6 +1,6 @@
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import {Header} from '@/components/layout/header';
-import {formatBytes} from '@/lib/utils';
+import {formatBytes} from '@/lib/file-utils';
 import {AlertCircle, Database, FolderOpen, HardDrive, Server, Zap} from 'lucide-react';
 import {BucketUsageChart} from '@/components/charts/BucketUsageChart';
 import {useDashboardData} from '@/hooks/useApi';

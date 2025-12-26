@@ -33,6 +33,7 @@ export interface S3Object {
   size: number;
   lastModified: string;
   etag?: string;
+  contentType?: string;
   storageClass?: string;
   isFolder?: boolean;
 }
@@ -52,6 +53,7 @@ export interface ObjectMetadata {
   lastModified: string;
   contentType: string;
   etag: string;
+  storageClass?: string;
   metadata?: Record<string, string>;
   versionId?: string;
 }
@@ -62,7 +64,6 @@ export interface AccessKey {
   name: string;
   secretKey?: string;
   createdAt: string;
-  lastUsed?: string;
   status: 'active' | 'inactive';
   permissions: BucketPermission[];
   expiration?: string;

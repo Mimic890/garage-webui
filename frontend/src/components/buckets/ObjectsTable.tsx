@@ -1,4 +1,5 @@
 import {useEffect, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
@@ -11,13 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {ChevronLeft, ChevronRight, Download, FileIcon, FolderIcon, Loader2, MoreVertical, Trash2} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Download, Eye, FileIcon, FolderIcon, Loader2, MoreVertical, Trash2} from 'lucide-react';
 import {Select, SelectOption} from '@/components/ui/select';
-import {formatBytes} from '@/lib/utils';
-import {formatRelativeTime, getFileType} from '@/lib/file-utils';
+import {formatBytes, formatRelativeTime} from '@/lib/file-utils';
 import type {S3Object} from '@/types';
 
 interface ObjectsTableProps {
+  bucketName: string;
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
@@ -41,6 +42,7 @@ type SortColumn = 'name' | 'size' | 'modified';
 type SortDirection = 'asc' | 'desc';
 
 export function ObjectsTable({
+  bucketName,
   objects,
   currentPath,
   searchQuery,
@@ -59,6 +61,7 @@ export function ObjectsTable({
   initialPageToken,
   initialItemsPerPage,
 }: ObjectsTableProps) {
+  const navigate = useNavigate();
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filteredObjects, setFilteredObjects] = useState<S3Object[]>([]);
@@ -117,16 +120,22 @@ export function ObjectsTable({
     return sorted;
   };
 
+  // Effect 1: Apply client-side filtering and sorting (NO pagination reset)
   useEffect(() => {
     const filtered = objects.filter((obj) =>
       obj.key.toLowerCase().includes(searchQuery.toLowerCase())
     );
     const sorted = sortObjects(filtered);
     setFilteredObjects(sorted);
-    // Reset pagination when path/search changes
+
+    // Do NOT reset pagination - search/sort are client-side operations
+  }, [searchQuery, objects, sortColumn, sortDirection]);
+
+  // Effect 2: Reset pagination ONLY on path navigation
+  useEffect(() => {
     setPageTokens([undefined]);
     setCurrentPageIndex(0);
-  }, [searchQuery, objects, sortColumn, sortDirection, currentPath]);
+  }, [currentPath]);
 
   // Update page tokens when we get a new next token
   useEffect(() => {
@@ -273,14 +282,17 @@ export function ObjectsTable({
                       {obj.key.replace(currentPath, '').replace('/', '')}
                     </button>
                   ) : (
-                    <span className="font-medium">
+                    <button
+                      onClick={() => navigate(`/buckets/${bucketName}/objects/${encodeURIComponent(obj.key)}`)}
+                      className="font-medium cursor-pointer hover:underline hover:text-primary"
+                    >
                       {obj.key.replace(currentPath, '')}
-                    </span>
+                    </button>
                   )}
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">
-                {obj.isFolder ? 'Directory' : getFileType(obj.key.replace(currentPath, ''))}
+                {obj.isFolder ? 'Directory' : (obj.contentType || 'application/octet-stream')}
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 {obj.storageClass && (
@@ -349,6 +361,10 @@ export function ObjectsTable({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => navigate(`/buckets/${bucketName}/objects/${encodeURIComponent(obj.key)}`)}>
+                        <Eye className="h-4 w-4" />
+                        View Details
+                      </DropdownMenuItem>
                       <DropdownMenuItem>
                         <Download className="h-4 w-4" />
                         Download

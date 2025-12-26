@@ -58,12 +58,6 @@ export function AccessControl() {
   const [permissionOwner, setPermissionOwner] = useState(false);
 
   // Key settings state (activation/expiration)
-  // const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  // const [settingsKey, setSettingsKey] = useState<AccessKey | null>(null);
-  // const [keyStatus, setKeyStatus] = useState<'active' | 'inactive'>('active');
-  // const [expirationDate, setExpirationDate] = useState<string>('');
-  // const [neverExpires, setNeverExpires] = useState(true);
-
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [settingsKey, setSettingsKey] = useState<AccessKey | null>(null);
   const [keyStatus, setKeyStatus] = useState<'active' | 'inactive'>('active');
@@ -74,6 +68,14 @@ export function AccessControl() {
   const [secretKeyDialogOpen, setSecretKeyDialogOpen] = useState(false);
   const [revealedSecretKey, setRevealedSecretKey] = useState<string>('');
   const [isLoadingSecretKey, setIsLoadingSecretKey] = useState(false);
+
+  // Key details dialog state
+  const [keyDetailsDialogOpen, setKeyDetailsDialogOpen] = useState(false);
+  const [viewingKey, setViewingKey] = useState<AccessKey | null>(null);
+  const [detailsSecretKey, setDetailsSecretKey] = useState<string>('');
+  const [isLoadingDetailsSecretKey, setIsLoadingDetailsSecretKey] = useState(false);
+  const [copiedAccessKeyId, setCopiedAccessKeyId] = useState(false);
+  const [copiedSecretKey, setCopiedSecretKey] = useState(false);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -341,6 +343,25 @@ export function AccessControl() {
     return perms.join(', ') || 'None';
   };
 
+  const handleRowClick = async (key: AccessKey) => {
+    setViewingKey(key);
+    setKeyDetailsDialogOpen(true);
+    setDetailsSecretKey('');
+    setIsLoadingDetailsSecretKey(true);
+    setCopiedAccessKeyId(false);
+    setCopiedSecretKey(false);
+
+    // Fetch the secret key immediately
+    try {
+      const secretKey = await accessApi.getSecretKey(key.accessKeyId);
+      setDetailsSecretKey(secretKey);
+    } catch (error) {
+      console.error('Failed to fetch secret key:', error);
+    } finally {
+      setIsLoadingDetailsSecretKey(false);
+    }
+  };
+
   return (
     <div>
       <Header
@@ -418,7 +439,6 @@ export function AccessControl() {
                     <TableHead className="hidden sm:table-cell">Access Key ID</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden md:table-cell">Created</TableHead>
-                    <TableHead className="hidden lg:table-cell">Last Used</TableHead>
                     <TableHead className="hidden md:table-cell">Permissions</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -426,7 +446,7 @@ export function AccessControl() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={6} className="text-center py-12">
                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
                           <Loader2 className="h-5 w-5 animate-spin" />
                           <span>Loading API keys...</span>
@@ -435,24 +455,36 @@ export function AccessControl() {
                     </TableRow>
                   ) : filteredKeys.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                         {searchQuery ? 'No keys found matching your search' : 'No API keys yet'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredKeys.map((key) => (
-                      <TableRow key={key.accessKeyId}>
+                      <TableRow
+                        key={key.accessKeyId}
+                        onClick={() => handleRowClick(key)}
+                        className="cursor-pointer hover:bg-muted/50"
+                      >
                         <TableCell className="font-medium truncate max-w-[150px]">{key.name}</TableCell>
                         <TableCell className="hidden sm:table-cell">
                           <div className="flex items-center gap-2">
-                            <code className="text-xs bg-muted px-2 py-1 rounded truncate max-w-[150px] block">
+                            <code
+                              className="text-xs bg-muted px-2 py-1 rounded truncate max-w-[150px] block cursor-pointer hover:bg-muted/80 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(key.accessKeyId);
+                                toast.success('Access Key ID copied to clipboard');
+                              }}
+                            >
                               {key.accessKeyId}
                             </code>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 flex-shrink-0"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 navigator.clipboard.writeText(key.accessKeyId);
                                 toast.success('Access Key ID copied to clipboard');
                               }}
@@ -467,9 +499,6 @@ export function AccessControl() {
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">{formatDate(key.createdAt)}</TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {key.lastUsed ? formatDate(key.lastUsed) : 'Never'}
-                        </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {key.permissions.slice(0, 2).map((perm, idx) => (
@@ -487,7 +516,7 @@ export function AccessControl() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger>
                               <Button variant="ghost" size="icon">
@@ -578,7 +607,13 @@ export function AccessControl() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Access Key ID</label>
                   <div className="flex items-center gap-2">
-                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1">
+                    <code
+                      className="text-sm bg-muted px-3 py-2 rounded flex-1 cursor-pointer hover:bg-muted/80 transition-colors"
+                      onClick={() => {
+                        navigator.clipboard.writeText(newlyCreatedKey.accessKeyId);
+                        toast.success('Access Key ID copied to clipboard');
+                      }}
+                    >
                       {newlyCreatedKey.accessKeyId}
                     </code>
                     <Button
@@ -596,7 +631,15 @@ export function AccessControl() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Secret Access Key</label>
                   <div className="flex items-center gap-2">
-                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all">
+                    <code
+                      className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all cursor-pointer hover:bg-muted/80 transition-colors"
+                      onClick={() => {
+                        if (newlyCreatedKey.secretKey) {
+                          navigator.clipboard.writeText(newlyCreatedKey.secretKey);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                    >
                       {newlyCreatedKey.secretKey}
                     </code>
                     <Button
@@ -613,14 +656,14 @@ export function AccessControl() {
                     </Button>
                   </div>
                 </div>
-                <div className="border rounded-lg p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900">
+                <div className="border rounded-lg p-4 bg-orange-100 border-orange-300 dark:bg-orange-950/20 dark:border-orange-900">
                   <div className="flex gap-2">
-                    <ShieldX className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                    <ShieldX className="h-5 w-5 text-orange-700 dark:text-orange-500 flex-shrink-0" />
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      <p className="text-sm font-medium text-orange-950 dark:text-orange-200">
                         Important: Save This Key Now
                       </p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                      <p className="text-xs text-orange-900 dark:text-orange-300">
                         This is the only time you'll see the secret access key. Make sure to copy and save it securely.
                         If you lose it, you'll need to create a new key.
                       </p>
@@ -794,7 +837,15 @@ export function AccessControl() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Access Key ID</label>
               <div className="flex items-center gap-2">
-                <code className="text-sm bg-muted px-3 py-2 rounded flex-1">
+                <code
+                  className="text-sm bg-muted px-3 py-2 rounded flex-1 cursor-pointer hover:bg-muted/80 transition-colors"
+                  onClick={() => {
+                    if (selectedKey?.accessKeyId) {
+                      navigator.clipboard.writeText(selectedKey.accessKeyId);
+                      toast.success('Access Key ID copied to clipboard');
+                    }
+                  }}
+                >
                   {selectedKey?.accessKeyId}
                 </code>
                 <Button
@@ -821,7 +872,15 @@ export function AccessControl() {
                   </div>
                 ) : (
                   <>
-                    <code className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all">
+                    <code
+                      className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all cursor-pointer hover:bg-muted/80 transition-colors"
+                      onClick={() => {
+                        if (revealedSecretKey) {
+                          navigator.clipboard.writeText(revealedSecretKey);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                    >
                       {revealedSecretKey}
                     </code>
                     <Button
@@ -839,19 +898,6 @@ export function AccessControl() {
                     </Button>
                   </>
                 )}
-              </div>
-            </div>
-            <div className="border rounded-lg p-4 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900">
-              <div className="flex gap-2">
-                <ShieldX className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Security Warning
-                  </p>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                    Keep this secret key secure. Anyone with access to it can perform operations on your behalf.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -934,26 +980,6 @@ export function AccessControl() {
                 )}
               </div>
             </div>
-
-            {/* Current Status Display */}
-            <div className="border rounded-lg p-4 bg-muted/50">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Current Status:</span>
-                  <Badge variant={settingsKey?.status === 'active' ? 'default' : 'secondary'}>
-                    {settingsKey?.status}
-                  </Badge>
-                </div>
-                {settingsKey?.expiration && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Current Expiration:</span>
-                    <span className="text-sm text-muted-foreground">
-                      {formatDate(settingsKey.expiration)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSettingsDialogOpen(false)}>
@@ -961,6 +987,190 @@ export function AccessControl() {
             </Button>
             <Button onClick={handleSaveKeySettings}>
               Save Settings
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Key Details Dialog */}
+      <Dialog open={keyDetailsDialogOpen} onOpenChange={setKeyDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>API Key Details</DialogTitle>
+            <DialogDescription>
+              View and manage your API key credentials and permissions
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Key Name and Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Key Name</label>
+                <div className="text-sm text-muted-foreground">{viewingKey?.name}</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <div>
+                  <Badge variant={viewingKey?.status === 'active' ? 'default' : 'secondary'}>
+                    {viewingKey?.status}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Access Key ID */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Access Key ID</label>
+              <div className="flex items-center gap-2">
+                <code
+                  className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all cursor-pointer hover:bg-muted/80 transition-colors"
+                  onClick={() => {
+                    if (viewingKey?.accessKeyId) {
+                      navigator.clipboard.writeText(viewingKey.accessKeyId);
+                      setCopiedAccessKeyId(true);
+                      setTimeout(() => setCopiedAccessKeyId(false), 2000);
+                      toast.success('Access Key ID copied to clipboard');
+                    }
+                  }}
+                >
+                  {viewingKey?.accessKeyId}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (viewingKey?.accessKeyId) {
+                      navigator.clipboard.writeText(viewingKey.accessKeyId);
+                      setCopiedAccessKeyId(true);
+                      setTimeout(() => setCopiedAccessKeyId(false), 2000);
+                      toast.success('Access Key ID copied to clipboard');
+                    }
+                  }}
+                >
+                  {copiedAccessKeyId ? 'Copied' : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {/* Secret Access Key */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Secret Access Key</label>
+              <div className="flex items-center gap-2">
+                {isLoadingDetailsSecretKey ? (
+                  <div className="flex items-center gap-2 text-muted-foreground flex-1 bg-muted px-3 py-2 rounded">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading secret key...</span>
+                  </div>
+                ) : (
+                  <>
+                    <code
+                      className="text-sm bg-muted px-3 py-2 rounded flex-1 break-all cursor-pointer hover:bg-muted/80 transition-colors"
+                      onClick={() => {
+                        if (detailsSecretKey) {
+                          navigator.clipboard.writeText(detailsSecretKey);
+                          setCopiedSecretKey(true);
+                          setTimeout(() => setCopiedSecretKey(false), 2000);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                    >
+                      {'•'.repeat(40)}
+                    </code>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (detailsSecretKey) {
+                          navigator.clipboard.writeText(detailsSecretKey);
+                          setCopiedSecretKey(true);
+                          setTimeout(() => setCopiedSecretKey(false), 2000);
+                          toast.success('Secret Access Key copied to clipboard');
+                        }
+                      }}
+                      disabled={!detailsSecretKey}
+                    >
+                      {copiedSecretKey ? 'Copied' : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Created</label>
+                <div className="text-sm text-muted-foreground">{viewingKey && formatDate(viewingKey.createdAt)}</div>
+              </div>
+              {viewingKey?.expiration && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Expiration</label>
+                  <div className="text-sm text-muted-foreground">{formatDate(viewingKey.expiration)}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Bucket Permissions */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Bucket Permissions</label>
+              {viewingKey && viewingKey.permissions.length > 0 ? (
+                <div className="border rounded-lg divide-y">
+                  {viewingKey.permissions.map((perm, idx) => (
+                    <div key={idx} className="p-3 flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">{perm.bucketName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPermissions(perm)}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {perm.read && (
+                          <Badge variant="outline" className="text-xs">
+                            Read
+                          </Badge>
+                        )}
+                        {perm.write && (
+                          <Badge variant="outline" className="text-xs">
+                            Write
+                          </Badge>
+                        )}
+                        {perm.owner && (
+                          <Badge variant="outline" className="text-xs">
+                            Owner
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    This key has no bucket permissions yet
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setKeyDetailsDialogOpen(false);
+                if (viewingKey) {
+                  handleOpenEditPermissions(viewingKey);
+                }
+              }}
+              className="w-full sm:w-auto"
+            >
+              <Edit className="h-4 w-4" />
+              Edit Permissions
+            </Button>
+            <Button
+              onClick={() => setKeyDetailsDialogOpen(false)}
+              className="w-full sm:w-auto"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

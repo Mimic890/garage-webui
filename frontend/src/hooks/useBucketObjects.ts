@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { objectsApi } from '@/lib/api';
-import type { S3Object } from '@/types';
+import type { S3Object, UploadTask } from '@/types';
 import { toast } from 'sonner';
 
 export function useBucketObjects(bucketName: string | null, currentPath: string = '') {
@@ -14,6 +14,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentContinuationToken, setCurrentContinuationToken] = useState<string | undefined>(undefined);
   const [previousPath, setPreviousPath] = useState<string>(currentPath);
+  const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
 
   const fetchObjects = useCallback(async (continuationToken?: string, isRefresh = false, isNav = false) => {
     if (!bucketName) return;
@@ -57,41 +58,103 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
   const uploadFiles = useCallback(async (files: File[]) => {
     if (!bucketName) return false;
 
-    try {
-      // Check if files are from a folder upload
-      const hasRelativePaths = files.some((file: any) => file.webkitRelativePath);
+    // Check if files are from a folder upload
+    const hasRelativePaths = files.some((file: any) => file.webkitRelativePath);
 
-      // Get unique folders from the files
-      const folders = new Set<string>();
-      files.forEach((file: any) => {
-        if (file.webkitRelativePath) {
-          const parts = file.webkitRelativePath.split('/');
-          if (parts.length > 1) {
-            folders.add(parts[0]);
-          }
+    // Get unique folders from the files
+    const folders = new Set<string>();
+    files.forEach((file: any) => {
+      if (file.webkitRelativePath) {
+        const parts = file.webkitRelativePath.split('/');
+        if (parts.length > 1) {
+          folders.add(parts[0]);
+        }
+      }
+    });
+
+    // Initialize upload tasks
+    const tasks: UploadTask[] = files.map((file, index) => {
+      const relativePath = (file as any).webkitRelativePath || file.name;
+      const key = currentPath ? `${currentPath}${relativePath}` : relativePath;
+      return {
+        id: `${Date.now()}-${index}`,
+        file,
+        key,
+        bucket: bucketName,
+        progress: 0,
+        status: 'pending' as const,
+      };
+    });
+
+    setUploadTasks(tasks);
+
+    // Upload files with progress tracking and error handling
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Upload files one by one
+    const concurrency = 1;
+    const uploadPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < tasks.length; i += concurrency) {
+      const batch = tasks.slice(i, Math.min(i + concurrency, tasks.length));
+
+      const batchPromises = batch.map(async (task) => {
+        try {
+          // Update task status to uploading
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'uploading' as const } : t
+          ));
+
+          await objectsApi.upload(bucketName, task.key, task.file, (progress) => {
+            setUploadTasks(prev => prev.map(t =>
+              t.id === task.id ? { ...t, progress } : t
+            ));
+          });
+
+          // Update task status to completed
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'completed' as const, progress: 100 } : t
+          ));
+          successCount++;
+        } catch (error) {
+          // Update task status to error but continue with other uploads
+          const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'error' as const, error: errorMessage } : t
+          ));
+          errorCount++;
+          console.error(`Failed to upload ${task.key}:`, error);
         }
       });
 
-      for (const file of files) {
-        // Use webkitRelativePath if available (for folder uploads), otherwise use file.name
-        const relativePath = (file as any).webkitRelativePath || file.name;
-        const key = currentPath ? `${currentPath}${relativePath}` : relativePath;
-        await objectsApi.upload(bucketName, key, file);
-      }
+      uploadPromises.push(...batchPromises);
+      await Promise.all(batchPromises);
+    }
 
+    await Promise.all(uploadPromises);
+
+    // Show summary toast
+    if (errorCount === 0) {
       if (hasRelativePaths && folders.size > 0) {
         const folderNames = Array.from(folders).join(', ');
-        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''} from ${folders.size} folder${folders.size > 1 ? 's' : ''} (${folderNames})`);
+        toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''} from ${folders.size} folder${folders.size > 1 ? 's' : ''} (${folderNames})`);
       } else {
-        toast.success(`Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}`);
+        toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''}`);
       }
-
-      await fetchObjects(currentContinuationToken, true);
-      return true;
-    } catch (error) {
-      console.error('Upload error:', error);
-      return false;
+    } else if (successCount > 0) {
+      toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${errorCount} failed`);
+    } else {
+      toast.error(`Failed to upload ${errorCount} file${errorCount > 1 ? 's' : ''}`);
     }
+
+    // Clear upload tasks after a delay
+    setTimeout(() => {
+      setUploadTasks([]);
+    }, 3000);
+
+    await fetchObjects(currentContinuationToken, true);
+    return successCount > 0;
   }, [bucketName, currentPath, currentContinuationToken, fetchObjects]);
 
   const deleteObject = useCallback(async (key: string) => {
@@ -160,6 +223,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
     setItemsPerPage,
     fetchObjects,
     uploadFiles,
+    uploadTasks,
     deleteObject,
     deleteMultipleObjects,
     createDirectory,

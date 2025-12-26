@@ -17,6 +17,12 @@ import type {
 } from '@/types';
 import type { AuthUser } from '@/types/auth';
 
+// Helper function to encode object keys for URLs
+// Encodes the entire key including slashes to ensure proper handling of special characters
+const encodeObjectKey = (key: string): string => {
+  return encodeURIComponent(key);
+};
+
 const api = axios.create({
   baseURL: '/api',
   headers: {
@@ -207,6 +213,7 @@ export const objectsApi = {
       size: obj.size,
       lastModified: obj.last_modified,
       etag: obj.etag,
+      contentType: obj.content_type,
       storageClass: obj.storage_class,
       isFolder: false,
     })) || [];
@@ -229,23 +236,38 @@ export const objectsApi = {
   },
 
   get: async (bucket: string, key: string): Promise<Blob> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`, {
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`, {
       responseType: 'blob'
     });
     return response.data;
   },
 
   getMetadata: async (bucket: string, key: string): Promise<ObjectMetadata> => {
-    const response = await api.head(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`);
-    return response.data.data;
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/metadata`);
+    const data = response.data.data;
+    return {
+      key: data.key,
+      size: data.size,
+      lastModified: data.last_modified,
+      contentType: data.content_type,
+      etag: data.etag,
+      storageClass: data.storage_class,
+      metadata: data.metadata,
+    };
   },
 
-  upload: async (bucket: string, key: string, file: File): Promise<void> => {
+  upload: async (bucket: string, key: string, file: File, onProgress?: (progress: number) => void): Promise<void> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('key', key);
     await api.post(`/v1/buckets/${bucket}/objects`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(progress);
+        }
+      },
     });
   },
 
@@ -262,7 +284,7 @@ export const objectsApi = {
   },
 
   delete: async (bucket: string, key: string): Promise<void> => {
-    await api.delete(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}`);
+    await api.delete(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`);
   },
 
   deleteMultiple: async (bucket: string, keys: string[], prefix?: string): Promise<void> => {
@@ -271,7 +293,7 @@ export const objectsApi = {
   },
 
   getPresignedUrl: async (bucket: string, key: string, expiresIn: number = 3600): Promise<string> => {
-    const response = await api.post(`/v1/buckets/${bucket}/objects/${encodeURIComponent(key)}/presign`, {}, {
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/presign`, {
       params: { expires_in: expiresIn }
     });
     return response.data.data.url;

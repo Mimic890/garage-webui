@@ -1,3 +1,2 @@
-export { useDashboardData } from './useApi';
-export { useBuckets } from './useBuckets';
+export { useDashboardData, useBuckets } from './useApi';
 export { useBucketObjects } from './useBucketObjects';

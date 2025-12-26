@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
 import type {BucketUsage} from '@/types';
-import {formatBytes} from '@/lib/utils';
+import {formatBytes} from '@/lib/file-utils';
 import {chartColorPalette, getTextColor, getTooltipStyle} from '@/lib/chart-colors';
 
 interface BucketUsageChartProps {
