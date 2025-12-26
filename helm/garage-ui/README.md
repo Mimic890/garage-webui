@@ -2,7 +2,7 @@
 
 A Helm chart for deploying [Garage UI](https://github.com/Noooste/garage-ui), a modern web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) distributed object storage systems.
 
-[![Version](https://img.shields.io/badge/version-0.1.8-blue.svg)](Chart.yaml)
+[![Version](https://img.shields.io/badge/version-0.1.9-blue.svg)](Chart.yaml)
 [![App Version](https://img.shields.io/badge/app%20version-v0.1.0-green.svg)](Chart.yaml)
 
 ## Table of Contents
@@ -815,13 +815,108 @@ The chart will:
 
 This keeps sensitive data out of ConfigMaps while maintaining easy Helm-based management.
 
+#### JWT Private Key for Session Tokens
+
+The chart automatically manages JWT private keys for signing session tokens. You have three options:
+
+**Method 1: Auto-generation** (recommended for most cases)
+
+By default, if you don't provide a JWT private key, the chart will automatically generate an Ed25519 private key on first install and persist it in a Kubernetes secret. This key will be reused across upgrades, ensuring session tokens remain valid.
+
+```yaml
+config:
+  auth:
+    # Leave both empty - chart will auto-generate and persist a key
+    jwt_private_key: ""
+    jwt_private_key_secret:
+      name: ""
+```
+
+The chart will:
+1. Run a pre-install/pre-upgrade Job to generate an Ed25519 key
+2. Store it in a secret named `<release-name>-jwt-key`
+3. Preserve the secret across chart upgrades (using `helm.sh/resource-policy: keep`)
+
+**Method 2: Provide your own key inline**
+
+Generate a key manually and include it in values:
+
+```bash
+# Generate Ed25519 private key
+openssl genpkey -algorithm ED25519 -out jwt-key.pem
+```
+
+```yaml
+config:
+  auth:
+    jwt_private_key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEI...
+      -----END PRIVATE KEY-----
+    jwt_private_key_secret:
+      name: ""
+```
+
+**Method 3: Use an existing Kubernetes secret**
+
+Create the secret manually:
+
+```bash
+# Generate key
+openssl genpkey -algorithm ED25519 -out jwt-key.pem
+
+# Create secret
+kubectl create secret generic my-jwt-key \
+  --from-file=jwt-key.pem=jwt-key.pem
+```
+
+Configure in values:
+```yaml
+config:
+  auth:
+    jwt_private_key: ""
+    jwt_private_key_secret:
+      name: "my-jwt-key"
+      key: "jwt-key.pem"
+```
+
+**Important Notes:**
+- Ed25519 keys are recommended over RSA for better performance and security
+- The auto-generated key persists across upgrades, so tokens remain valid
+- For multi-replica deployments, all pods share the same key from the secret
+- The secret is marked with `helm.sh/resource-policy: keep` to prevent deletion during uninstall
+
 #### OIDC Client Secret
 
-For OIDC credentials, you can similarly use secrets (requires manual template modification):
+For OIDC credentials, you can similarly use secrets:
+
+**Method 1: Let the chart create the secret**
+
+```yaml
+config:
+  auth:
+    oidc:
+      enabled: true
+      client_secret: "your-oidc-secret"
+      # Chart will create a secret automatically
+```
+
+**Method 2: Use an existing secret**
 
 ```bash
 kubectl create secret generic garage-oidc \
   --from-literal=client-secret='your-oidc-secret'
+```
+
+```yaml
+config:
+  auth:
+    oidc:
+      enabled: true
+      client_secret: ""  # Leave empty when using existingSecret
+      existingSecret:
+        name: "garage-oidc"
+        key: "client-secret"
 ```
 
 ### Network Policies

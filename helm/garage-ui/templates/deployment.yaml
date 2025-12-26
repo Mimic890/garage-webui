@@ -46,7 +46,6 @@ spec:
               name: {{ include "garage-ui.fullname" . }}-admin-token
               key: admin-token
               {{- end }}
-        {{- if or .Values.config.auth.jwt_private_key .Values.config.auth.jwt_private_key_secret.name }}
         - name: GARAGE_UI_AUTH_JWT_PRIVATE_KEY
           valueFrom:
             secretKeyRef:
@@ -55,9 +54,8 @@ spec:
               key: {{ .Values.config.auth.jwt_private_key_secret.key }}
               {{- else }}
               name: {{ include "garage-ui.fullname" . }}-jwt-key
-              key: jwt-key
+              key: jwt-key.pem
               {{- end }}
-        {{- end }}
         {{- if .Values.config.auth.oidc.enabled }}
         - name: GARAGE_UI_AUTH_OIDC_CLIENT_SECRET
           valueFrom:

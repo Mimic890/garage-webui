@@ -43,9 +43,11 @@ config:
   auth:
     # Ed25519 private key for JWT signing (PEM format)
     # Generate with: openssl genpkey -algorithm ED25519
-    # If not provided, auto-generated on each restart (not recommended for production)
+    # If not provided and no existing secret is specified, a key will be auto-generated
+    # and persisted in a Kubernetes secret (recommended for production)
     jwt_private_key: ""
-    # Use existing secret for JWT private key (recommended)
+    # Use existing secret for JWT private key (optional)
+    # If not specified, the chart will auto-generate a secret on first install
     jwt_private_key_secret:
       name: ""
       key: "jwt-key.pem"
