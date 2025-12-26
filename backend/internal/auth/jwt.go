@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
@@ -76,12 +77,22 @@ func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, er
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	// Check if it's raw Ed25519 private key bytes (64 bytes)
-	if len(block.Bytes) == ed25519.PrivateKeySize {
-		return ed25519.PrivateKey(block.Bytes), nil
+	// Try to parse as PKCS#8 format (standard format from openssl genpkey -algorithm ED25519)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err == nil {
+		// Successfully parsed as PKCS#8, check if it's an Ed25519 key
+		if ed25519Key, ok := key.(ed25519.PrivateKey); ok {
+			return ed25519Key, nil
+		}
+		return nil, fmt.Errorf("PKCS#8 key is not an Ed25519 key")
 	}
 
-	return nil, fmt.Errorf("invalid Ed25519 private key format: expected %d bytes, got %d",
+	// Fallback: Check if it's raw Ed25519 private key bytes (64 bytes)
+	if len(block.Bytes) == ed25519.PrivateKeySize {
+		return block.Bytes, nil
+	}
+
+	return nil, fmt.Errorf("invalid Ed25519 private key format: not PKCS#8 and not raw %d bytes (got %d bytes)",
 		ed25519.PrivateKeySize, len(block.Bytes))
 }
 
