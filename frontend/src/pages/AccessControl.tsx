@@ -19,8 +19,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import {Tabs, TabsContent} from '@/components/ui/tabs';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Select, SelectOption} from '@/components/ui/select';
 import {accessApi, bucketsApi} from '@/lib/api';
@@ -369,11 +369,6 @@ export function AccessControl() {
       />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <Tabs defaultValue="keys">
-          <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="keys" className="flex-1 sm:flex-initial">API Keys</TabsTrigger>
-            <TabsTrigger value="policies" className="flex-1 sm:flex-initial">Bucket Policies</TabsTrigger>
-          </TabsList>
-
           <TabsContent value="keys" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
             {/* Stats */}
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -567,22 +562,6 @@ export function AccessControl() {
               </Table>
               </div>
             </div>
-          </TabsContent>
-
-          <TabsContent value="policies" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Bucket Policies</CardTitle>
-                <CardDescription>
-                  Manage resource-based policies for your buckets
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  Bucket policy editor coming soon...
-                </p>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

@@ -143,7 +143,6 @@ list: async (): Promise<Bucket[]> => {
 - Activate/deactivate keys
 - Copy access key IDs
 - Permission configuration
-- Bucket policies (coming soon)
 
 ## Theme Customization
 
