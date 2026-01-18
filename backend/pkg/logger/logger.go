@@ -21,17 +21,16 @@ var (
 
 // Config holds logger configuration
 type Config struct {
-	Level      string // debug, info, warn, error
-	Pretty     bool   // Enable console pretty printing
-	TimeFormat string // Time format (default: time.RFC3339)
+	Level  string // debug, info, warn, error
+	Format string // json, text
 }
 
 // Init initializes the global logger with the given configuration
 func Init(cfg Config) {
 	var output io.Writer = os.Stdout
 
-	// Set up pretty console output if enabled
-	if cfg.Pretty {
+	// Set up console output for text format
+	if cfg.Format == "text" {
 		output = zerolog.ConsoleWriter{
 			Out:        os.Stdout,
 			TimeFormat: time.RFC3339,
@@ -70,7 +69,7 @@ func Get() *Logger {
 		// Initialize with defaults if not initialized
 		Init(Config{
 			Level:  "info",
-			Pretty: true,
+			Format: "text",
 		})
 	}
 	return globalLogger

@@ -21,9 +21,12 @@ type GarageAdminService struct {
 }
 
 // NewGarageAdminService creates a new Garage Admin API service
-func NewGarageAdminService(cfg *config.GarageConfig) *GarageAdminService {
+func NewGarageAdminService(cfg *config.GarageConfig, logLevel string) *GarageAdminService {
 	session := azuretls.NewSession()
-	session.Log()
+
+	if logLevel == "debug" {
+		session.Log()
+	}
 
 	return &GarageAdminService{
 		baseURL:    cfg.AdminEndpoint,
@@ -75,10 +78,6 @@ func decodeResponse(resp *azuretls.Response, target interface{}) error {
 
 	return nil
 }
-
-// ====================================
-// Access Key Operations
-// ====================================
 
 // ListKeys returns all access keys in the cluster
 func (s *GarageAdminService) ListKeys(ctx context.Context) ([]models.ListKeysResponseItem, error) {
@@ -178,10 +177,6 @@ func (s *GarageAdminService) ImportKey(ctx context.Context, req models.ImportKey
 	return &result, nil
 }
 
-// ====================================
-// Bucket Operations (Admin API)
-// ====================================
-
 // ListBuckets returns all buckets in the cluster
 func (s *GarageAdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v2/ListBuckets", nil)
@@ -279,10 +274,6 @@ func (s *GarageAdminService) DeleteBucket(ctx context.Context, bucketID string) 
 	return nil
 }
 
-// ====================================
-// Bucket Alias Operations
-// ====================================
-
 // AddBucketAlias adds an alias to a bucket
 func (s *GarageAdminService) AddBucketAlias(ctx context.Context, req models.AddBucketAliasRequest) (*models.GarageBucketInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/AddBucketAlias", req)
@@ -313,10 +304,6 @@ func (s *GarageAdminService) RemoveBucketAlias(ctx context.Context, req models.R
 	return &result, nil
 }
 
-// ====================================
-// Permission Operations
-// ====================================
-
 // AllowBucketKey grants permissions for a key on a bucket
 func (s *GarageAdminService) AllowBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/AllowBucketKey", req)
@@ -346,10 +333,6 @@ func (s *GarageAdminService) DenyBucketKey(ctx context.Context, req models.Bucke
 
 	return &result, nil
 }
-
-// ====================================
-// Cluster Operations
-// ====================================
 
 // GetClusterHealth returns the health status of the cluster
 func (s *GarageAdminService) GetClusterHealth(ctx context.Context) (*models.ClusterHealth, error) {
@@ -396,10 +379,6 @@ func (s *GarageAdminService) GetClusterStatistics(ctx context.Context) (*models.
 	return &result, nil
 }
 
-// ====================================
-// Node Operations
-// ====================================
-
 // GetNodeInfo returns information about a specific node
 func (s *GarageAdminService) GetNodeInfo(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
 	path := fmt.Sprintf("/v2/GetNodeInfo?node=%s", nodeID)
@@ -433,10 +412,6 @@ func (s *GarageAdminService) GetNodeStatistics(ctx context.Context, nodeID strin
 
 	return &result, nil
 }
-
-// ====================================
-// Monitoring Operations
-// ====================================
 
 // HealthCheck checks if the Admin API is reachable
 func (s *GarageAdminService) HealthCheck(ctx context.Context) error {

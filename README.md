@@ -183,6 +183,7 @@ curl http://localhost:3903/status -H "Authorization: Bearer your-token"
 ```yaml
 logging:
   level: "debug"
+  format: "text"  # or "json"
 ```
 
 ## License

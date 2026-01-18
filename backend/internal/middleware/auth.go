@@ -9,7 +9,7 @@ import (
 )
 
 // AuthMiddleware supports admin and OIDC authentication
-func AuthMiddleware(cfg *config.AuthConfig, authService *auth.AuthService) fiber.Handler {
+func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// If no auth is enabled, allow all requests
 		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled {
@@ -59,43 +59,5 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.AuthService) fiber
 		return c.Status(fiber.StatusUnauthorized).JSON(
 			models.ErrorResponse(models.ErrCodeUnauthorized, "Authentication required"),
 		)
-	}
-}
-
-func RequireAuth(cfg *config.AuthConfig) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled {
-			return c.Status(fiber.StatusForbidden).JSON(
-				models.ErrorResponse(models.ErrCodeForbidden, "Authentication is required but not configured"),
-			)
-		}
-		return c.Next()
-	}
-}
-
-func RequireAdmin(authService *auth.AuthService) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		userInfoInterface := c.Locals("userInfo")
-		if userInfoInterface == nil {
-			return c.Status(fiber.StatusForbidden).JSON(
-				models.ErrorResponse(models.ErrCodeForbidden, "Admin access required"),
-			)
-		}
-
-		userInfo, ok := userInfoInterface.(*auth.UserInfo)
-		if !ok {
-			return c.Status(fiber.StatusForbidden).JSON(
-				models.ErrorResponse(models.ErrCodeForbidden, "Admin access required"),
-			)
-		}
-
-		// Check if user has admin role
-		if !authService.IsAdmin(userInfo) {
-			return c.Status(fiber.StatusForbidden).JSON(
-				models.ErrorResponse(models.ErrCodeForbidden, "Admin role required"),
-			)
-		}
-
-		return c.Next()
 	}
 }

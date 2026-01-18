@@ -13,8 +13,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// AuthService handles authentication operations
-type AuthService struct {
+// Service handles authentication operations
+type Service struct {
 	authConfig   *config.AuthConfig
 	serverConfig *config.ServerConfig
 	oidcProvider *oidc.Provider
@@ -32,13 +32,13 @@ type UserInfo struct {
 }
 
 // NewAuthService creates a new authentication service
-func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) (*AuthService, error) {
+func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) (*Service, error) {
 	jwtService, err := NewJWTServiceWithKey(authCfg.JWTPrivKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize JWT service: %w", err)
 	}
 
-	service := &AuthService{
+	service := &Service{
 		authConfig:   authCfg,
 		serverConfig: serverCfg,
 		jwtService:   jwtService,
@@ -55,7 +55,7 @@ func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) 
 }
 
 // initOIDC initializes the OIDC provider and configuration
-func (a *AuthService) initOIDC() error {
+func (a *Service) initOIDC() error {
 	ctx := context.Background()
 
 	// Create OIDC provider
@@ -91,7 +91,7 @@ func (a *AuthService) initOIDC() error {
 }
 
 // ValidateBasicAuth validates basic authentication credentials
-func (a *AuthService) ValidateBasicAuth(username, password string) bool {
+func (a *Service) ValidateBasicAuth(username, password string) bool {
 	// Use constant-time comparison to prevent timing attacks
 	usernameMatch := subtle.ConstantTimeCompare(
 		[]byte(username),
@@ -136,7 +136,7 @@ func ParseBasicAuth(authHeader string) (username, password string, ok bool) {
 }
 
 // GetAuthorizationURL returns the OIDC authorization URL for login
-func (a *AuthService) GetAuthorizationURL(state string) (string, error) {
+func (a *Service) GetAuthorizationURL(state string) (string, error) {
 	if a.oauth2Config == nil {
 		return "", fmt.Errorf("OIDC not initialized")
 	}
@@ -145,7 +145,7 @@ func (a *AuthService) GetAuthorizationURL(state string) (string, error) {
 }
 
 // ExchangeCode exchanges an authorization code for tokens
-func (a *AuthService) ExchangeCode(ctx context.Context, code string) (*oauth2.Token, error) {
+func (a *Service) ExchangeCode(ctx context.Context, code string) (*oauth2.Token, error) {
 	if a.oauth2Config == nil {
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
@@ -159,7 +159,7 @@ func (a *AuthService) ExchangeCode(ctx context.Context, code string) (*oauth2.To
 }
 
 // VerifyIDToken verifies an OIDC ID token and extracts user info
-func (a *AuthService) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserInfo, error) {
+func (a *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserInfo, error) {
 	if a.oidcVerifier == nil {
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
@@ -192,7 +192,7 @@ func (a *AuthService) VerifyIDToken(ctx context.Context, rawIDToken string) (*Us
 }
 
 // GetUserInfo retrieves user information from the OIDC provider
-func (a *AuthService) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
+func (a *Service) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	if a.oidcProvider == nil {
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
@@ -228,7 +228,7 @@ func (a *AuthService) GetUserInfo(ctx context.Context, token *oauth2.Token) (*Us
 }
 
 // IsAdmin checks if the user has admin role
-func (a *AuthService) IsAdmin(userInfo *UserInfo) bool {
+func (a *Service) IsAdmin(userInfo *UserInfo) bool {
 	if a.authConfig.OIDC.AdminRole == "" {
 		return false
 	}
@@ -316,22 +316,22 @@ func extractStringArray(value interface{}) []string {
 }
 
 // GenerateStateToken generates a secure CSRF state token
-func (a *AuthService) GenerateStateToken() (string, error) {
+func (a *Service) GenerateStateToken() (string, error) {
 	return a.jwtService.GenerateStateToken()
 }
 
 // ValidateAndConsumeState validates and consumes a CSRF state token
-func (a *AuthService) ValidateAndConsumeState(token string) bool {
+func (a *Service) ValidateAndConsumeState(token string) bool {
 	return a.jwtService.ValidateAndConsumeState(token)
 }
 
 // GenerateSessionToken generates a JWT session token for the user
-func (a *AuthService) GenerateSessionToken(userInfo *UserInfo) (string, error) {
+func (a *Service) GenerateSessionToken(userInfo *UserInfo) (string, error) {
 	return a.jwtService.GenerateToken(userInfo, a.authConfig.OIDC.SessionMaxAge)
 }
 
 // ValidateSessionToken validates a JWT session token and returns user info
-func (a *AuthService) ValidateSessionToken(tokenString string) (*UserInfo, error) {
+func (a *Service) ValidateSessionToken(tokenString string) (*UserInfo, error) {
 	claims, err := a.jwtService.ValidateToken(tokenString)
 	if err != nil {
 		return nil, err

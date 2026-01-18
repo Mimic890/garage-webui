@@ -11,11 +11,11 @@ import (
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
 	cfg         *config.Config
-	authService *auth.AuthService
+	authService *auth.Service
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(cfg *config.Config, authService *auth.AuthService) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authService *auth.Service) *AuthHandler {
 	return &AuthHandler{
 		cfg:         cfg,
 		authService: authService,
@@ -23,12 +23,13 @@ func NewAuthHandler(cfg *config.Config, authService *auth.AuthService) *AuthHand
 }
 
 // GetAuthConfig returns the current authentication configuration
-// @Summary Get authentication configuration
-// @Description Returns the current auth configuration (admin and/or OIDC)
-// @Tags auth
-// @Produce json
-// @Success 200 {object} object{admin=object,oidc=object} "Auth config"
-// @Router /auth/config [get]
+//
+//	@Summary		Get authentication configuration
+//	@Description	Returns the current auth configuration (admin and/or OIDC)
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	object{admin=object,oidc=object}	"Auth config"
+//	@Router			/auth/config [get]
 func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 	response := fiber.Map{
 		"admin": fiber.Map{
@@ -58,16 +59,17 @@ type LoginBasicRequest struct {
 }
 
 // LoginAdmin handles admin authentication login
-// @Summary Admin auth login
-// @Description Authenticate with admin username and password, returns JWT token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param credentials body LoginBasicRequest true "Login credentials"
-// @Success 200 {object} object{success=bool,token=string,user=object} "Login successful"
-// @Failure 400 {object} models.APIResponse "Invalid request"
-// @Failure 401 {object} models.APIResponse "Invalid credentials"
-// @Router /auth/login [post]
+//
+//	@Summary		Admin auth login
+//	@Description	Authenticate with admin username and password, returns JWT token
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			credentials	body		LoginBasicRequest								true	"Login credentials"
+//	@Success		200			{object}	object{success=bool,token=string,user=object}	"Login successful"
+//	@Failure		400			{object}	models.APIResponse								"Invalid request"
+//	@Failure		401			{object}	models.APIResponse								"Invalid credentials"
+//	@Router			/auth/login [post]
 func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 	// Parse request body
 	var req LoginBasicRequest
@@ -107,14 +109,15 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 }
 
 // GetMe returns the current authenticated user's information
-// @Summary Get current user
-// @Description Returns information about the currently authenticated user
-// @Tags auth
-// @Produce json
-// @Security ApiKeyAuth
-// @Success 200 {object} object{success=bool,user=object} "User information"
-// @Failure 401 {object} models.APIResponse "Not authenticated"
-// @Router /auth/me [get]
+//
+//	@Summary		Get current user
+//	@Description	Returns information about the currently authenticated user
+//	@Tags			auth
+//	@Produce		json
+//	@Security		ApiKeyAuth
+//	@Success		200	{object}	object{success=bool,user=object}	"User information"
+//	@Failure		401	{object}	models.APIResponse					"Not authenticated"
+//	@Router			/auth/me [get]
 func (h *AuthHandler) GetMe(c fiber.Ctx) error {
 	// Try to get user info from OIDC context
 	userInfoInterface := c.Locals("userInfo")

@@ -41,7 +41,3 @@ services:
         -----BEGIN PRIVATE KEY-----
         MC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS
         -----END PRIVATE KEY-----
-
-      # Logging
-      GARAGE_UI_LOGGING_LEVEL: "info"
-      GARAGE_UI_LOGGING_FORMAT: "json"

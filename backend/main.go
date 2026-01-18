@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,9 +12,9 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/routes"
 	"Noooste/garage-ui/internal/services"
+	"Noooste/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
@@ -62,20 +61,31 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
 	flag.Parse()
 
-	// Load configuration
-	log.Printf("Loading configuration from: %s", *configPath)
+	// Load configuration first (before initializing logger)
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		// If config fails to load, use default logger to report the error
+		logger.Get().Fatal().Err(err).Str("config_path", *configPath).Msg("Failed to load configuration")
 	}
 
-	log.Printf("Starting Garage UI Backend v%s in %s mode", version, cfg.Server.Environment)
+	// Initialize logger with configuration from config file
+	logger.Init(logger.Config{
+		Level:  cfg.Logging.Level,
+		Format: cfg.Logging.Format,
+	})
+
+	// Now log with the properly configured logger
+	logger.Info().
+		Str("config_path", *configPath).
+		Str("version", version).
+		Str("environment", cfg.Server.Environment).
+		Msg("Starting Garage UI Backend")
 
 	// Initialize services
-	log.Println("Initializing Garage Admin service...")
-	adminService := services.NewGarageAdminService(&cfg.Garage)
+	logger.Info().Msg("Initializing Garage Admin service")
+	adminService := services.NewGarageAdminService(&cfg.Garage, cfg.Logging.Level)
 
-	log.Println("Initializing S3 service...")
+	logger.Info().Msg("Initializing S3 service")
 	s3Service := services.NewS3Service(&cfg.Garage, adminService)
 
 	// Determine enabled auth methods for logging
@@ -89,10 +99,10 @@ func main() {
 	if len(authMethods) == 0 {
 		authMethods = append(authMethods, "none")
 	}
-	log.Printf("Initializing authentication service (enabled: %v)...", authMethods)
+	logger.Info().Strs("enabled_methods", authMethods).Msg("Initializing authentication service")
 	authService, err := auth.NewAuthService(&cfg.Auth, &cfg.Server)
 	if err != nil {
-		log.Fatalf("Failed to initialize auth service: %v", err)
+		logger.Fatal().Err(err).Msg("Failed to initialize auth service")
 	}
 
 	// Initialize handlers
@@ -121,9 +131,12 @@ func main() {
 		writeBufferSize = 4096 // 4KB default
 	}
 
-	log.Printf("Server limits - Max body: %d bytes (%.2fMB), Max header: %d bytes (%.2fKB)",
-		maxBodySize, float64(maxBodySize)/(1024*1024),
-		maxHeaderSize, float64(maxHeaderSize)/1024)
+	logger.Info().
+		Int64("max_body_bytes", maxBodySize).
+		Float64("max_body_mb", float64(maxBodySize)/(1024*1024)).
+		Int("max_header_bytes", maxHeaderSize).
+		Float64("max_header_kb", float64(maxHeaderSize)/1024).
+		Msg("Server request limits configured")
 
 	// Create Fiber app with configuration
 	app := fiber.New(fiber.Config{
@@ -136,12 +149,9 @@ func main() {
 
 	// Apply global middleware
 	app.Use(recover.New()) // Panic recovery
-	app.Use(logger.New(logger.Config{
-		Format: "[${time}] ${status} - ${method} ${path} (${latency})\n",
-	}))
 
 	// Setup routes
-	log.Println("Setting up routes...")
+	logger.Info().Msg("Setting up routes")
 	routes.SetupRoutes(
 		app,
 		cfg,
@@ -157,12 +167,14 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		addr := cfg.GetAddress()
-		log.Printf("Server listening on %s", addr)
-		log.Printf("Health check available at: http://%s/health", addr)
-		log.Printf("API documentation: http://%s/api/v1/", addr)
+		logger.Info().
+			Str("address", addr).
+			Str("health_endpoint", fmt.Sprintf("http://%s/health", addr)).
+			Str("api_docs", fmt.Sprintf("http://%s/api/v1/", addr)).
+			Msg("Server starting")
 
 		if err := app.Listen(addr); err != nil {
-			log.Fatalf("Failed to start server: %v", err)
+			logger.Fatal().Err(err).Msg("Failed to start server")
 		}
 	}()
 
@@ -171,12 +183,12 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info().Msg("Shutting down server")
 	if err := app.Shutdown(); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
+		logger.Fatal().Err(err).Msg("Server shutdown failed")
 	}
 
-	log.Println("Server stopped gracefully")
+	logger.Info().Msg("Server stopped gracefully")
 }
 
 // customErrorHandler handles errors globally
@@ -190,7 +202,12 @@ func customErrorHandler(c fiber.Ctx, err error) error {
 	}
 
 	// Log the error
-	log.Printf("Error: %v", err)
+	logger.Error().
+		Err(err).
+		Int("status_code", code).
+		Str("method", c.Method()).
+		Str("path", c.Path()).
+		Msg("Request error")
 
 	// Return JSON error response
 	return c.Status(code).JSON(fiber.Map{

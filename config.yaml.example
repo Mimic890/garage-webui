@@ -103,7 +103,8 @@ cors:
   allow_credentials: false
   max_age: 3600
 
-# Logging
+# Logging Configuration
+# The application uses zerolog for structured logging
 logging:
-  level: "info" # debug, info, warn, error
-  format: "json" # json, text
+  level: "info" # Options: debug, info, warn, error
+  format: "text" or "json"

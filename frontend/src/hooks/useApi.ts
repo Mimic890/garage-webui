@@ -3,9 +3,6 @@ import { bucketsApi, objectsApi, accessApi, garageApi, analyticsApi } from '@/li
 import { queryKeys } from '@/lib/query-client';
 import { toast } from 'sonner';
 
-// ===========================
-// Bucket Hooks
-// ===========================
 
 export function useBuckets() {
   return useQuery({
@@ -66,9 +63,6 @@ export function useGrantBucketPermission() {
   });
 }
 
-// ===========================
-// Object Hooks
-// ===========================
 
 export function useObjects(bucket: string, prefix?: string, enabled = true) {
   return useQuery({
@@ -138,9 +132,6 @@ export function useDeleteMultipleObjects() {
   });
 }
 
-// ===========================
-// Access Key Hooks
-// ===========================
 
 export function useAccessKeys() {
   return useQuery({
@@ -197,9 +188,6 @@ export function useUpdateAccessKey() {
   });
 }
 
-// ===========================
-// Cluster Hooks
-// ===========================
 
 export function useClusterHealth() {
   return useQuery({
@@ -225,9 +213,6 @@ export function useClusterStatistics() {
   });
 }
 
-// ===========================
-// Dashboard Hooks
-// ===========================
 
 export function useDashboardMetrics() {
   return useQuery({

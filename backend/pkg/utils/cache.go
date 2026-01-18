@@ -91,5 +91,4 @@ func (c *Cache) cleanupExpired() {
 	}
 }
 
-// Global cache instance
 var GlobalCache = NewCache()

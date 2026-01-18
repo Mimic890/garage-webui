@@ -5,7 +5,7 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
-	"fmt"
+	"Noooste/garage-ui/pkg/logger"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,7 +22,7 @@ import (
 func SetupRoutes(
 	app *fiber.App,
 	cfg *config.Config,
-	authService *auth.AuthService,
+	authService *auth.Service,
 	healthHandler *handlers.HealthHandler,
 	bucketHandler *handlers.BucketHandler,
 	objectHandler *handlers.ObjectHandler,
@@ -292,7 +292,7 @@ func SetupRoutes(
 				strings.HasPrefix(path, "/auth") ||
 				strings.HasPrefix(path, "/health") ||
 				strings.HasPrefix(path, "/docs") {
-				fmt.Println("API or health check route, skipping SPA fallback:", path)
+				logger.Debug().Str("path", path).Msg("API or health check route, skipping SPA fallback")
 				return c.Next()
 			}
 

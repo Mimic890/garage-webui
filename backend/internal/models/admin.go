@@ -2,10 +2,6 @@ package models
 
 import "time"
 
-// ====================================
-// Access Key Models
-// ====================================
-
 // GarageKeyInfo represents detailed information about a Garage access key
 type GarageKeyInfo struct {
 	AccessKeyID     string          `json:"accessKeyId"`
@@ -71,10 +67,6 @@ type ListKeysResponseItem struct {
 	Created    *time.Time `json:"created,omitempty"`
 	Expiration *time.Time `json:"expiration,omitempty"`
 }
-
-// ====================================
-// Bucket Models (Admin API)
-// ====================================
 
 // GarageBucketInfo represents detailed information about a bucket from Admin API
 type GarageBucketInfo struct {
@@ -153,10 +145,6 @@ type BucketLocalAlias struct {
 	Alias       string `json:"alias"`
 }
 
-// ====================================
-// Bucket Alias Models
-// ====================================
-
 // AddBucketAliasRequest represents the request to add a bucket alias
 type AddBucketAliasRequest struct {
 	BucketID    string  `json:"bucketId"`
@@ -173,20 +161,12 @@ type RemoveBucketAliasRequest struct {
 	AccessKeyID *string `json:"accessKeyId,omitempty"`
 }
 
-// ====================================
-// Permission Models
-// ====================================
-
 // BucketKeyPermRequest represents a request to change bucket-key permissions
 type BucketKeyPermRequest struct {
 	BucketID    string              `json:"bucketId"`
 	AccessKeyID string              `json:"accessKeyId"`
 	Permissions BucketKeyPermission `json:"permissions"`
 }
-
-// ====================================
-// Cluster Models
-// ====================================
 
 // ClusterHealth represents the health status of the cluster
 type ClusterHealth struct {
@@ -210,10 +190,6 @@ type ClusterStatus struct {
 type ClusterStatistics struct {
 	Freeform string `json:"freeform"`
 }
-
-// ====================================
-// Node Models
-// ====================================
 
 // NodeInfo represents information about a cluster node
 type NodeInfo struct {
