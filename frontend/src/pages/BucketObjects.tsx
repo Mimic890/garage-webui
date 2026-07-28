@@ -40,6 +40,7 @@ export function BucketObjects() {
     isLoading,
     isRefreshing,
     isNavigating,
+    error,
     isTruncated,
     nextContinuationToken,
     itemsPerPage,
@@ -114,6 +115,7 @@ export function BucketObjects() {
         searchQuery={searchQuery}
         filterQuery={debouncedSearch}
         deepSearch={deepSearch}
+        error={error}
         isLoading={isLoading}
         isTruncated={isTruncated}
         nextContinuationToken={nextContinuationToken}

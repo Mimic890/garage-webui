@@ -27,6 +27,7 @@ interface ObjectsTableProps {
   selectedFileKeys: Set<string>;
   selectedFolderKeys: Set<string>;
   isDragActive: boolean;
+  error?: Error | null;
   isLoading?: boolean;
   isTruncated?: boolean;
   nextContinuationToken?: string;
@@ -60,6 +61,7 @@ export function ObjectsTable({
   selectedFileKeys,
   selectedFolderKeys,
   isDragActive,
+  error,
   isLoading = false,
   isTruncated = false,
   nextContinuationToken,
@@ -278,6 +280,15 @@ export function ObjectsTable({
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Loading objects...</span>
+              </div>
+            </TableCell>
+          </TableRow>
+        ) : error ? (
+          <TableRow>
+            <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12">
+              <div className="flex flex-col items-center gap-2 text-destructive">
+                <span className="text-sm font-medium">Failed to load objects</span>
+                <span className="text-xs text-muted-foreground">{error.message}</span>
               </div>
             </TableCell>
           </TableRow>
