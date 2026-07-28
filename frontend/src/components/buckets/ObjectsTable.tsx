@@ -234,8 +234,7 @@ export function ObjectsTable({
                   // In normal/prefix browsing this equals filteredObjects; in
                   // client-paginated deep search it is just the visible page, so
                   // one click never selects hidden matches for a destructive delete.
-                  checked={
-                    pageObjects.length > 0 &&
+                  checked={!isLoading && pageObjects.length > 0 &&
                     pageObjects.every(obj =>
                       obj.isFolder ? selectedFolderKeys.has(obj.key) : selectedFileKeys.has(obj.key),
                     )

@@ -206,10 +206,10 @@ export function Cluster() {
                     status.nodes.map((node) => {
                       const nodeStatus = getNodeStatus(node);
                       const NodeIcon = nodeStatus.icon;
-                      const dataUsage = node.dataPartition
+                      const dataUsage = node.dataPartition && node.dataPartition.total > 0
                         ? ((node.dataPartition.total - node.dataPartition.available) / node.dataPartition.total) * 100
                         : 0;
-                      const metadataUsage = node.metadataPartition
+                      const metadataUsage = node.metadataPartition && node.metadataPartition.total > 0
                         ? ((node.metadataPartition.total - node.metadataPartition.available) / node.metadataPartition.total) * 100
                         : 0;
 

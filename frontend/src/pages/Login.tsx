@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { BasicLoginForm } from '@/components/auth/BasicLoginForm';
 import { OIDCLoginView } from '@/components/auth/OIDCLoginView';
@@ -34,8 +34,7 @@ export function Login() {
 
   // No auth enabled, redirect to dashboard immediately
   if (config && !config.admin.enabled && !config.oidc.enabled && !config.token.enabled) {
-    navigate('/');
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const showAdmin = config?.admin.enabled || false;
