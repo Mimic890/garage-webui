@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -251,7 +252,9 @@ func main() {
 
 	logger.Info().Str("signal", sig.String()).Msg("Shutting down server")
 	shutdownStart := time.Now()
-	if err := app.Shutdown(); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
 		logger.Fatal().Err(err).Msg("Server shutdown failed")
 	}
 

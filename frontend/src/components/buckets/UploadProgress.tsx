@@ -78,7 +78,15 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
             )}
             <div className="relative w-full bg-secondary rounded-full h-3 overflow-hidden">
               <div
-                className={`h-full transition-all duration-300 ease-out relative bg-green-500 dark:bg-green-600`}
+                className={`h-full transition-all duration-300 ease-out relative ${
+                  errorCount > 0 && successCount > 0
+                    ? 'bg-yellow-500 dark:bg-yellow-600'
+                    : errorCount > 0
+                    ? 'bg-red-500 dark:bg-red-600'
+                    : allDone
+                    ? 'bg-green-500 dark:bg-green-600'
+                    : 'bg-primary'
+                }`}
                 style={{ width: `${overallProgress}%` }}
               >
                 {/* Animated shimmer effect */}
