@@ -193,6 +193,10 @@ func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
 		)
 	}
 
+	// Invalidate all cached S3 credentials since this key may have been cached
+	// for any bucket. Safe: the cache will be repopulated on the next request.
+	services.ClearAllCredsCache()
+
 	return c.JSON(models.SuccessResponse(map[string]interface{}{
 		"access_key": accessKey,
 		"deleted":    true,
@@ -351,6 +355,10 @@ func (h *UserHandler) UpdateUserPermissions(c fiber.Ctx) error {
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update user: "+err.Error()),
 		)
 	}
+
+	// Invalidate cached credentials; the key's permissions or expiration may
+	// have changed, affecting any bucket it is cached for.
+	services.ClearAllCredsCache()
 
 	// Convert bucket permissions to frontend format
 	bucketPermissions := convertBucketPermissionsToBucketPermissions(keyInfo.Buckets)

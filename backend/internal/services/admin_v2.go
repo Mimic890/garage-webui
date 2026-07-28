@@ -259,6 +259,12 @@ func (s *GarageV2AdminService) GetBucketInfoByAlias(ctx context.Context, globalA
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
+		resp.RawBody.Close()
+		log.Debug().Float64("duration_ms", msSince(start)).Str("outcome", "not-found").Msg("bucket not found by alias")
+		return nil, nil
+	}
+
 	var result models.GarageBucketInfo
 	if err = decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage get_bucket_info_by_alias decode failed")

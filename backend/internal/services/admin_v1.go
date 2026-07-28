@@ -166,6 +166,12 @@ func (s *GarageV1AdminService) GetBucketInfoByAlias(ctx context.Context, globalA
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
+
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
+		resp.RawBody.Close()
+		return nil, nil
+	}
+
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
