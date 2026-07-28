@@ -21,6 +21,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
   const previousPathRef = useRef<string>(currentPath);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const clearTasksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uploadingRef = useRef(false);
   // Monotonic sequence guarding against stale responses: when a newer fetch or
   // search starts, older in-flight responses are discarded instead of clobbering
   // the current view (e.g. a slow search resolving after the query was cleared).
@@ -118,6 +119,11 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
   const uploadFiles = useCallback(async (files: File[]) => {
     if (!bucketName) return false;
+    if (uploadingRef.current) {
+      toast.error('Upload already in progress. Wait for it to finish.');
+      return false;
+    }
+    uploadingRef.current = true;
 
     const hasRelativePaths = files.some((file) => !!file.webkitRelativePath);
 
@@ -146,57 +152,61 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
     setUploadTasks(tasks);
 
-    const results = await Promise.all(tasks.map(async (task) => {
-      try {
-        setUploadTasks(prev => prev.map(t =>
-          t.id === task.id ? { ...t, status: 'uploading' as const } : t
-        ));
+    try {
+      const results = await Promise.all(tasks.map(async (task) => {
+        try {
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'uploading' as const } : t
+          ));
 
-        await objectsApi.upload(bucketName, task.key, task.file, (progress) => {
-          setUploadTasks(prev => prev.map(t => {
-            if (t.id !== task.id || t.progress === progress) return t;
-            return { ...t, progress };
-          }));
-        });
+          await objectsApi.upload(bucketName, task.key, task.file, (progress) => {
+            setUploadTasks(prev => prev.map(t => {
+              if (t.id !== task.id || t.progress === progress) return t;
+              return { ...t, progress };
+            }));
+          });
 
-        setUploadTasks(prev => prev.map(t =>
-          t.id === task.id ? { ...t, status: 'completed' as const, progress: 100 } : t
-        ));
-        return true;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-        setUploadTasks(prev => prev.map(t =>
-          t.id === task.id ? { ...t, status: 'error' as const, error: errorMessage } : t
-        ));
-        console.error(`Failed to upload ${task.key}:`, error);
-        return false;
-      }
-    }));
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'completed' as const, progress: 100 } : t
+          ));
+          return true;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+          setUploadTasks(prev => prev.map(t =>
+            t.id === task.id ? { ...t, status: 'error' as const, error: errorMessage } : t
+          ));
+          console.error(`Failed to upload ${task.key}:`, error);
+          return false;
+        }
+      }));
 
-    const successCount = results.filter(Boolean).length;
-    const errorCount = results.length - successCount;
+      const successCount = results.filter(Boolean).length;
+      const errorCount = results.length - successCount;
 
-    if (errorCount === 0) {
-      if (hasRelativePaths && folders.size > 0) {
-        const folderNames = Array.from(folders).join(', ');
-        toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''} from ${folders.size} folder${folders.size > 1 ? 's' : ''} (${folderNames})`);
+      if (errorCount === 0) {
+        if (hasRelativePaths && folders.size > 0) {
+          const folderNames = Array.from(folders).join(', ');
+          toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''} from ${folders.size} folder${folders.size > 1 ? 's' : ''} (${folderNames})`);
+        } else {
+          toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''}`);
+        }
+      } else if (successCount > 0) {
+        toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${errorCount} failed`);
       } else {
-        toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''}`);
+        toast.error(`Failed to upload ${errorCount} file${errorCount > 1 ? 's' : ''}`);
       }
-    } else if (successCount > 0) {
-      toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${errorCount} failed`);
-    } else {
-      toast.error(`Failed to upload ${errorCount} file${errorCount > 1 ? 's' : ''}`);
+
+      if (clearTasksTimerRef.current) clearTimeout(clearTasksTimerRef.current);
+      clearTasksTimerRef.current = setTimeout(() => {
+        setUploadTasks([]);
+        clearTasksTimerRef.current = null;
+      }, 3000);
+
+      await fetchObjects(currentContinuationToken, true);
+      return successCount > 0;
+    } finally {
+      uploadingRef.current = false;
     }
-
-    if (clearTasksTimerRef.current) clearTimeout(clearTasksTimerRef.current);
-    clearTasksTimerRef.current = setTimeout(() => {
-      setUploadTasks([]);
-      clearTasksTimerRef.current = null;
-    }, 3000);
-
-    await fetchObjects(currentContinuationToken, true);
-    return successCount > 0;
   }, [bucketName, currentPath, currentContinuationToken, fetchObjects]);
 
   const deleteObject = useCallback(async (key: string) => {
