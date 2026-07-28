@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {useDropzone} from 'react-dropzone';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -18,6 +18,7 @@ interface ObjectBrowserViewProps {
   searchQuery: string;
   filterQuery: string;
   deepSearch: boolean;
+  error?: Error | null;
   isLoading?: boolean;
   isTruncated?: boolean;
   nextContinuationToken?: string;
@@ -47,6 +48,7 @@ export function ObjectBrowserView({
   searchQuery,
   filterQuery,
   deepSearch,
+  error,
   isLoading = false,
   isTruncated = false,
   nextContinuationToken,
@@ -77,6 +79,12 @@ export function ObjectBrowserView({
   // Holds the keys/prefixes awaiting confirmation in the bulk-delete dialog.
   const [pendingDelete, setPendingDelete] = useState<{ keys: string[]; prefixes: string[] } | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // H1: clear selection when navigating between folders
+  useEffect(() => {
+    setSelectedFileKeys(new Set());
+    setSelectedFolderKeys(new Set());
+  }, [currentPath]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: async (acceptedFiles, _fileRejections, event) => {
@@ -466,6 +474,7 @@ export function ObjectBrowserView({
             selectedFileKeys={selectedFileKeys}
             selectedFolderKeys={selectedFolderKeys}
             isDragActive={isDragActive}
+            error={error}
             isLoading={isLoading && !isRefreshing && !isNavigating}
             isTruncated={isTruncated}
             nextContinuationToken={nextContinuationToken}
