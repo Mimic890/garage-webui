@@ -141,9 +141,10 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	maxKeysStr := c.Query("max_keys", "100")
 	maxKeys, err := strconv.Atoi(maxKeysStr)
 	if err != nil || maxKeys <= 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(
-			models.ErrorResponse(models.ErrCodeBadRequest, "Invalid max_keys parameter"),
-		)
+		maxKeys = 100
+	}
+	if maxKeys > 1000 {
+		maxKeys = 1000
 	}
 
 	// List objects in the bucket
@@ -767,14 +768,16 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	}, len(files))
 
 	// Open all files and prepare for upload
+	opened := make([]io.Closer, 0, len(files))
 	for i, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
+			for _, f := range opened { f.Close() }
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to open file "+fileHeader.Filename+": "+err.Error()),
 			)
 		}
-		defer file.Close()
+		opened = append(opened, file)
 
 		// Use filename as the key
 		key := fileHeader.Filename
@@ -796,6 +799,9 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 
 	// Upload all files using the service method
 	results := h.s3Service.UploadMultipleObjects(ctx, bucketName, uploadFiles)
+
+	// Close all opened files immediately to free file descriptors
+	for _, f := range opened { f.Close() }
 
 	// Process results and categorize successes and failures
 	var successFiles []models.ObjectUploadResult
@@ -837,6 +843,10 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 		statusCode = fiber.StatusMultiStatus // 207
 	} else if failureCount > 0 && successCount == 0 {
 		statusCode = fiber.StatusInternalServerError
+	}
+
+	if statusCode == fiber.StatusInternalServerError {
+		return c.Status(statusCode).JSON(models.ErrorResponse("UPLOAD_FAILED", "All files failed to upload"))
 	}
 
 	return c.Status(statusCode).JSON(models.SuccessResponse(response))
