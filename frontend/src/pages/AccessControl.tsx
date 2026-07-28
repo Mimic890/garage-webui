@@ -201,6 +201,7 @@ export function AccessControl() {
             });
           } catch (error) {
             console.error('Failed to grant permissions:', error);
+            toast.warning(`Key created, but failed to grant permissions on "${createSelectedBucket}". You can set them later.`);
             // Continue even if permission grant fails - key is already created
           }
         }
@@ -295,15 +296,16 @@ export function AccessControl() {
     if (!settingsKey) return;
 
     try {
-      const updates: { status?: string; expiration?: string } = {};
+      const updates: { status?: string; expiration?: string | null } = {};
 
       updates.status = keyStatus;
 
       if (!neverExpires && expirationDate) {
         updates.expiration = new Date(expirationDate).toISOString();
       } else if (neverExpires) {
-        // Clear expiration by setting status to active
         updates.status = 'active';
+        // Clear any previously-set expiration so the backend removes it.
+        updates.expiration = null;
       }
 
       await accessApi.updateKey(settingsKey.accessKeyId, updates);
