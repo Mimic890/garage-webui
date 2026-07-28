@@ -30,7 +30,7 @@ export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps
     try {
       await loginAdmin(username, password);
       // Navigate to return URL on success
-      navigate(decodeURIComponent(returnUrl));
+      navigate(returnUrl);
     } catch (error) {
       // Error is already handled by the store and toast
       console.error('Login failed:', error);
