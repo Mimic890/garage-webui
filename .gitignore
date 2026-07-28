@@ -53,7 +53,9 @@ dist-ssr
 
 .env*
 !config.example.yaml
+docker-compose.yml
 docker-compose.*.yml
+!docker-compose.example.yml
 !backend/tests/smoke/docker-compose.test.yml
 
 data/
