@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { NavLink, Outlet, useParams, useLocation } from 'react-router-dom';
 import { Database, Copy, Upload } from 'lucide-react';
 import { IconTile } from '@/components/ui/icon-tile';
 import { Button } from '@/components/ui/button';
@@ -36,10 +36,25 @@ function formatBytes(n?: number) {
 
 export function BucketDetailShell() {
   const { bucketName = '' } = useParams<{ bucketName: string }>();
-  const { data: buckets = [] } = useBuckets();
+  const location = useLocation();
+  const { data: buckets = [], isFetched } = useBuckets();
   const bucket = buckets.find((b) => b.name === bucketName);
   const canBucket = useBucketCan();
   const visibleTabs = tabs.filter((t) => !t.perms || t.perms.every((p) => canBucket(bucket, p)));
+  const isObjectsTab = location.pathname.endsWith('/objects') || location.pathname.includes('/objects/');
+
+  // Show not-found state when buckets have been loaded but no match was found.
+  if (isFetched && !bucket) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 px-7 py-12 text-center">
+        <Database className="h-12 w-12 text-muted-foreground opacity-50" />
+        <h2 className="text-xl font-semibold">Bucket not found</h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          The bucket "{bucketName}" does not exist or you don't have access to it.
+        </p>
+      </div>
+    );
+  }
 
   const s3Url = `s3://${bucketName}`;
   const copyUrl = async () => {
@@ -72,7 +87,7 @@ export function BucketDetailShell() {
             <Button variant="secondary" onClick={copyUrl}>
               <Copy /> Copy URL
             </Button>
-            {canBucket(bucket, 'object.write') && (
+            {canBucket(bucket, 'object.write') && isObjectsTab && (
               <Button variant="primary" onClick={() => document.dispatchEvent(new CustomEvent('bucket:upload'))}>
                 <Upload /> Upload
               </Button>
