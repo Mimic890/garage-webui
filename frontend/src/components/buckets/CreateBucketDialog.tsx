@@ -22,19 +22,25 @@ interface CreateBucketDialogProps {
 
 export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: CreateBucketDialogProps) {
   const [bucketName, setBucketName] = useState('');
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => { if (!open) setBucketName(''); }, [open]);
+  useEffect(() => { if (!open) { setBucketName(''); setPending(false); } }, [open]);
 
   const handleCreate = async () => {
-    if (!bucketName) {
+    if (!bucketName || pending) {
       toast.error('Please enter a bucket name');
       return;
     }
 
-    const success = await onCreateBucket(bucketName);
-    if (success) {
-      setBucketName('');
-      onOpenChange(false);
+    setPending(true);
+    try {
+      const success = await onCreateBucket(bucketName);
+      if (success) {
+        setBucketName('');
+        onOpenChange(false);
+      }
+    } finally {
+      setPending(false);
     }
   };
 
@@ -76,7 +82,7 @@ export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: Creat
           <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={!bucketName}
+            disabled={!bucketName || pending}
           >
             Create
           </Button>

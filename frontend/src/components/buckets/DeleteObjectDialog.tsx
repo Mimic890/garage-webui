@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,12 +20,19 @@ interface DeleteObjectDialogProps {
 }
 
 export function DeleteObjectDialog({ open, onOpenChange, object, onDeleteObject }: DeleteObjectDialogProps) {
+  const [pending, setPending] = useState(false);
+
   const handleDelete = async () => {
     if (!object) return;
 
-    const success = await onDeleteObject(object.key);
-    if (success) {
-      onOpenChange(false);
+    setPending(true);
+    try {
+      const success = await onDeleteObject(object.key);
+      if (success) {
+        onOpenChange(false);
+      }
+    } finally {
+      setPending(false);
     }
   };
 
@@ -44,7 +52,7 @@ export function DeleteObjectDialog({ open, onOpenChange, object, onDeleteObject 
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleDelete}>
+          <Button variant="destructive" onClick={handleDelete} disabled={pending}>
             Delete
           </Button>
         </DialogFooter>

@@ -51,19 +51,19 @@ export function Cluster() {
     queryKey: ['cluster-statistics'],
     queryFn: () => garageApi.getClusterStatistics(),
     refetchInterval: 30000,
-    enabled: features?.clusterStatistics !== false,
+    enabled: !!features && features.clusterStatistics !== false,
   });
 
   const { data: nodeInfo, isLoading: nodeInfoLoading } = useQuery({
     queryKey: ['node-info', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeInfo(selectedNodeId || '*'),
-    enabled: features?.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
+    enabled: !!features && features.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
   });
 
   const { data: nodeStats } = useQuery({
     queryKey: ['node-statistics', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeStatistics(selectedNodeId || '*'),
-    enabled: features?.nodeStatistics !== false && !!selectedNodeId,
+    enabled: !!features && features.nodeStatistics !== false && !!selectedNodeId,
   });
 
   const isLoading = healthLoading || statusLoading || statisticsLoading;

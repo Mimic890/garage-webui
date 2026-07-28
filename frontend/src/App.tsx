@@ -77,6 +77,7 @@ function App() {
               </Route>
               <Route path="cluster" element={<Cluster />} />
               <Route path="access" element={<AccessControl />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </BrowserRouter>
