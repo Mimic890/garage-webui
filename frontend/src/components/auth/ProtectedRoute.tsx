@@ -15,7 +15,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // If no auth is enabled, always allow access
-  if (config && !config.admin.enabled && !config.oidc.enabled) {
+  if (config && !config.admin.enabled && !config.oidc.enabled && !config.token.enabled) {
     return <>{children}</>;
   }
 
