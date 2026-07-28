@@ -72,18 +72,18 @@ export function useObjectPreview(
     if (!blob) return;
     let cancelled = false;
     const typed = new Blob([blob], { type: getPreviewMime(kind, contentType, objectKey) });
-    const url = URL.createObjectURL(typed);
-    setObjectUrl(url);
     if (kind === 'text') {
       blob.text().then((decoded) => {
         if (cancelled) return;
         if (looksBinary(decoded.slice(0, 4096))) setIsBinary(true);
         else setText(decoded);
       });
+    } else {
+      const url = URL.createObjectURL(typed);
+      setObjectUrl(url);
     }
     return () => {
       cancelled = true;
-      URL.revokeObjectURL(url);
       setObjectUrl(null);
       setText(null);
       setIsBinary(false);

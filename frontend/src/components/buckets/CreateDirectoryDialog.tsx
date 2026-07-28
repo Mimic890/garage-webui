@@ -23,8 +23,9 @@ interface CreateDirectoryDialogProps {
 
 export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreateDirectory }: CreateDirectoryDialogProps) {
   const [dirName, setDirName] = useState('');
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => { if (!open) setDirName(''); }, [open]);
+  useEffect(() => { if (!open) { setDirName(''); setPending(false); } }, [open]);
 
   const handleCreate = async () => {
     if (!dirName) {
@@ -32,10 +33,15 @@ export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreat
       return;
     }
 
-    const success = await onCreateDirectory(dirName);
-    if (success) {
-      setDirName('');
-      onOpenChange(false);
+    setPending(true);
+    try {
+      const success = await onCreateDirectory(dirName);
+      if (success) {
+        setDirName('');
+        onOpenChange(false);
+      }
+    } finally {
+      setPending(false);
     }
   };
 
@@ -71,7 +77,7 @@ export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreat
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={!dirName}>
+          <Button onClick={handleCreate} disabled={!dirName || pending}>
             Create
           </Button>
         </DialogFooter>

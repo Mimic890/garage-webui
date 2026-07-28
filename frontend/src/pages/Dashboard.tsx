@@ -58,13 +58,13 @@ export function Dashboard() {
             />
             <StatCard
               label="Objects"
-              value={metrics?.objectCount.toLocaleString() ?? '—'}
+              value={(metrics?.objectCount ?? 0).toLocaleString()}
               sub="files and folders"
               icon={<FolderOpen />}
             />
             <StatCard
               label="Buckets"
-              value={metrics?.bucketCount.toLocaleString() ?? '—'}
+              value={(metrics?.bucketCount ?? 0).toLocaleString()}
               sub="active storage buckets"
               icon={<Database />}
             />
@@ -122,15 +122,15 @@ export function Dashboard() {
                       <div className="flex items-center justify-between gap-2 text-[13.5px]">
                         <span className="truncate font-medium">{bucket.bucketName}</span>
                         <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
-                          <span>{bucket.objectCount.toLocaleString()} objects</span>
+                          <span>{(bucket.objectCount ?? 0).toLocaleString()} objects</span>
                           <span className="font-medium text-[var(--foreground)]">{formatBytes(bucket.size)}</span>
-                          <span className="w-10 text-right">{bucket.percentage.toFixed(1)}%</span>
+                          <span className="w-10 text-right">{(bucket.percentage ?? 0).toFixed(1)}%</span>
                         </div>
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
                         <div
                           className="h-full bg-[var(--primary)] transition-all"
-                          style={{ width: `${bucket.percentage}%` }}
+                          style={{ width: `${bucket.percentage ?? 0}%` }}
                         />
                       </div>
                     </div>

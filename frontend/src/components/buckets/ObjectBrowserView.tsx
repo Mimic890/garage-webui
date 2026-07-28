@@ -250,6 +250,9 @@ export function ObjectBrowserView({
       setSelectedFileKeys(prev => {
         const next = new Set(prev);
         pendingDelete.keys.forEach(k => next.delete(k));
+        pendingDelete.prefixes.forEach(p => {
+          for (const k of next) if (k.startsWith(p)) next.delete(k);
+        });
         return next;
       });
       setSelectedFolderKeys(prev => {
