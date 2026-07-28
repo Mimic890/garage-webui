@@ -57,19 +57,24 @@ export function ObjectDetailsView() {
       setIsLoading(false);
       return;
     }
+    let cancelled = false;
+    const ctrl = new AbortController();
     const fetchMetadata = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const data = await objectsApi.getMetadata(bucketName, objectKey);
+        const data = await objectsApi.getMetadata(bucketName, objectKey, { signal: ctrl.signal });
+        if (cancelled) return;
         setMetadata(data);
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load object metadata');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     fetchMetadata();
+    return () => { cancelled = true; ctrl.abort(); };
   }, [bucketName, objectKey]);
 
   const parentPath = objectKey?.split('/').slice(0, -1).join('/') ?? '';
