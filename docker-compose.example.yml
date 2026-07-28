@@ -1,7 +1,7 @@
 ---
 services:
   garage-ui:
-    image: .
+    build: .
     container_name: garage-ui
     restart: unless-stopped
     volumes:
@@ -12,6 +12,7 @@ services:
       # Garage S3 Configuration
       GARAGE_UI_GARAGE_ENDPOINT: "localhost:3900"
       GARAGE_UI_GARAGE_ADMIN_ENDPOINT: "http://localhost:3903"
+      # GARAGE_UI_GARAGE_ADMIN_TOKEN: "your-admin-token" # uncomment if not using config.yaml
 
       # Server Configuration
       GARAGE_UI_SERVER_HOST: "0.0.0.0"
