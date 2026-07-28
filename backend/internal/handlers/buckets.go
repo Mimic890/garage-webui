@@ -353,6 +353,10 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 		result = r
 	}
 
+	// Invalidate cached credentials so subsequent S3 operations pick up the new
+	// permission set instead of using stale creds for up to an hour.
+	services.InvalidateBucketCredsCache(bucketName)
+
 	return c.JSON(models.SuccessResponse(result))
 }
 

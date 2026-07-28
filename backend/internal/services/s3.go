@@ -73,6 +73,20 @@ func (op Operation) satisfies(perms models.BucketKeyPermission) bool {
 	return true
 }
 
+// InvalidateBucketCredsCache removes all cached S3 credentials for a bucket.
+// Call this after granting/revoking bucket permissions or deleting a key.
+func InvalidateBucketCredsCache(bucketName string) {
+	for _, op := range []Operation{OpRead, OpWrite, OpRead | OpWrite} {
+		utils.GlobalCache.Delete(fmt.Sprintf("key:%s:%d", bucketName, op))
+	}
+}
+
+// ClearAllCredsCache wipes the entire credentials cache. Use when a key is
+// deleted or modified, since we can't know which buckets it had access to.
+func ClearAllCredsCache() {
+	utils.GlobalCache.Clear()
+}
+
 func setKeyInCache(bucketName string, permissions models.BucketKeyPermission, creds *credentials.Credentials) {
 	canWrite := permissions.Write
 	canRead := permissions.Read
