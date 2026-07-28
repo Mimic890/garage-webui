@@ -17,14 +17,14 @@ export function Login() {
   useEffect(() => {
     if (loginSuccess === 'success') {
       initialize().then(() => {
-        navigate(decodeURIComponent(returnUrl));
+        navigate(returnUrl);
       });
     }
   }, [loginSuccess, initialize, navigate, returnUrl]);
 
   useEffect(() => {
     if (isAuthenticated && !loginSuccess) {
-      navigate(decodeURIComponent(returnUrl));
+      navigate(returnUrl);
     }
   }, [isAuthenticated, navigate, returnUrl, loginSuccess]);
 

@@ -20,7 +20,7 @@ export function TokenLoginForm() {
 
     try {
       await loginToken(token);
-      navigate(decodeURIComponent(returnUrl));
+      navigate(returnUrl);
     } catch (error) {
       console.error('Login failed:', error);
     } finally {
