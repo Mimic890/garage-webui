@@ -271,28 +271,33 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 	// Note: ListObjectsV2 doesn't return ContentType, so we need to fetch it separately
 	objects := make([]models.ObjectInfo, len(contents))
 
-	// Use goroutines to fetch ContentType concurrently for better performance
+	// Fetch ContentType concurrently with a bounded worker pool and per-call
+	// timeout, so a slow Garage node can't stall the entire listing.
 	type statResult struct {
 		index       int
 		contentType string
 		err         error
 	}
 
-	statChan := make(chan statResult, len(result.Contents))
+	statChan := make(chan statResult, len(contents))
+	sem := make(chan struct{}, 10) // limit to 10 concurrent StatObject calls
 
 	for i, obj := range contents {
 		go func(idx int, objKey string) {
-			// Fetch object metadata to get ContentType
-			stat, err := client.StatObject(ctx, bucketName, objKey, minio.StatObjectOptions{})
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			statCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			stat, err := client.StatObject(statCtx, bucketName, objKey, minio.StatObjectOptions{})
 			if err != nil {
-				// If StatObject fails, we still include the object but without ContentType
 				statChan <- statResult{index: idx, contentType: "", err: err}
 				return
 			}
 			statChan <- statResult{index: idx, contentType: stat.ContentType, err: nil}
 		}(i, obj.Key)
 
-		// Initialize the object with basic info from ListObjectsV2
 		objects[i] = models.ObjectInfo{
 			Key:          obj.Key,
 			Size:         obj.Size,
@@ -666,7 +671,7 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	}
 
 	// Create channel for objects to delete
-	objectsCh := make(chan minio.ObjectInfo)
+	objectsCh := make(chan minio.ObjectInfo, len(keys))
 
 	// Send objects to delete in a goroutine
 	go func() {
