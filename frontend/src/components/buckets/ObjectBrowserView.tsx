@@ -86,7 +86,11 @@ export function ObjectBrowserView({
     setSelectedFolderKeys(new Set());
   }, [currentPath]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const {
+    getRootProps: getTableRootProps,
+    getInputProps: getTableInputProps,
+    isDragActive,
+  } = useDropzone({
     onDrop: async (acceptedFiles, _fileRejections, event) => {
       if (!onUploadFiles) return;
 
@@ -113,6 +117,16 @@ export function ObjectBrowserView({
       }
 
       await onUploadFiles(filesWithPaths.length > 0 ? filesWithPaths : acceptedFiles);
+      setShowUploadZone(false);
+    },
+    noClick: true,
+    disabled: !onUploadFiles,
+  });
+
+  const { getRootProps: getPanelRootProps } = useDropzone({
+    onDrop: async (acceptedFiles) => {
+      if (!onUploadFiles) return;
+      await onUploadFiles(acceptedFiles);
       setShowUploadZone(false);
     },
     noClick: true,
@@ -374,14 +388,13 @@ export function ObjectBrowserView({
 
               <div className="flex-1 space-y-3">
                 <div
-                  {...getRootProps()}
+                  {...getPanelRootProps()}
                   className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
                     isDragActive
                       ? 'border-primary bg-primary/5'
                       : 'border-muted-foreground/25 hover:border-muted-foreground/50'
                   }`}
                 >
-                  <input {...getInputProps()} />
                   <p className="text-sm">
                     Drag and drop files/folders or{' '}
                     <label
@@ -435,14 +448,14 @@ export function ObjectBrowserView({
 
         {/* Objects Table with Drag & Drop */}
         <div
-          {...getRootProps()}
+          {...getTableRootProps()}
           className={`relative border rounded-lg transition-all duration-200 overflow-visible ${
             isDragActive
               ? 'border-primary bg-primary/5 border-2 shadow-lg'
               : 'border-border'
           }`}
         >
-          <input {...getInputProps()} />
+          <input {...getTableInputProps()} />
 
           {/* Drag & Drop Overlay */}
           {isDragActive && (

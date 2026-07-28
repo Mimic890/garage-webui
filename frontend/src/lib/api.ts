@@ -333,8 +333,8 @@ export const objectsApi = {
     return response.data;
   },
 
-  getMetadata: async (bucket: string, key: string): Promise<ObjectMetadata> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/metadata`);
+  getMetadata: async (bucket: string, key: string, options?: { signal?: AbortSignal }): Promise<ObjectMetadata> => {
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/metadata`, options);
     const data = response.data.data;
     return {
       key: data.key,
