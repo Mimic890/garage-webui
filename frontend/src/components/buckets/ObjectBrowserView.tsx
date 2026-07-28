@@ -135,7 +135,7 @@ export function ObjectBrowserView({
 
   // Helper function to traverse file/directory tree
   const traverseFileTree = async (item: any, path: string, files: File[]): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (item.isFile) {
         item.file((file: File) => {
           const fullPath = path + file.name;

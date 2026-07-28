@@ -79,7 +79,7 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
             <div className="relative w-full bg-secondary rounded-full h-3 overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ease-out relative ${
-                  errorCount > 0 && successCount > 0
+                  errorCount > 0 && completedCount > 0
                     ? 'bg-yellow-500 dark:bg-yellow-600'
                     : errorCount > 0
                     ? 'bg-red-500 dark:bg-red-600'
