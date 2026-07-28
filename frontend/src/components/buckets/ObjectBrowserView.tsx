@@ -126,12 +126,29 @@ export function ObjectBrowserView({
         });
       } else if (item.isDirectory) {
         const dirReader = item.createReader();
-        dirReader.readEntries(async (entries: any[]) => {
+        const readAllEntries = () =>
+          new Promise<any[]>((resolve, reject) => {
+            const entries: any[] = [];
+            const step = () =>
+              dirReader.readEntries(
+                (batch: any[]) => {
+                  if (batch.length === 0) return resolve(entries);
+                  entries.push(...batch);
+                  step();
+                },
+                (err: any) => reject(err),
+              );
+            step();
+          });
+        try {
+          const entries = await readAllEntries();
           for (const entry of entries) {
             await traverseFileTree(entry, path + item.name + '/', files);
           }
-          resolve();
-        });
+        } catch {
+          // If reading directory entries fails, skip this directory
+        }
+        resolve();
       } else {
         resolve();
       }
