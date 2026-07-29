@@ -141,7 +141,9 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	maxKeysStr := c.Query("max_keys", "100")
 	maxKeys, err := strconv.Atoi(maxKeysStr)
 	if err != nil || maxKeys <= 0 {
-		maxKeys = 100
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "max_keys must be a positive integer"),
+		)
 	}
 	if maxKeys > 1000 {
 		maxKeys = 1000

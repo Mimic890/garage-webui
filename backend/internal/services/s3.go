@@ -842,6 +842,9 @@ func (s *S3Service) GetBucketStatistics(ctx context.Context, bucketName string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket info for %s: %w", bucketName, err)
 	}
+	if bucketInfo == nil {
+		return nil, fmt.Errorf("failed to get bucket info for %s: bucket not found", bucketName)
+	}
 
 	// Return statistics from Admin API
 	return &BucketStatistics{
