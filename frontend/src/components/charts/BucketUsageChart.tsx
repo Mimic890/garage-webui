@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
+import {Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
 import type {BucketUsage} from '@/types';
 import {formatBytes} from '@/lib/file-utils';
 import {chartColorPalette, getTextColor, getTooltipStyle} from '@/lib/chart-colors';
@@ -12,14 +12,12 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Check if dark mode is enabled
     const checkDarkMode = () => {
       setIsDark(document.documentElement.classList.contains('dark'));
     };
 
     checkDarkMode();
 
-    // Listen for theme changes
     const observer = new MutationObserver(checkDarkMode);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
@@ -44,7 +42,6 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name }) => `${name}`}
           outerRadius={80}
           fill="#8884d8"
           dataKey="value"
@@ -52,6 +49,7 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
           {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
           ))}
+          <LabelList dataKey="name" fill={textColor} fontSize={12} />
         </Pie>
         <Tooltip
           formatter={(value) => formatBytes(value as number)}
