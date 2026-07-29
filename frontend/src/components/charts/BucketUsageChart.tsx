@@ -28,7 +28,7 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
 
   const colors = isDark ? chartColorPalette.dark : chartColorPalette.light;
   const textColor = getTextColor();
-  const tooltipStyle = getTooltipStyle(isDark);
+  const tooltipStyle = getTooltipStyle();
 
   const chartData = data.map(item => ({
     name: item.bucketName,
