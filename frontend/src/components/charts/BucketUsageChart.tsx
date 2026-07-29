@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
+import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
 import type {BucketUsage} from '@/types';
 import {formatBytes} from '@/lib/file-utils';
 import {chartColorPalette, getTextColor, getTooltipStyle} from '@/lib/chart-colors';
@@ -49,7 +49,6 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
           {chartData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
           ))}
-          <LabelList dataKey="name" fill={textColor} fontSize={12} />
         </Pie>
         <Tooltip
           formatter={(value) => formatBytes(value as number)}
