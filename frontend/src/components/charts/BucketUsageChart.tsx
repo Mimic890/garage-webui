@@ -53,7 +53,8 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
         <Tooltip
           formatter={(value) => formatBytes(value as number)}
           contentStyle={tooltipStyle as React.CSSProperties}
-          labelStyle={{ color: textColor }}
+          labelStyle={{ color: 'var(--popover-foreground)' }}
+          itemStyle={{ color: 'var(--popover-foreground)' }}
         />
         <Legend wrapperStyle={{ color: textColor }} />
       </PieChart>
