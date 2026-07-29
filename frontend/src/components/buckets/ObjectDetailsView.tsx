@@ -82,8 +82,19 @@ export function ObjectDetailsView() {
   const backHref = `/buckets/${bucketName}/objects${parentPath ? `?prefix=${encodeURIComponent(parentPath + '/')}` : ''}`;
   const pathSegments = parentPath ? parentPath.split('/').filter(Boolean) : [];
 
-  const copy = (text: string, label = 'Copied') => {
-    navigator.clipboard.writeText(text);
+  const copy = async (text: string, label = 'Copied') => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
     toast.success(label);
   };
 
