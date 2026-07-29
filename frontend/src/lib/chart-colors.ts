@@ -57,15 +57,15 @@ export const getChartColors = (isDark: boolean = false) => {
   return isDark ? chartColorPalette.dark : chartColorPalette.light;
 };
 
-export const getTextColor = (isDark: boolean = false) => {
-  return isDark ? '#e0e0e0' : '#333333';
+export const getTextColor = () => {
+  return 'var(--popover-foreground)';
 };
 
 export const getGridColor = (isDark: boolean = false) => {
   return isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
 };
 
-export const getTooltipStyle = (isDark: boolean = false) => {
+export const getTooltipStyle = () => {
   return {
     backgroundColor: 'var(--popover)',
     border: '1px solid var(--border)',
