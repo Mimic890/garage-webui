@@ -58,7 +58,8 @@ export const getChartColors = (isDark: boolean = false) => {
 };
 
 export const getTextColor = () => {
-  return 'var(--popover-foreground)';
+  if (typeof document === 'undefined') return '#e8eaed';
+  return getComputedStyle(document.documentElement).getPropertyValue('--popover-foreground').trim() || '#e8eaed';
 };
 
 export const getGridColor = (isDark: boolean = false) => {
