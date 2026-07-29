@@ -67,9 +67,9 @@ export const getGridColor = (isDark: boolean = false) => {
 
 export const getTooltipStyle = (isDark: boolean = false) => {
   return {
-    backgroundColor: isDark ? '#1f2937' : '#ffffff',
-    border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
+    backgroundColor: 'var(--popover)',
+    border: '1px solid var(--border)',
     borderRadius: '6px',
-    color: isDark ? '#e0e0e0' : '#333333',
+    color: 'var(--popover-foreground)',
   };
 };
