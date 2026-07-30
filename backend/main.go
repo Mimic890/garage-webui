@@ -19,6 +19,7 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	appmw "Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/routes"
+	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/logger"
 
@@ -190,8 +191,9 @@ func main() {
 	userHandler := handlers.NewUserHandler()
 	clusterHandler := handlers.NewClusterHandler()
 	monitoringHandler := handlers.NewMonitoringHandler()
-	// TODO: Capabilities handler needs dynamic injection
-	capabilitiesHandler := handlers.NewCapabilitiesHandler("v2", nil, cfg.AccessControl != nil)
+	// Capabilities are reported as v2 by default; per-cluster API version can
+	// refine this later when the active cluster is known.
+	capabilitiesHandler := handlers.NewCapabilitiesHandler("v2", services.CapabilitiesV2(), cfg.AccessControl != nil)
 
 	// Set default values for buffer sizes if not configured
 	maxBodySize := cfg.Server.MaxBodySize

@@ -33,10 +33,6 @@ server:
   host: "0.0.0.0"
   port: 8080
   environment: development
-garage:
-  endpoint: http://garage:3900
-  admin_endpoint: http://garage:3903
-  admin_token: supersecret
 `
 
 func TestLoad_YAMLOnly(t *testing.T) {
@@ -55,12 +51,6 @@ func TestLoad_YAMLOnly(t *testing.T) {
 	}
 	if cfg.Server.Environment != "development" {
 		t.Errorf("Server.Environment = %q, want development", cfg.Server.Environment)
-	}
-	if cfg.Garage.Endpoint != "http://garage:3900" {
-		t.Errorf("Garage.Endpoint = %q", cfg.Garage.Endpoint)
-	}
-	if cfg.Garage.AdminToken != "supersecret" {
-		t.Errorf("Garage.AdminToken = %q", cfg.Garage.AdminToken)
 	}
 }
 
@@ -86,9 +76,6 @@ func TestLoad_EnvOnly_MissingFile(t *testing.T) {
 	if cfg.Server.Host != "::" {
 		t.Errorf("Server.Host = %q, want :: (default)", cfg.Server.Host)
 	}
-	if cfg.Garage.AdminToken != "env-token" {
-		t.Errorf("Garage.AdminToken = %q, want env-token", cfg.Garage.AdminToken)
-	}
 }
 
 func TestLoad_EnvOverridesYAML(t *testing.T) {
@@ -105,9 +92,6 @@ func TestLoad_EnvOverridesYAML(t *testing.T) {
 	}
 	if cfg.Server.Port != 9090 {
 		t.Errorf("Server.Port = %d, want 9090 (env override)", cfg.Server.Port)
-	}
-	if cfg.Garage.AdminToken != "env-wins" {
-		t.Errorf("Garage.AdminToken = %q, want env-wins", cfg.Garage.AdminToken)
 	}
 	// Host was not overridden; YAML value should persist.
 	if cfg.Server.Host != "0.0.0.0" {
@@ -131,14 +115,10 @@ func TestLoad_MalformedYAMLReturnsError(t *testing.T) {
 
 func TestLoad_ValidationFailurePropagates(t *testing.T) {
 	resetViper(t)
-	// Valid YAML syntax but Garage.Endpoint is blank → Validate must fail.
+	// Valid YAML syntax but port is invalid → Validate must fail.
 	path := writeConfigFile(t, `
 server:
-  port: 8080
-garage:
-  endpoint: ""
-  admin_endpoint: http://g:3903
-  admin_token: t
+  port: 0
 `)
 
 	_, err := Load(path)
@@ -148,8 +128,8 @@ garage:
 	if !strings.Contains(err.Error(), "invalid configuration") {
 		t.Errorf("expected wrapped invalid-config error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "garage endpoint is required") {
-		t.Errorf("expected endpoint-required message, got %v", err)
+	if !strings.Contains(err.Error(), "invalid server port") {
+		t.Errorf("expected invalid-port message, got %v", err)
 	}
 }
 
@@ -157,12 +137,7 @@ garage:
 func validBaseConfig() Config {
 	return Config{
 		Server: ServerConfig{Port: 8080},
-		Garage: GarageConfig{
-			Endpoint:      "http://g:3900",
-			AdminEndpoint: "http://g:3903",
-			AdminToken:    "t",
-		},
-	}
+			}
 }
 
 // applyValidOIDC fills OIDC with all required fields.
@@ -209,21 +184,7 @@ func TestValidate(t *testing.T) {
 			mutate:          func(c *Config) { c.Server.Port = 65535 },
 			wantErrContains: "",
 		},
-		{
-			name:            "missing garage endpoint",
-			mutate:          func(c *Config) { c.Garage.Endpoint = "" },
-			wantErrContains: "garage endpoint is required",
-		},
-		{
-			name:            "missing garage admin_endpoint",
-			mutate:          func(c *Config) { c.Garage.AdminEndpoint = "" },
-			wantErrContains: "admin_endpoint is required",
-		},
-		{
-			name:            "missing garage admin_token",
-			mutate:          func(c *Config) { c.Garage.AdminToken = "" },
-			wantErrContains: "admin_token is required",
-		},
+
 		{
 			name: "admin auth enabled without username",
 			mutate: func(c *Config) {
@@ -417,89 +378,7 @@ func TestIsDevelopment(t *testing.T) {
 	}
 }
 
-func writeToml(t *testing.T, content string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "garage.toml")
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
-		t.Fatalf("write toml: %v", err)
-	}
-	return path
-}
 
-const testGarageToml = `
-[admin]
-api_bind_addr = "[::]:3903"
-admin_token = "toml-token"
-
-[s3_api]
-api_bind_addr = "[::]:3900"
-s3_region = "garage"
-`
-
-func TestLoad_GarageTomlOnly(t *testing.T) {
-	resetViper(t)
-	tomlPath := writeToml(t, testGarageToml)
-	missingYaml := filepath.Join(t.TempDir(), "nope.yaml")
-
-	cfg, err := Load(missingYaml, WithGarageToml(tomlPath))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Garage.AdminToken != "toml-token" {
-		t.Errorf("AdminToken = %q, want toml-token", cfg.Garage.AdminToken)
-	}
-	if cfg.Garage.Endpoint != "http://127.0.0.1:3900" {
-		t.Errorf("Endpoint = %q, want http://127.0.0.1:3900", cfg.Garage.Endpoint)
-	}
-	if cfg.Garage.AdminEndpoint != "http://127.0.0.1:3903" {
-		t.Errorf("AdminEndpoint = %q, want http://127.0.0.1:3903", cfg.Garage.AdminEndpoint)
-	}
-	if cfg.Garage.Region != "garage" {
-		t.Errorf("Region = %q, want garage", cfg.Garage.Region)
-	}
-}
-
-func TestLoad_YAMLOverridesToml(t *testing.T) {
-	resetViper(t)
-	tomlPath := writeToml(t, testGarageToml)
-	yaml := `
-server:
-  host: "0.0.0.0"
-  port: 8080
-garage:
-  endpoint: http://custom:3900
-  admin_endpoint: http://custom:3903
-  admin_token: yaml-wins
-`
-	yamlPath := writeConfigFile(t, yaml)
-
-	cfg, err := Load(yamlPath, WithGarageToml(tomlPath))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Garage.AdminToken != "yaml-wins" {
-		t.Errorf("AdminToken = %q, want yaml-wins (yaml overrides toml)", cfg.Garage.AdminToken)
-	}
-	if cfg.Garage.Endpoint != "http://custom:3900" {
-		t.Errorf("Endpoint = %q, want http://custom:3900", cfg.Garage.Endpoint)
-	}
-}
-
-func TestLoad_EnvOverridesToml(t *testing.T) {
-	resetViper(t)
-	tomlPath := writeToml(t, testGarageToml)
-	missingYaml := filepath.Join(t.TempDir(), "nope.yaml")
-	t.Setenv("GARAGE_UI_GARAGE_ADMIN_TOKEN", "env-wins")
-
-	cfg, err := Load(missingYaml, WithGarageToml(tomlPath))
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Garage.AdminToken != "env-wins" {
-		t.Errorf("AdminToken = %q, want env-wins (env overrides toml)", cfg.Garage.AdminToken)
-	}
-}
 
 // oidcValidYAML is a minimal configuration that enables OIDC and passes
 // Validate, but deliberately omits auth.oidc.cookie_name.
@@ -508,10 +387,6 @@ server:
   host: "0.0.0.0"
   port: 8080
   root_url: "https://garage.example.com"
-garage:
-  endpoint: http://garage:3900
-  admin_endpoint: http://garage:3903
-  admin_token: supersecret
 auth:
   oidc:
     enabled: true
@@ -656,8 +531,8 @@ func TestApplyFileBackedEnvVars(t *testing.T) {
 		},
 		{
 			name:      "trims trailing newline",
-			envVar:    "GARAGE_UI_GARAGE_ADMIN_TOKEN",
-			configKey: "garage.admin_token",
+			envVar:    "GARAGE_UI_AUTH_ADMIN_PASSWORD",
+			configKey: "auth.admin.password",
 			fileBody:  "tok\n",
 			wantValue: "tok",
 		},
@@ -733,19 +608,7 @@ func TestApplyFileBackedEnvVars_NoFileEnvSet_NoOp(t *testing.T) {
 	}
 }
 
-func TestLoad_FileBackedEnvVarMissingFileReturnsError(t *testing.T) {
-	resetViper(t)
-	yamlPath := writeConfigFile(t, minimalValidYAML)
-	t.Setenv("GARAGE_UI_GARAGE_ADMIN_TOKEN_FILE", filepath.Join(t.TempDir(), "does-not-exist"))
 
-	_, err := Load(yamlPath)
-	if err == nil {
-		t.Fatal("expected error from Load when _FILE points at a missing file, got nil")
-	}
-	if !strings.Contains(err.Error(), "error resolving _FILE env vars") {
-		t.Errorf("error %q does not contain wrapped prefix from Load", err)
-	}
-}
 
 func TestAccessControlConfigParsing(t *testing.T) {
 	resetViper(t)
@@ -754,10 +617,6 @@ func TestAccessControlConfigParsing(t *testing.T) {
 	yaml := `
 server:
   port: 8080
-garage:
-  endpoint: "http://localhost:3900"
-  admin_endpoint: "http://localhost:3903"
-  admin_token: "test-token"
 auth:
   oidc:
     enabled: false
@@ -806,10 +665,6 @@ func TestAccessControlAbsentIsNil(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
 	yaml := `
-garage:
-  endpoint: "http://localhost:3900"
-  admin_endpoint: "http://localhost:3903"
-  admin_token: "test-token"
 `
 	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
@@ -833,10 +688,6 @@ func TestAccessControlPresentButEmptyIsNonNil(t *testing.T) {
 	dir := t.TempDir()
 	cfgFile := filepath.Join(dir, "config.yaml")
 	yaml := `
-garage:
-  endpoint: "http://localhost:3900"
-  admin_endpoint: "http://localhost:3903"
-  admin_token: "test-token"
 access_control: {}
 `
 	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
@@ -859,8 +710,7 @@ func TestOIDCAdminRolesOptionalWithAccessControl(t *testing.T) {
 	// default-deny protects unmatched users.
 	cfg := &Config{
 		Server: ServerConfig{Port: 8080, RootURL: "https://ui.example.com"},
-		Garage: GarageConfig{Endpoint: "e", AdminEndpoint: "a", AdminToken: "t"},
-		Auth: AuthConfig{OIDC: OIDCConfig{
+				Auth: AuthConfig{OIDC: OIDCConfig{
 			Enabled: true, ClientID: "id", IssuerURL: "https://idp", Scopes: []string{"openid"},
 		}},
 		AccessControl: &AccessControlConfig{},

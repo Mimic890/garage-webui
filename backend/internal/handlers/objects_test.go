@@ -41,8 +41,9 @@ func newObjectsTestAppWithMinter(t *testing.T) (*fiber.App, *mocks.S3Mock, *mint
 	t.Helper()
 	s3 := &mocks.S3Mock{}
 	minter := &mintStub{}
-	h := NewObjectHandler(s3, minter)
+	h := NewObjectHandler(minter)
 	app := fiber.New()
+	app.Use(injectServices(nil, s3))
 	app.Get("/buckets/:bucket/objects", h.ListObjects)
 	app.Post("/buckets/:bucket/objects", h.UploadObject)
 	app.Post("/buckets/:bucket/directories", h.CreateDirectory)
@@ -399,7 +400,6 @@ func TestGetPreviewURL_Success(t *testing.T) {
 func TestGetPreviewURL_EscapesKeyInURL(t *testing.T) {
 	// Production sets the decoded key in locals via the wildcard dispatcher,
 	// so mirror that here instead of relying on :key param decoding.
-	s3 := &mocks.S3Mock{}
 	minter := &mintStub{}
 	minter.fn = func(_, key string, _ time.Duration) (string, time.Time, error) {
 		if key != "dir/my file.mp4" {
@@ -407,7 +407,7 @@ func TestGetPreviewURL_EscapesKeyInURL(t *testing.T) {
 		}
 		return "tok", time.Now().Add(time.Hour), nil
 	}
-	h := NewObjectHandler(s3, minter)
+	h := NewObjectHandler(minter)
 	app := fiber.New()
 	app.Get("/buckets/:bucket/preview-url", func(c fiber.Ctx) error {
 		c.Locals("objectKey", "dir/my file.mp4")
@@ -434,9 +434,8 @@ func TestGetPreviewURL_EscapesKeyInURL(t *testing.T) {
 func TestGetPreviewURL_MissingBucketAndKey400(t *testing.T) {
 	// Mount on a route with no :bucket param and no objectKey local, so both
 	// bucket and key are empty and the handler short-circuits with 400.
-	s3 := &mocks.S3Mock{}
 	minter := &mintStub{}
-	h := NewObjectHandler(s3, minter)
+	h := NewObjectHandler(minter)
 	app := fiber.New()
 	app.Get("/preview-url-nobucket", h.GetPreviewURL)
 
@@ -1324,8 +1323,7 @@ func TestGetObject_RangeWithDownloadSetsAttachment(t *testing.T) {
 // GetObject rejects a request that resolves to an empty object key with 400.
 // This guards the wildcard dispatch path where the key comes from locals.
 func TestGetObject_EmptyKeyIsBadRequest(t *testing.T) {
-	s3 := &mocks.S3Mock{}
-	h := NewObjectHandler(s3, &mintStub{})
+	h := NewObjectHandler(&mintStub{})
 	app := fiber.New()
 	// Mounted without a :key param so the handler resolves an empty key.
 	app.Get("/buckets/:bucket/object", h.GetObject)

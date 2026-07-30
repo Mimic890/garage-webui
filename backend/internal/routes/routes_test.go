@@ -15,8 +15,10 @@ import (
 	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
+	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
+	"Noooste/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -28,6 +30,28 @@ type routeFixture struct {
 	S3    *mocks.S3Mock
 	Auth  *auth.Service
 	Cfg   *config.Config
+	State *state.Manager
+}
+
+// bearerToken mints a session JWT for the given user (AuthMethod=admin by default).
+func (f *routeFixture) bearerToken(t *testing.T, username string) string {
+	t.Helper()
+	tok, err := f.Auth.GenerateSessionToken(&auth.UserInfo{
+		Username:   username,
+		AuthMethod: "admin",
+	})
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+	return tok
+}
+
+// authedRequest builds an HTTP request with a Bearer session token.
+func (f *routeFixture) authedRequest(t *testing.T, method, path string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(method, path, nil)
+	r.Header.Set("Authorization", "Bearer "+f.bearerToken(t, "admin"))
+	return r
 }
 
 // newTestApp builds a fully-wired fiber.App via SetupRoutes. The cfgMutator
@@ -35,6 +59,9 @@ type routeFixture struct {
 // constructed. If the mutator sets OIDC.Enabled=true it MUST set
 // OIDC.IssuerURL + Scopes + AdminRole + ClientID so NewAuthService can dial
 // the issuer — typically via the testIssuer fixture.
+//
+// Cluster services are injected via StaticClusterMiddleware (Admin/S3 mocks)
+// so route tests never dial a real Garage node.
 func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 	t.Helper()
 
@@ -58,6 +85,11 @@ func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 	admin := &mocks.AdminMock{}
 	s3 := &mocks.S3Mock{}
 
+	sm, err := state.NewManager(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
 	policy, err := authz.CompilePolicy(nil)
 	if err != nil {
 		t.Fatalf("CompilePolicy: %v", err)
@@ -70,16 +102,18 @@ func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 		cfg,
 		svc,
 		handlers.NewHealthHandler("test"),
-		handlers.NewBucketHandler(admin, s3),
-		handlers.NewObjectHandler(s3, svc),
-		handlers.NewUserHandler(admin),
-		handlers.NewClusterHandler(admin),
-		handlers.NewMonitoringHandler(admin, s3),
+		handlers.NewBucketHandler(),
+		handlers.NewObjectHandler(svc),
+		handlers.NewUserHandler(),
+		handlers.NewClusterHandler(),
+		handlers.NewMonitoringHandler(),
 		handlers.NewCapabilitiesHandler("v2", services.CapabilitiesV2(), false),
 		az,
+		sm,
+		WithClusterMiddleware(middleware.StaticClusterMiddleware(admin, s3)),
 	)
 
-	return &routeFixture{App: app, Admin: admin, S3: s3, Auth: svc, Cfg: cfg}
+	return &routeFixture{App: app, Admin: admin, S3: s3, Auth: svc, Cfg: cfg, State: sm}
 }
 
 // expectStatus sends req and asserts the status code.
@@ -96,7 +130,8 @@ func expectStatus(t *testing.T, app *fiber.App, req *http.Request, want int) *ht
 }
 
 func TestRoutes_Registered_NoAuth(t *testing.T) {
-	// No auth: every route resolves; auth-specific routes return 404.
+	// Admin login is always registered (panel admin lives in state). OIDC
+	// routes only mount when OIDC is enabled.
 	f := newTestApp(t, func(c *config.Config) {
 		c.Auth.Admin.Enabled = false
 		c.Auth.OIDC.Enabled = false
@@ -109,6 +144,8 @@ func TestRoutes_Registered_NoAuth(t *testing.T) {
 		{"GET", "/health"},
 		{"GET", "/api/v1/health"},
 		{"GET", "/auth/config"},
+		{"POST", "/auth/login"},
+		{"GET", "/auth/me"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, nil)
 		resp, err := f.App.Test(req)
@@ -120,12 +157,10 @@ func TestRoutes_Registered_NoAuth(t *testing.T) {
 		}
 	}
 
-	// Auth-specific routes must 404 when both auth methods disabled.
+	// OIDC routes must 404 when OIDC is disabled.
 	for _, tc := range []struct {
 		method, path string
 	}{
-		{"POST", "/auth/login"},
-		{"GET", "/auth/me"},
 		{"GET", "/auth/oidc/login"},
 		{"GET", "/auth/oidc/callback"},
 		{"POST", "/auth/oidc/logout"},
@@ -386,9 +421,15 @@ func TestRoutes_Registered_OIDCOnly(t *testing.T) {
 		}
 	}
 
-	// /auth/login must be 404 — admin disabled.
+	// /auth/login remains registered (panel admin login is always available).
 	req := httptest.NewRequest("POST", "/auth/login", nil)
-	expectStatus(t, f.App, req, 404)
+	resp, err := f.App.Test(req)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if resp.StatusCode == 404 {
+		t.Error("POST /auth/login returned 404 — route should always be registered")
+	}
 }
 
 // oidcState returns a fresh state token minted by the fixture's auth service.
@@ -609,7 +650,17 @@ func TestRoutes_SPAFallback_WithFrontend_ServesIndexForUnknownPath(t *testing.T)
 		t.Errorf("body = %q, want index.html content", string(body[:n]))
 	}
 
-	// API prefix is skipped by the fallback → still 404 for unknown API path.
+	// API prefix is skipped by the SPA fallback. Auth middleware runs first on
+	// /api/v1/*, so unauthenticated unknown paths return 401 (not the SPA index).
 	req2 := httptest.NewRequest("GET", "/api/v1/definitely-not-a-route", nil)
-	expectStatus(t, f.App, req2, 404)
+	resp2, err := f.App.Test(req2)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if resp2.StatusCode == 200 {
+		t.Errorf("API-prefixed unknown path must not serve SPA index, got 200")
+	}
+	if resp2.StatusCode != 401 && resp2.StatusCode != 404 {
+		t.Errorf("status = %d, want 401 or 404", resp2.StatusCode)
+	}
 }
