@@ -10,15 +10,11 @@ import (
 )
 
 // ClusterHandler handles cluster-status HTTP requests.
-type ClusterHandler struct {
-	adminService services.AdminService
-}
+type ClusterHandler struct{}
 
 // NewClusterHandler creates a new cluster handler.
-func NewClusterHandler(adminService services.AdminService) *ClusterHandler {
-	return &ClusterHandler{
-		adminService: adminService,
-	}
+func NewClusterHandler() *ClusterHandler {
+	return &ClusterHandler{}
 }
 
 // GetHealth returns the health status of the cluster
@@ -34,7 +30,7 @@ func NewClusterHandler(adminService services.AdminService) *ClusterHandler {
 func (h *ClusterHandler) GetHealth(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	health, err := h.adminService.GetClusterHealth(ctx)
+	health, err := getAdminService(c).GetClusterHealth(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get cluster health: "+err.Error()),
@@ -57,7 +53,7 @@ func (h *ClusterHandler) GetHealth(c fiber.Ctx) error {
 func (h *ClusterHandler) GetStatus(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	status, err := h.adminService.GetClusterStatus(ctx)
+	status, err := getAdminService(c).GetClusterStatus(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get cluster status: "+err.Error()),
@@ -71,7 +67,7 @@ func (h *ClusterHandler) GetStatus(c fiber.Ctx) error {
 // GET /api/v1/cluster/statistics
 func (h *ClusterHandler) GetStatistics(c fiber.Ctx) error {
 	ctx := c.Context()
-	stats, err := h.adminService.GetClusterStatistics(ctx)
+	stats, err := getAdminService(c).GetClusterStatistics(ctx)
 	if err != nil {
 		if errors.Is(err, services.ErrUnsupported) {
 			return c.Status(fiber.StatusNotImplemented).JSON(
@@ -105,7 +101,7 @@ func (h *ClusterHandler) GetNodeInfo(c fiber.Ctx) error {
 			models.ErrorResponse(models.ErrCodeBadRequest, "Node ID is required"),
 		)
 	}
-	info, err := h.adminService.GetNodeInfo(ctx, nodeID)
+	info, err := getAdminService(c).GetNodeInfo(ctx, nodeID)
 	if err != nil {
 		if errors.Is(err, services.ErrUnsupported) {
 			return c.Status(fiber.StatusNotImplemented).JSON(
@@ -139,7 +135,7 @@ func (h *ClusterHandler) GetNodeStatistics(c fiber.Ctx) error {
 			models.ErrorResponse(models.ErrCodeBadRequest, "Node ID is required"),
 		)
 	}
-	stats, err := h.adminService.GetNodeStatistics(ctx, nodeID)
+	stats, err := getAdminService(c).GetNodeStatistics(ctx, nodeID)
 	if err != nil {
 		if errors.Is(err, services.ErrUnsupported) {
 			return c.Status(fiber.StatusNotImplemented).JSON(

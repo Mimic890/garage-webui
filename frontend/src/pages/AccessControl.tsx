@@ -28,8 +28,11 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Select, SelectOption} from '@/components/ui/select';
 import {useQueryClient} from '@tanstack/react-query';
+import { useClusterStore } from '@/store/cluster-store';
+import { Navigate } from 'react-router-dom';
 import {accessApi, bucketsApi} from '@/lib/api';
 import {queryKeys} from '@/lib/query-client';
+import { useTranslation } from '@/lib/i18n';
 import {formatDate} from '@/lib/utils';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Check, Copy, Database, Edit, Eye, EyeOff, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
@@ -123,6 +126,7 @@ function CredentialField({
 
 export function AccessControl() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<AccessKey[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -130,6 +134,7 @@ export function AccessControl() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<AccessKey | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
+  const { clusters } = useClusterStore();
 
   // Create key with permissions state
   const [createAvailableBuckets, setCreateAvailableBuckets] = useState<Bucket[]>([]);
@@ -183,6 +188,10 @@ export function AccessControl() {
 
     fetchKeys();
   }, []);
+
+  if (clusters.length === 0) {
+    return <Navigate to="/" replace />;
+  }
 
   const filteredKeys = useMemo(
     () =>
@@ -467,7 +476,7 @@ export function AccessControl() {
 
   return (
     <div>
-      <PageHeader title="Access control" subtitle="Access keys and per-bucket permissions" />
+      <PageHeader title={t('nav.access')} subtitle="Access keys and per-bucket permissions" />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <Tabs defaultValue="keys">
           <TabsContent value="keys" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">

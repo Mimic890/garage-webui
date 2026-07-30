@@ -2,23 +2,16 @@ package handlers
 
 import (
 	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 // MonitoringHandler handles metrics and dashboard HTTP requests.
-type MonitoringHandler struct {
-	adminService services.AdminService
-	s3Service    services.S3Storage
-}
+type MonitoringHandler struct{}
 
 // NewMonitoringHandler creates a new monitoring handler.
-func NewMonitoringHandler(adminService services.AdminService, s3Service services.S3Storage) *MonitoringHandler {
-	return &MonitoringHandler{
-		adminService: adminService,
-		s3Service:    s3Service,
-	}
+func NewMonitoringHandler() *MonitoringHandler {
+	return &MonitoringHandler{}
 }
 
 // GetMetrics retrieves system metrics from the Admin API
@@ -34,7 +27,7 @@ func NewMonitoringHandler(adminService services.AdminService, s3Service services
 func (h *MonitoringHandler) GetMetrics(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	metrics, err := h.adminService.GetMetrics(ctx)
+	metrics, err := getAdminService(c).GetMetrics(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get metrics: "+err.Error()),
@@ -59,7 +52,7 @@ func (h *MonitoringHandler) GetMetrics(c fiber.Ctx) error {
 func (h *MonitoringHandler) CheckAdminHealth(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	err := h.adminService.HealthCheck(ctx)
+	err := getAdminService(c).HealthCheck(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Admin API health check failed: "+err.Error()),
@@ -86,7 +79,7 @@ func (h *MonitoringHandler) GetDashboardMetrics(c fiber.Ctx) error {
 	ctx := c.Context()
 
 	// Get bucket list
-	buckets, err := h.adminService.ListBuckets(ctx)
+	buckets, err := getAdminService(c).ListBuckets(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get buckets: "+err.Error()),
@@ -100,7 +93,7 @@ func (h *MonitoringHandler) GetDashboardMetrics(c fiber.Ctx) error {
 
 	for _, bucket := range buckets {
 		// Get bucket info to calculate size and object count
-		bucketInfo, err := h.adminService.GetBucketInfo(ctx, bucket.ID)
+		bucketInfo, err := getAdminService(c).GetBucketInfo(ctx, bucket.ID)
 		if err != nil {
 			continue // Skip buckets we can't access
 		}
