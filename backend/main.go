@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -23,6 +25,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/bcrypt"
 )
 
 //	@title			Garage UI API
@@ -97,6 +100,56 @@ func main() {
 	stateManager, err := state.NewManager("data/state.json")
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to initialize state manager")
+	}
+
+	// Auto-provision state from environment if setup is not complete
+	// This maintains backwards compatibility with v1-style docker-compose setups and CI environments
+	s := stateManager.GetState()
+	if !s.Admin.Setup {
+		adminUser := os.Getenv("GARAGE_UI_AUTH_ADMIN_USERNAME")
+		adminPass := os.Getenv("GARAGE_UI_AUTH_ADMIN_PASSWORD")
+		if adminUser != "" && adminPass != "" {
+			logger.Info().Msg("Auto-provisioning admin account from environment variables")
+			hasher := sha256.New()
+			hasher.Write([]byte(adminPass))
+			sha256Hash := hex.EncodeToString(hasher.Sum(nil))
+			hash, err := bcrypt.GenerateFromPassword([]byte(sha256Hash), bcrypt.DefaultCost)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("Failed to hash auto-provisioned admin password")
+			}
+			s.Admin.Nickname = adminUser
+			s.Admin.Password = string(hash)
+			s.Admin.Setup = true
+			if err := stateManager.UpdateAdmin(s.Admin); err != nil {
+				logger.Fatal().Err(err).Msg("Failed to save auto-provisioned admin account")
+			}
+		}
+	}
+
+	// Auto-provision initial cluster if none exist
+	s = stateManager.GetState()
+	if len(s.Clusters) == 0 {
+		garageEndpoint := os.Getenv("GARAGE_UI_GARAGE_ENDPOINT")
+		garageAdminEndpoint := os.Getenv("GARAGE_UI_GARAGE_ADMIN_ENDPOINT")
+		if garageEndpoint != "" || garageAdminEndpoint != "" {
+			logger.Info().Msg("Auto-provisioning initial cluster from environment variables")
+			adminToken := os.Getenv("GARAGE_UI_GARAGE_ADMIN_TOKEN")
+			region := os.Getenv("GARAGE_UI_GARAGE_REGION")
+			if region == "" {
+				region = "garage" // Default
+			}
+			cluster := state.ClusterConfig{
+				ID:            "default",
+				Name:          "Default Cluster",
+				Endpoint:      garageEndpoint,
+				Region:        region,
+				AdminEndpoint: garageAdminEndpoint,
+				AdminToken:    adminToken,
+			}
+			if err := stateManager.AddCluster(cluster); err != nil {
+				logger.Fatal().Err(err).Msg("Failed to save auto-provisioned cluster")
+			}
+		}
 	}
 
 
