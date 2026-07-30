@@ -144,8 +144,12 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
 );
 DropdownMenuContent.displayName = 'DropdownMenuContent';
 
-const DropdownMenuItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, onClick, ...props }, ref) => {
+interface DropdownMenuItemProps extends React.HTMLAttributes<HTMLDivElement> {
+  closeOnClick?: boolean;
+}
+
+const DropdownMenuItem = React.forwardRef<HTMLDivElement, DropdownMenuItemProps>(
+  ({ className, onClick, closeOnClick = true, ...props }, ref) => {
     const { setOpen } = useDropdownMenu();
     return (
       <div
@@ -156,7 +160,9 @@ const DropdownMenuItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<H
         )}
         onClick={(e) => {
           onClick?.(e);
-          setOpen(false);
+          if (closeOnClick) {
+            setOpen(false);
+          }
         }}
         {...props}
       />

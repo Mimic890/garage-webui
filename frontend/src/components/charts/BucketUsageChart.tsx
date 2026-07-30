@@ -1,34 +1,34 @@
-import {useEffect, useState} from 'react';
-import {Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip} from 'recharts';
-import type {BucketUsage} from '@/types';
-import {formatBytes} from '@/lib/file-utils';
-import {chartColorPalette, getTextColor, getTooltipStyle} from '@/lib/chart-colors';
+import { useEffect, useState } from 'react';
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import type { BucketUsage } from '@/types';
+import { formatBytes } from '@/lib/file-utils';
+import { getUniqueThemeColors, getTextColor, getTooltipStyle } from '@/lib/chart-colors';
 
 interface BucketUsageChartProps {
   data: BucketUsage[];
 }
 
 export function BucketUsageChart({ data }: BucketUsageChartProps) {
-  const [isDark, setIsDark] = useState(false);
+  const [colors, setColors] = useState<string[]>([]);
+  const [textColor, setTextColorState] = useState('#e8eaed');
 
   useEffect(() => {
-    const checkDarkMode = () => {
-      setIsDark(document.documentElement.classList.contains('dark'));
+    const updateColors = () => {
+      setColors(getUniqueThemeColors(data.length));
+      setTextColorState(getTextColor());
     };
 
-    checkDarkMode();
+    updateColors();
 
-    const observer = new MutationObserver(checkDarkMode);
+    const observer = new MutationObserver(updateColors);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     return () => observer.disconnect();
-  }, []);
+  }, [data.length]);
 
-  const colors = isDark ? chartColorPalette.dark : chartColorPalette.light;
-  const textColor = getTextColor();
   const tooltipStyle = getTooltipStyle();
 
-  const chartData = data.map(item => ({
+  const chartData = data.map((item) => ({
     name: item.bucketName,
     value: item.size,
     displaySize: formatBytes(item.size),
@@ -42,12 +42,13 @@ export function BucketUsageChart({ data }: BucketUsageChartProps) {
           cx="50%"
           cy="50%"
           labelLine={false}
-          outerRadius={80}
-          fill="#8884d8"
+          outerRadius={85}
+          innerRadius={45}
+          paddingAngle={3}
           dataKey="value"
         >
           {chartData.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+            <Cell key={`cell-${index}`} fill={colors[index] || '#3f68c0'} stroke="var(--card)" strokeWidth={2} />
           ))}
         </Pie>
         <Tooltip
