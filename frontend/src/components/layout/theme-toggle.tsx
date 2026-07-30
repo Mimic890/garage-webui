@@ -113,6 +113,7 @@ export function ThemeToggle() {
           return (
             <DropdownMenuItem
               key={p.id}
+              closeOnClick={false}
               onClick={() => setPalette(p.id)}
               className="flex items-center justify-between cursor-pointer py-1.5 px-2.5 rounded-md hover:bg-accent hover:text-accent-foreground"
             >

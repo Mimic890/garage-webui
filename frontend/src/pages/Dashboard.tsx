@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { AlertCircle, Database, FolderOpen, HardDrive, Server, Zap } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { IconTile } from '@/components/ui/icon-tile';
@@ -5,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
 import { useDashboardData } from '@/hooks/useApi';
 import { formatBytes } from '@/lib/file-utils';
+import { getUniqueThemeColors } from '@/lib/chart-colors';
 import type { ClusterHealth } from '@/types';
 
 type StatTone = 'primary' | 'destructive' | 'neutral';
@@ -27,6 +29,22 @@ export function Dashboard() {
   const buckets = bucketsQuery.data ?? [];
   const clusterHealth = healthQuery.data ?? null;
   const health = deriveHealth(clusterHealth);
+
+  const bucketCount = metrics?.usageByBucket?.length ?? 0;
+  const [themeColors, setThemeColors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const updateThemeColors = () => {
+      setThemeColors(getUniqueThemeColors(bucketCount));
+    };
+
+    updateThemeColors();
+
+    const observer = new MutationObserver(updateThemeColors);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, [bucketCount]);
 
   return (
     <div>
@@ -117,24 +135,36 @@ export function Dashboard() {
             <Card title="Breakdown" description="Detailed breakdown of storage across all buckets">
               {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
                 <div className="space-y-4">
-                  {metrics.usageByBucket.map((bucket) => (
-                    <div key={bucket.bucketName} className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 text-[13.5px]">
-                        <span className="truncate font-medium">{bucket.bucketName}</span>
-                        <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
-                          <span>{(bucket.objectCount ?? 0).toLocaleString()} objects</span>
-                          <span className="font-medium text-[var(--foreground)]">{formatBytes(bucket.size)}</span>
-                          <span className="w-10 text-right">{(bucket.percentage ?? 0).toFixed(1)}%</span>
+                  {metrics.usageByBucket.map((bucket, idx) => {
+                    const color = themeColors[idx] || 'var(--primary)';
+                    return (
+                      <div key={bucket.bucketName} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[13.5px]">
+                          <span className="truncate font-medium flex items-center gap-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            {bucket.bucketName}
+                          </span>
+                          <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
+                            <span>{(bucket.objectCount ?? 0).toLocaleString()} objects</span>
+                            <span className="font-medium text-[var(--foreground)]">{formatBytes(bucket.size)}</span>
+                            <span className="w-10 text-right">{(bucket.percentage ?? 0).toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
+                          <div
+                            className="h-full transition-all rounded-full"
+                            style={{
+                              width: `${bucket.percentage ?? 0}%`,
+                              backgroundColor: color,
+                            }}
+                          />
                         </div>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
-                        <div
-                          className="h-full bg-[var(--primary)] transition-all"
-                          style={{ width: `${bucket.percentage ?? 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No buckets available</div>
