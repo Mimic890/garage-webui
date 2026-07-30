@@ -9,7 +9,7 @@ import { useBucketCan } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { DangerousConfirmDialog } from '@/components/ui/dangerous-confirm-dialog';
+import { DeleteBucketDialog } from '@/components/buckets/DeleteBucketDialog';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Select, SelectOption } from '@/components/ui/select';
@@ -90,7 +90,6 @@ export function BucketSettings() {
   const canBucket = useBucketCan();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const defaults = useMemo(() => deriveDefaults(bucket?.quotas), [bucket?.quotas]);
 
@@ -140,16 +139,6 @@ export function BucketSettings() {
       </div>
     );
   }
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteMutation.mutateAsync(bucket.name);
-      navigate('/buckets');
-    } catch {
-      setDeleting(false);
-    }
-  };
 
   const onSubmit = handleSubmit(async (values) => {
     const maxSize = values.maxSizeEnabled
@@ -319,17 +308,19 @@ export function BucketSettings() {
         </section>
       )}
 
-      <DangerousConfirmDialog
+      <DeleteBucketDialog
         open={deleteOpen}
-        onOpenChange={(o) => {
-          if (!o && !deleting) setDeleteOpen(false);
+        onOpenChange={setDeleteOpen}
+        bucketName={bucket.name}
+        objectCount={bucket.objectCount ?? 0}
+        onEmptyBucket={async () => {
+          const { bucketsApi } = await import('@/lib/api');
+          await bucketsApi.emptyBucket(bucket.name);
         }}
-        title={`Delete bucket "${bucket.name}"?`}
-        description="This action cannot be undone."
-        confirmationText={bucket.name}
-        confirmLabel="Delete bucket"
-        loading={deleting}
-        onConfirm={confirmDelete}
+        onDeleteBucket={async () => {
+          await deleteMutation.mutateAsync(bucket.name);
+          navigate('/buckets');
+        }}
       />
     </div>
   );

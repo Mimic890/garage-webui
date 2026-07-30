@@ -853,3 +853,38 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 
 	return c.Status(statusCode).JSON(models.SuccessResponse(response))
 }
+
+// EmptyBucket deletes all objects in a bucket
+//
+//	@Summary		Delete all objects in a bucket
+//	@Description	Removes every object stored in the specified bucket. Used to empty a bucket before deletion.
+//	@Tags			Objects
+//	@Accept			json
+//	@Produce		json
+//	@Param			bucket	path		string												true	"Name of the bucket to empty"
+//	@Success		200		{object}	models.APIResponse{data=object{bucket=string,deleted=int}}	"All objects deleted"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}			"Bucket name is required"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}			"Failed to delete objects"
+//	@Router			/api/v1/buckets/{bucket}/objects/empty [post]
+func (h *ObjectHandler) EmptyBucket(c fiber.Ctx) error {
+	ctx := c.Context()
+
+	bucketName := c.Params("bucket")
+	if bucketName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Bucket name is required"),
+		)
+	}
+
+	deleted, err := h.s3Service.DeleteAllObjects(ctx, bucketName)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to empty bucket: "+err.Error()),
+		)
+	}
+
+	return c.JSON(models.SuccessResponse(map[string]interface{}{
+		"bucket":  bucketName,
+		"deleted": deleted,
+	}))
+}

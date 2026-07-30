@@ -209,6 +209,11 @@ export const bucketsApi = {
     await api.delete(`/v1/buckets/${name}`);
   },
 
+  emptyBucket: async (name: string): Promise<{ deleted: number }> => {
+    const response = await api.post(`/v1/buckets/${name}/objects/empty`);
+    return response.data.data;
+  },
+
   grantPermission: async (
     bucketName: string,
     accessKeyId: string,
