@@ -38,7 +38,7 @@ func newAuthTestService(t *testing.T, admin config.AdminAuthConfig) *auth.Servic
 func newAuthTestApp(t *testing.T, cfg *config.Config) (*fiber.App, *AuthHandler) {
 	t.Helper()
 	svc := newAuthTestService(t, cfg.Auth.Admin)
-	h := NewAuthHandler(cfg, svc)
+	h := NewAuthHandler(cfg, svc, nil)
 	app := fiber.New()
 	app.Get("/auth/config", h.GetAuthConfig)
 	app.Post("/auth/login", h.LoginAdmin)
@@ -262,7 +262,7 @@ func TestLoginToken_Success(t *testing.T) {
 		},
 	}
 	svc := newAuthTestService(t, cfg.Auth.Admin)
-	h := NewAuthHandler(cfg, svc)
+	h := NewAuthHandler(cfg, svc, nil)
 	app := fiber.New()
 	app.Post("/auth/login-token", h.LoginToken)
 
@@ -312,7 +312,7 @@ func TestLoginToken_WrongToken(t *testing.T) {
 		},
 	}
 	svc := newAuthTestService(t, cfg.Auth.Admin)
-	h := NewAuthHandler(cfg, svc)
+	h := NewAuthHandler(cfg, svc, nil)
 	app := fiber.New()
 	app.Post("/auth/login-token", h.LoginToken)
 
@@ -341,7 +341,7 @@ func TestLoginToken_MalformedJSONReturns400(t *testing.T) {
 		},
 	}
 	svc := newAuthTestService(t, cfg.Auth.Admin)
-	h := NewAuthHandler(cfg, svc)
+	h := NewAuthHandler(cfg, svc, nil)
 	app := fiber.New()
 	app.Post("/auth/login-token", h.LoginToken)
 

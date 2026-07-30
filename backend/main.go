@@ -17,7 +17,7 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	appmw "Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/routes"
-	"Noooste/garage-ui/internal/services"
+	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -66,21 +66,10 @@ var version = "dev"
 func main() {
 	// Parse command-line flags
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
-	garageTomlPath := flag.String("garage-toml", "", "Path to garage.toml file (extracts Garage connection values)")
 	flag.Parse()
-
-	// Env var fallback for --garage-toml
-	if *garageTomlPath == "" {
-		if envPath := os.Getenv("GARAGE_UI_GARAGE_TOML"); envPath != "" {
-			*garageTomlPath = envPath
-		}
-	}
 
 	// Build load options
 	var loadOpts []config.LoadOption
-	if *garageTomlPath != "" {
-		loadOpts = append(loadOpts, config.WithGarageToml(*garageTomlPath))
-	}
 
 	// Load configuration first (before initializing logger)
 	cfg, err := config.Load(*configPath, loadOpts...)
@@ -103,24 +92,14 @@ func main() {
 		Str("environment", cfg.Server.Environment).
 		Msg("Starting Garage UI Backend")
 
-	if *garageTomlPath != "" {
-		logger.Warn().
-			Str("s3_endpoint", cfg.Garage.Endpoint).
-			Str("admin_endpoint", cfg.Garage.AdminEndpoint).
-			Msg("Endpoints inferred from garage.toml bind addresses — override with GARAGE_UI_GARAGE_ENDPOINT / GARAGE_UI_GARAGE_ADMIN_ENDPOINT for remote/container setups")
-	}
-
-	// Initialize services
-	logger.Info().Msg("Detecting Garage API version")
-	adminResult, err := services.NewAdminService(&cfg.Garage, cfg.Logging.Level)
+	// Initialize state manager
+	logger.Info().Msg("Initializing State Manager")
+	stateManager, err := state.NewManager("data/state.json")
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to connect to Garage admin API")
+		logger.Fatal().Err(err).Msg("Failed to initialize state manager")
 	}
-	adminService := adminResult.Service
-	capabilitiesHandler := handlers.NewCapabilitiesHandler(adminResult.APIVersion, adminResult.Capabilities, cfg.AccessControl != nil)
 
-	logger.Info().Msg("Initializing S3 service")
-	s3Service := services.NewS3Service(&cfg.Garage, adminService)
+
 
 	// Determine enabled auth methods for logging
 	authMethods := []string{}
@@ -153,11 +132,13 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
-	bucketHandler := handlers.NewBucketHandler(adminService, s3Service)
-	objectHandler := handlers.NewObjectHandler(s3Service, authService)
-	userHandler := handlers.NewUserHandler(adminService)
-	clusterHandler := handlers.NewClusterHandler(adminService)
-	monitoringHandler := handlers.NewMonitoringHandler(adminService, s3Service)
+	bucketHandler := handlers.NewBucketHandler()
+	objectHandler := handlers.NewObjectHandler(authService)
+	userHandler := handlers.NewUserHandler()
+	clusterHandler := handlers.NewClusterHandler()
+	monitoringHandler := handlers.NewMonitoringHandler()
+	// TODO: Capabilities handler needs dynamic injection
+	capabilitiesHandler := handlers.NewCapabilitiesHandler("v2", nil, cfg.AccessControl != nil)
 
 	// Set default values for buffer sizes if not configured
 	maxBodySize := cfg.Server.MaxBodySize
@@ -224,6 +205,7 @@ func main() {
 		monitoringHandler,
 		capabilitiesHandler,
 		azMiddleware,
+		stateManager,
 	)
 
 	if err := authz.VerifyRouteCoverage(app); err != nil {

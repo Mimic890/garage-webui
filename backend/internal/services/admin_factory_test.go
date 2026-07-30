@@ -1,12 +1,11 @@
 package services
 
 import (
+	"Noooste/garage-ui/internal/state"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"Noooste/garage-ui/internal/config"
 )
 
 func TestErrUnsupportedIsSentinel(t *testing.T) {
@@ -41,7 +40,7 @@ func TestDetectVersion_V2(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	cfg := &state.ClusterConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
 	result, err := NewAdminService(cfg, "")
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +68,7 @@ func TestDetectVersion_V1(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	cfg := &state.ClusterConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
 	result, err := NewAdminService(cfg, "")
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func TestDetectVersion_V1(t *testing.T) {
 }
 
 func TestDetectVersion_Unreachable(t *testing.T) {
-	cfg := &config.GarageConfig{AdminEndpoint: "http://127.0.0.1:1", AdminToken: "tok"}
+	cfg := &state.ClusterConfig{AdminEndpoint: "http://127.0.0.1:1", AdminToken: "tok"}
 	_, err := NewAdminService(cfg, "")
 	if err == nil {
 		t.Fatal("expected error for unreachable server")
@@ -114,7 +113,7 @@ func TestDetectVersion_V2_TransientProbeFailure(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	cfg := &state.ClusterConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
 	result, err := NewAdminService(cfg, "")
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +140,7 @@ func TestDetectVersion_DoesNotDowngradeOnV2ServerError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	cfg := &state.ClusterConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
 	result, err := NewAdminService(cfg, "")
 	if err == nil && result.APIVersion == "v1" {
 		t.Fatal("must not downgrade to v1 when /v2 returns a server error; v2.x also serves /v1/health")

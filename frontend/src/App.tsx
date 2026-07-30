@@ -13,7 +13,11 @@ import {BucketWebsite} from '@/pages/BucketWebsite';
 import {BucketSettings} from '@/pages/BucketSettings';
 import {Cluster} from '@/pages/Cluster';
 import {AccessControl} from '@/pages/AccessControl';
+import {Connections} from '@/pages/Connections';
+import {Settings} from '@/pages/Settings';
+import {UserSettings} from '@/pages/UserSettings';
 import {Login} from '@/pages/Login';
+import {Setup} from '@/pages/Setup';
 import {Toaster} from 'sonner';
 import {queryClient} from '@/lib/query-client';
 import {useAuthStore} from '@/store/auth-store';
@@ -39,47 +43,59 @@ function ThemedToaster() {
   );
 }
 
-function App() {
-  const { initialize, isLoading } = useAuthStore();
-
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+function AppRoutes() {
+  const { isLoading } = useAuthStore();
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
 
   return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/setup" element={<Setup />} />
+
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="buckets" element={<Buckets />} />
+        <Route path="buckets/:bucketName" element={<BucketDetailShell />}>
+          <Route index element={<Navigate to="objects" replace />} />
+          <Route path="objects" element={<BucketObjects />} />
+          <Route path="objects/*" element={<ObjectDetailsView />} />
+          <Route path="permissions" element={<BucketPermissions />} />
+          <Route path="website" element={<BucketWebsite />} />
+          <Route path="settings" element={<BucketSettings />} />
+        </Route>
+        <Route path="cluster" element={<Cluster />} />
+        <Route path="connections" element={<Connections />} />
+        <Route path="access" element={<AccessControl />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="user-settings" element={<UserSettings />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+function App() {
+  const { initialize } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultPalette="warm" defaultMode="dark">
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="buckets" element={<Buckets />} />
-              <Route path="buckets/:bucketName" element={<BucketDetailShell />}>
-                <Route index element={<Navigate to="objects" replace />} />
-                <Route path="objects" element={<BucketObjects />} />
-                <Route path="objects/*" element={<ObjectDetailsView />} />
-                <Route path="permissions" element={<BucketPermissions />} />
-                <Route path="website" element={<BucketWebsite />} />
-                <Route path="settings" element={<BucketSettings />} />
-              </Route>
-              <Route path="cluster" element={<Cluster />} />
-              <Route path="access" element={<AccessControl />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
         <ThemedToaster />
       </ThemeProvider>

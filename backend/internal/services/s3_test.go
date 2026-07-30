@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/utils"
 )
 
 func TestNewS3Service_StripsHTTPPrefix(t *testing.T) {
-	cfg := &config.GarageConfig{
+	cfg := &state.ClusterConfig{
 		Endpoint: "http://garage:3900",
 		Region:   "garage",
 	}
@@ -29,7 +29,7 @@ func TestNewS3Service_StripsHTTPPrefix(t *testing.T) {
 }
 
 func TestNewS3Service_StripsHTTPSPrefixAndEnablesSSL(t *testing.T) {
-	cfg := &config.GarageConfig{
+	cfg := &state.ClusterConfig{
 		Endpoint: "https://garage.example.com",
 		Region:   "garage",
 	}
@@ -43,7 +43,7 @@ func TestNewS3Service_StripsHTTPSPrefixAndEnablesSSL(t *testing.T) {
 }
 
 func TestNewS3Service_LeavesBareHostUnchanged(t *testing.T) {
-	cfg := &config.GarageConfig{
+	cfg := &state.ClusterConfig{
 		Endpoint: "garage:3900",
 		Region:   "garage",
 		UseSSL:   true, // pre-set; should remain true
@@ -64,11 +64,11 @@ func adminBackedS3(t *testing.T, handler http.Handler) (*S3Service, *httptest.Se
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	admin := NewGarageV2AdminService(&config.GarageConfig{
+	admin := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}, "")
-	s3 := NewS3Service(&config.GarageConfig{
+	s3 := NewS3Service(&state.ClusterConfig{
 		Endpoint: "garage:3900",
 		Region:   "garage",
 	}, admin)
