@@ -67,6 +67,7 @@ You can configure the application behavior using environment variables. These ca
 |----------------------|---------|-------------|
 | `GARAGE_UI_SERVER_HOST` | `0.0.0.0` | The host interface the web server binds to. Use `0.0.0.0` for all interfaces. |
 | `GARAGE_UI_SERVER_PORT` | `8080` | The port the web server listens on. |
+| `GARAGE_UI_DATA_DIR` | `data` (`/app/data` in Docker) | Directory for persistent state (`state.json`: admin account + clusters). |
 | `GARAGE_UI_LOGGING_LEVEL` | `info` | The severity level of backend logs. Supported values: `trace`, `debug`, `info`, `warn`, `error`. |
 
 ### Default Credentials
