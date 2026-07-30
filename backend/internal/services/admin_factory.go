@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"Noooste/garage-ui/internal/config"
+	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/logger"
 
 	"github.com/Noooste/azuretls-client"
@@ -43,7 +43,7 @@ type AdminServiceResult struct {
 // /v1/health, so a 404 on /v2 is the only reliable "this is a v1 server" signal.
 var errProbeNotFound = errors.New("probe endpoint not found")
 
-func NewAdminService(cfg *config.GarageConfig, logLevel string) (*AdminServiceResult, error) {
+func NewAdminService(cfg *state.ClusterConfig, logLevel string) (*AdminServiceResult, error) {
 	// retry so a startup fails doesn't lock us to a v1 client.
 	err := probeEndpointWithRetry(cfg, "/v2/GetClusterHealth")
 	if err == nil {
@@ -88,7 +88,7 @@ const probeAttempts = 4
 
 // probeEndpointWithRetry retries transient failures with backoff, but returns a
 // 404 immediately, a missing route won't appear on a retry.
-func probeEndpointWithRetry(cfg *config.GarageConfig, path string) error {
+func probeEndpointWithRetry(cfg *state.ClusterConfig, path string) error {
 	var err error
 	backoff := 250 * time.Millisecond
 	for attempt := range probeAttempts {
@@ -104,7 +104,7 @@ func probeEndpointWithRetry(cfg *config.GarageConfig, path string) error {
 	return err
 }
 
-func probeEndpoint(cfg *config.GarageConfig, path string) error {
+func probeEndpoint(cfg *state.ClusterConfig, path string) error {
 	session := azuretls.NewSession()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

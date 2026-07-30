@@ -157,8 +157,9 @@ func logDecision(c fiber.Ctx, subject, action, resource string, allow bool, reas
 // health is unauthenticated, capabilities is the frontend's fail-closed
 // source and returns only the caller's own permissions.
 var coverageExemptPaths = map[string]struct{}{
-	"/api/v1/health":       {},
-	"/api/v1/capabilities": {},
+	"/api/v1/health":        {},
+	"/api/v1/capabilities":  {},
+	"/api/v1/panel/setup":   {},
 }
 
 // VerifyRouteCoverage walks the app's route table and errors if any /api/v1

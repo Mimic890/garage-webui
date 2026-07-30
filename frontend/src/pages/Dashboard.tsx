@@ -7,7 +7,11 @@ import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
 import { useDashboardData } from '@/hooks/useApi';
 import { formatBytes } from '@/lib/file-utils';
 import { getUniqueThemeColors } from '@/lib/chart-colors';
+import { useClusterStore } from '@/store/cluster-store';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 import type { ClusterHealth } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 
 type StatTone = 'primary' | 'destructive' | 'neutral';
 type HealthLabel = 'Healthy' | 'Degraded' | 'Unhealthy' | 'Unknown';
@@ -46,14 +50,39 @@ export function Dashboard() {
     return () => observer.disconnect();
   }, [bucketCount]);
 
+  const { clusters } = useClusterStore();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  if (clusters.length === 0) {
+    return (
+      <div>
+        <PageHeader title={t('nav.dashboard')} subtitle="Welcome to Garage Admin Panel" />
+        <div className="px-6 py-12 flex items-center justify-center">
+          <EmptyState
+            icon={<Server />}
+            title={t('dashboard.no_clusters')}
+            description={t('dashboard.no_clusters.desc')}
+            tone="primary"
+            action={
+              <Button onClick={() => navigate('/connections', { state: { addCluster: true } })}>
+                {t('dashboard.add_btn')}
+              </Button>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
-        title="Dashboard"
+        title={t('nav.dashboard')}
         subtitle={
           clusterHealth
-            ? `${clusterHealth.connectedNodes}/${clusterHealth.knownNodes} nodes connected`
-            : 'Loading cluster status…'
+            ? `${clusterHealth.connectedNodes}/${clusterHealth.knownNodes} ${t('dashboard.nodes_connected')}`
+            : t('dashboard.loading')
         }
       />
 
@@ -61,7 +90,7 @@ export function Dashboard() {
         <div className="flex min-h-[360px] items-center justify-center">
           <div className="text-center">
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[var(--primary)] border-r-transparent" />
-            <p className="mt-3 text-[13.5px] text-[var(--muted-foreground)]">Loading dashboard…</p>
+            <p className="mt-3 text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.loading')}</p>
           </div>
         </div>
       ) : (
@@ -69,30 +98,30 @@ export function Dashboard() {
           {/* KPI row */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              label="Total storage"
+              label={t('dashboard.total_storage')}
               value={metrics ? formatBytes(metrics.totalSize) : '—'}
               sub={`across ${metrics?.bucketCount ?? 0} bucket${metrics?.bucketCount === 1 ? '' : 's'}`}
               icon={<HardDrive />}
             />
             <StatCard
-              label="Objects"
+              label={t('dashboard.objects')}
               value={(metrics?.objectCount ?? 0).toLocaleString()}
-              sub="files and folders"
+              sub={t('dashboard.files_folders')}
               icon={<FolderOpen />}
             />
             <StatCard
-              label="Buckets"
+              label={t('nav.buckets')}
               value={(metrics?.bucketCount ?? 0).toLocaleString()}
-              sub="active storage buckets"
+              sub={t('dashboard.active_buckets')}
               icon={<Database />}
             />
             <StatCard
-              label="Cluster"
+              label={t('nav.cluster')}
               value={health.label}
               valueTone={health.tone}
               sub={
                 clusterHealth
-                  ? `${clusterHealth.storageNodesUp}/${clusterHealth.storageNodes} storage nodes`
+                  ? `${clusterHealth.storageNodesUp}/${clusterHealth.storageNodes} ${t('dashboard.storage_nodes').toLowerCase()}`
                   : '—'
               }
               icon={health.label === 'Unhealthy' ? <AlertCircle /> : <Zap />}
@@ -103,36 +132,36 @@ export function Dashboard() {
           {/* Cluster row */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <StatCard
-              label="Storage nodes"
+              label={t('dashboard.storage_nodes')}
               value={clusterHealth ? `${clusterHealth.storageNodesUp}/${clusterHealth.storageNodes}` : '—'}
-              sub="healthy"
+              sub={t('dashboard.healthy')}
               icon={<Server />}
             />
             <StatCard
-              label="Partitions"
+              label={t('dashboard.partitions')}
               value={clusterHealth ? `${clusterHealth.partitionsAllOk}/${clusterHealth.partitions}` : '—'}
-              sub="healthy"
+              sub={t('dashboard.healthy')}
               icon={<Zap />}
             />
             <StatCard
-              label="Connected nodes"
+              label={t('dashboard.connected_nodes')}
               value={clusterHealth ? `${clusterHealth.connectedNodes}/${clusterHealth.knownNodes}` : '—'}
-              sub="cluster membership"
+              sub={t('dashboard.cluster_membership')}
               icon={<Server />}
             />
           </div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Card title="Storage usage by bucket" description="Distribution of storage across buckets">
+            <Card title={t('dashboard.usage_by_bucket')} description={t('dashboard.usage_desc')}>
               {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
                 <BucketUsageChart data={metrics.usageByBucket} />
               ) : (
-                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No data available</div>
+                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.no_data')}</div>
               )}
             </Card>
 
-            <Card title="Breakdown" description="Detailed breakdown of storage across all buckets">
+            <Card title={t('dashboard.breakdown')} description={t('dashboard.breakdown_desc')}>
               {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
                 <div className="space-y-4">
                   {metrics.usageByBucket.map((bucket, idx) => {
@@ -148,7 +177,7 @@ export function Dashboard() {
                             {bucket.bucketName}
                           </span>
                           <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
-                            <span>{(bucket.objectCount ?? 0).toLocaleString()} objects</span>
+                            <span>{(bucket.objectCount ?? 0).toLocaleString()} {t('dashboard.objects').toLowerCase()}</span>
                             <span className="font-medium text-[var(--foreground)]">{formatBytes(bucket.size)}</span>
                             <span className="w-10 text-right">{(bucket.percentage ?? 0).toFixed(1)}%</span>
                           </div>
@@ -167,18 +196,18 @@ export function Dashboard() {
                   })}
                 </div>
               ) : (
-                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No buckets available</div>
+                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.no_buckets')}</div>
               )}
             </Card>
           </div>
 
           {/* Recent buckets */}
-          <Card title="Recent buckets" description="Your most recently created buckets">
+          <Card title={t('dashboard.recent_buckets')} description={t('dashboard.recent_desc')}>
             {buckets.length === 0 ? (
               <EmptyState
                 icon={<Database />}
-                title="No buckets yet"
-                description="Create your first bucket from the Buckets page to start storing objects."
+                title={t('dashboard.no_buckets_yet')}
+                description={t('dashboard.no_buckets_yet_desc')}
                 tone="neutral"
               />
             ) : (
@@ -189,11 +218,11 @@ export function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-medium">{bucket.name}</p>
                       <p className="truncate text-[12.5px] text-[var(--muted-foreground)]">
-                        Created {new Date(bucket.creationDate).toLocaleDateString()}
+                        {t('dashboard.created')} {new Date(bucket.creationDate).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[14px] font-medium">{bucket.objectCount?.toLocaleString() ?? '—'} objects</p>
+                      <p className="text-[14px] font-medium">{bucket.objectCount?.toLocaleString() ?? '—'} {t('dashboard.objects').toLowerCase()}</p>
                       <p className="text-[12.5px] text-[var(--muted-foreground)]">
                         {bucket.size ? formatBytes(bucket.size) : '—'}
                       </p>

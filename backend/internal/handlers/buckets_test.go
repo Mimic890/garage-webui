@@ -47,7 +47,7 @@ func TestListBuckets_MapsAliasesAndStats(t *testing.T) {
 	admin.ListBucketsFn = func(_ context.Context) ([]models.ListBucketsResponseItem, error) {
 		return []models.ListBucketsResponseItem{
 			{ID: "id-1", Created: time.Unix(0, 0), GlobalAliases: []string{"alpha"}},
-			{ID: "id-2", Created: time.Unix(0, 0), GlobalAliases: []string{}},  // skipped: no global alias
+			{ID: "id-2", Created: time.Unix(0, 0), GlobalAliases: []string{}}, // skipped: no global alias
 			{ID: "id-3", Created: time.Unix(0, 0), GlobalAliases: []string{"gamma"}},
 		}, nil
 	}

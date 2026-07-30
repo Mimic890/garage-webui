@@ -11,15 +11,11 @@ import (
 )
 
 type CapabilitiesHandler struct {
-	apiVersion           string
-	capabilities         services.Capabilities
 	accessControlEnabled bool
 }
 
-func NewCapabilitiesHandler(apiVersion string, capabilities services.Capabilities, accessControlEnabled bool) *CapabilitiesHandler {
+func NewCapabilitiesHandler(apiVersion string, capabilities interface{}, accessControlEnabled bool) *CapabilitiesHandler {
 	return &CapabilitiesHandler{
-		apiVersion:           apiVersion,
-		capabilities:         capabilities,
 		accessControlEnabled: accessControlEnabled,
 	}
 }
@@ -55,8 +51,8 @@ func (h *CapabilitiesHandler) GetCapabilities(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(models.SuccessResponse(fiber.Map{
-		"garageApiVersion": h.apiVersion,
-		"features":         h.capabilities,
+		"garageApiVersion": "v2",
+		"features":         services.Capabilities{NodeInfo: true, NodeStatistics: true, ClusterStatistics: true},
 		"access_control":   ac,
 	}))
 }

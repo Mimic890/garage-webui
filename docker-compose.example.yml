@@ -1,21 +1,26 @@
----
 services:
   garage-ui:
-    build: .
+    image: ghcr.io/mimic890/garage-webui:latest
     container_name: garage-ui
     restart: unless-stopped
-    volumes:
-      - ./config.yaml:/app/config.yaml
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      # Data directory for SQLite/JSON persistence
+      - garage_ui_data:/app/data
     environment:
-      # Garage S3 Configuration
-      GARAGE_UI_GARAGE_ENDPOINT: "localhost:3900"
-      GARAGE_UI_GARAGE_ADMIN_ENDPOINT: "http://localhost:3903"
-      # GARAGE_UI_GARAGE_ADMIN_TOKEN: "your-admin-token" # uncomment if not using config.yaml
+      # Minimal environment variables, just for server basics
+      - GARAGE_UI_SERVER_HOST=0.0.0.0
+      - GARAGE_UI_SERVER_PORT=8080
+      - GARAGE_UI_LOGGING_LEVEL=info # Options: trace, debug, info, warn, error
+      # - GARAGE_UI_LOGGING_FORMAT=text # Options: text, json
+      # - GARAGE_UI_SERVER_PROTOCOL=http
+      # - GARAGE_UI_SERVER_ROOT_URL=http://localhost:8080
+      # - GARAGE_UI_SERVER_ALLOWED_IPS=127.0.0.1,192.168.1.0/24
+      # - GARAGE_UI_SERVER_MAX_BODY_SIZE=314572800 # 300MB
+      # - GARAGE_UI_SERVER_MAX_HEADER_SIZE=1048576 # 1MB
+      # - GARAGE_UI_SERVER_READ_BUFFER_SIZE=4096 # 4KB
+      # - GARAGE_UI_SERVER_WRITE_BUFFER_SIZE=4096 # 4KB
 
-      # Server Configuration
-      GARAGE_UI_SERVER_HOST: "0.0.0.0"
-      GARAGE_UI_SERVER_PORT: "8080"
-      GARAGE_UI_SERVER_ENVIRONMENT: "production"
- 
+volumes:
+  garage_ui_data:

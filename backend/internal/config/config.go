@@ -15,7 +15,6 @@ import (
 // Config represents the application configuration
 type Config struct {
 	Server        ServerConfig         `mapstructure:"server"`
-	Garage        GarageConfig         `mapstructure:"garage"`
 	Auth          AuthConfig           `mapstructure:"auth"`
 	CORS          CORSConfig           `mapstructure:"cors"`
 	Logging       LoggingConfig        `mapstructure:"logging"`
@@ -33,18 +32,9 @@ type ServerConfig struct {
 	RootURL         string `mapstructure:"root_url"`          // Full external URL for redirects (e.g., https://garage-ui.example.com)
 	MaxBodySize     int64  `mapstructure:"max_body_size"`     // Maximum request body size in bytes (default: 300MB)
 	MaxHeaderSize   int    `mapstructure:"max_header_size"`   // Maximum request header size in bytes (default: 1MB)
-	ReadBufferSize  int    `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
-	WriteBufferSize int    `mapstructure:"write_buffer_size"` // Write buffer size in bytes (default: 4KB)
-}
-
-// GarageConfig contains Garage S3 connection settings
-type GarageConfig struct {
-	Endpoint       string `mapstructure:"endpoint"`
-	Region         string `mapstructure:"region"`
-	UseSSL         bool   `mapstructure:"use_ssl"`
-	ForcePathStyle bool   `mapstructure:"force_path_style"`
-	AdminEndpoint  string `mapstructure:"admin_endpoint"`
-	AdminToken     string `mapstructure:"admin_token"`
+	ReadBufferSize  int      `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
+	WriteBufferSize int      `mapstructure:"write_buffer_size"` // Write buffer size in bytes (default: 4KB)
+	AllowedIPs      []string `mapstructure:"allowed_ips"`       // List of allowed IPs (supports CIDR notation)
 }
 
 // AuthConfig contains authentication configuration
@@ -164,15 +154,6 @@ type BindingConfig struct {
 type LoadOption func(*loadOptions)
 
 type loadOptions struct {
-	garageTomlPath string
-}
-
-// WithGarageToml tells Load to parse a garage.toml file and use its values as
-// lowest-priority defaults (below YAML, below env vars).
-func WithGarageToml(path string) LoadOption {
-	return func(o *loadOptions) {
-		o.garageTomlPath = path
-	}
 }
 
 // Load reads the configuration from the specified file
@@ -195,27 +176,12 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetDefault("server.host", "::")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "production")
-	viper.SetDefault("garage.force_path_style", true)
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
 	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
 	viper.SetDefault("auth.oidc.cookie_http_only", true)
 	viper.SetDefault("auth.oidc.cookie_same_site", "lax")
 	viper.SetDefault("auth.oidc.session_max_age", 86400)
-
-	// If garage.toml path is provided, parse it and set values as viper
-	// defaults. Defaults sit below config-file and env-var values in viper's
-	// priority order, so YAML and env vars will still win.
-	if lo.garageTomlPath != "" {
-		tomlResult, err := ParseGarageToml(lo.garageTomlPath)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing garage.toml: %w", err)
-		}
-		viper.SetDefault("garage.endpoint", tomlResult.Endpoint)
-		viper.SetDefault("garage.admin_endpoint", tomlResult.AdminEndpoint)
-		viper.SetDefault("garage.admin_token", tomlResult.AdminToken)
-		viper.SetDefault("garage.region", tomlResult.Region)
-	}
 
 	// Allow environment variables to override config values
 	// Environment variables take precedence over config file
@@ -278,14 +244,7 @@ func bindEnvVars() {
 	viper.BindEnv("server.max_header_size", "GARAGE_UI_SERVER_MAX_HEADER_SIZE")
 	viper.BindEnv("server.read_buffer_size", "GARAGE_UI_SERVER_READ_BUFFER_SIZE")
 	viper.BindEnv("server.write_buffer_size", "GARAGE_UI_SERVER_WRITE_BUFFER_SIZE")
-
-	// Garage config
-	viper.BindEnv("garage.endpoint", "GARAGE_UI_GARAGE_ENDPOINT")
-	viper.BindEnv("garage.region", "GARAGE_UI_GARAGE_REGION")
-	viper.BindEnv("garage.use_ssl", "GARAGE_UI_GARAGE_USE_SSL")
-	viper.BindEnv("garage.force_path_style", "GARAGE_UI_GARAGE_FORCE_PATH_STYLE")
-	viper.BindEnv("garage.admin_endpoint", "GARAGE_UI_GARAGE_ADMIN_ENDPOINT")
-	viper.BindEnv("garage.admin_token", "GARAGE_UI_GARAGE_ADMIN_TOKEN")
+	viper.BindEnv("server.allowed_ips", "GARAGE_UI_SERVER_ALLOWED_IPS")
 
 	// Auth config
 	viper.BindEnv("auth.admin.enabled", "GARAGE_UI_AUTH_ADMIN_ENABLED")
@@ -344,7 +303,6 @@ func bindEnvVars() {
 // store in a Kubernetes Secret or Docker secret. Non-sensitive config (host,
 // port, endpoints, etc.) is excluded.
 var fileBackedEnvVars = map[string]string{
-	"GARAGE_UI_GARAGE_ADMIN_TOKEN":      "garage.admin_token",
 	"GARAGE_UI_AUTH_ADMIN_USERNAME":     "auth.admin.username",
 	"GARAGE_UI_AUTH_ADMIN_PASSWORD":     "auth.admin.password",
 	"GARAGE_UI_AUTH_JWT_PRIVATE_KEY":    "auth.jwt_private_key",
@@ -382,17 +340,6 @@ func (c *Config) Validate() error {
 	// Validate server config
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
-	}
-
-	// Validate Garage config
-	if c.Garage.Endpoint == "" {
-		return fmt.Errorf("garage endpoint is required")
-	}
-	if c.Garage.AdminEndpoint == "" {
-		return fmt.Errorf("garage admin_endpoint is required")
-	}
-	if c.Garage.AdminToken == "" {
-		return fmt.Errorf("garage admin_token is required")
 	}
 
 	// Validate admin auth if enabled

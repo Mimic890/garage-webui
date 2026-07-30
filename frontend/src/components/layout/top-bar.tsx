@@ -1,17 +1,22 @@
 import * as React from 'react';
-import { User, LogOut } from 'lucide-react';
-import { Breadcrumb, type BreadcrumbItem } from '@/components/ui/breadcrumb';
+import { User, LogOut, Menu, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ClusterSwitcher } from '@/components/layout/cluster-switcher';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useAuthStore } from '@/store/auth-store';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '@/lib/i18n';
 
 interface TopBarProps {
-  crumbs: BreadcrumbItem[];
+  onMenuClick?: () => void;
 }
 
-export function TopBar({ crumbs }: TopBarProps) {
+export function TopBar({ onMenuClick }: TopBarProps) {
   const { user, config, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
     if (!menuOpen) return;
@@ -26,10 +31,25 @@ export function TopBar({ crumbs }: TopBarProps) {
 
   return (
     <div
-      className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface-sunken)] px-4 backdrop-blur"
+      className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface-sunken)] px-4 backdrop-blur"
     >
-      <div className="min-w-0 flex-1 pl-8 md:pl-0">
-        <Breadcrumb items={crumbs} />
+      <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)] mr-2 md:mr-4">
+        {onMenuClick && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden h-8 w-8 mr-1"
+            onClick={onMenuClick}
+            aria-label="Toggle navigation"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        )}
+        <img src="/garage.png" alt="" className="h-7 w-7" />
+        <span className="text-[16px] font-semibold tracking-tight hidden sm:inline-block">Garage UI</span>
+      </div>
+      <div className="min-w-0 flex-1 pl-1 md:pl-0 flex items-center">
+        <ClusterSwitcher />
       </div>
       <div className="flex items-center gap-1">
         <ThemeToggle />
@@ -55,8 +75,15 @@ export function TopBar({ crumbs }: TopBarProps) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setMenuOpen(false); logout(); }}
+                  onClick={() => { setMenuOpen(false); navigate('/user-settings'); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--accent)]"
+                >
+                  <Settings className="h-3.5 w-3.5" /> {t('settings.user') || 'User Settings'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); logout(); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--accent)] text-red-500"
                 >
                   <LogOut className="h-3.5 w-3.5" /> Logout
                 </button>

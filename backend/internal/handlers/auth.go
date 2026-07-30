@@ -1,26 +1,31 @@
 package handlers
 
 import (
-	"crypto/subtle"
-
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
+
+	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/gofiber/fiber/v3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
-	cfg         *config.Config
-	authService *auth.Service
+	cfg          *config.Config
+	authService  *auth.Service
+	stateManager *state.Manager
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(cfg *config.Config, authService *auth.Service) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authService *auth.Service, stateManager *state.Manager) *AuthHandler {
 	return &AuthHandler{
-		cfg:         cfg,
-		authService: authService,
+		cfg:          cfg,
+		authService:  authService,
+		stateManager: stateManager,
 	}
 }
 
@@ -35,13 +40,28 @@ func NewAuthHandler(cfg *config.Config, authService *auth.Service) *AuthHandler 
 func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 	response := fiber.Map{
 		"admin": fiber.Map{
-			"enabled": h.cfg.Auth.Admin.Enabled,
+			"enabled": true, // Admin is now always enabled since it's the core local account
 		},
 		"oidc": fiber.Map{
 			"enabled": h.cfg.Auth.OIDC.Enabled,
 		},
 		"token": fiber.Map{
 			"enabled": h.cfg.Auth.Token.Enabled,
+		},
+		"server": fiber.Map{
+			"host": h.cfg.Server.Host,
+			"port": h.cfg.Server.Port,
+			"protocol": h.cfg.Server.Protocol,
+			"root_url": h.cfg.Server.RootURL,
+			"allowed_ips": h.cfg.Server.AllowedIPs,
+			"max_body_size": h.cfg.Server.MaxBodySize,
+			"max_header_size": h.cfg.Server.MaxHeaderSize,
+			"read_buffer_size": h.cfg.Server.ReadBufferSize,
+			"write_buffer_size": h.cfg.Server.WriteBufferSize,
+		},
+		"logging": fiber.Map{
+			"level": h.cfg.Logging.Level,
+			"format": h.cfg.Logging.Format,
 		},
 	}
 
@@ -60,7 +80,7 @@ func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 // LoginBasicRequest represents the basic auth login request
 type LoginBasicRequest struct {
 	Username string `json:"username" validate:"required"`
-	Password string `json:"password" validate:"required"`
+	Password string `json:"password"`
 }
 
 // LoginAdmin handles admin authentication login
@@ -84,11 +104,39 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 		)
 	}
 
-	// Validate credentials against admin config
-	if req.Username != h.cfg.Auth.Admin.Username || req.Password != h.cfg.Auth.Admin.Password {
+	// Validate credentials against state manager
+	s := h.stateManager.GetState()
+	if !s.Admin.Setup {
+		return c.Status(fiber.StatusUnauthorized).JSON(
+			models.ErrorResponse(models.ErrCodeUnauthorized, "Panel setup not completed"),
+		)
+	}
+
+	if req.Username != s.Admin.Nickname {
 		return c.Status(fiber.StatusUnauthorized).JSON(
 			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
 		)
+	}
+
+	if s.Admin.Password != "" {
+		// Pre-hash the provided password with SHA-256 to match setup
+		hasher := sha256.New()
+		hasher.Write([]byte(req.Password))
+		sha256Hash := hex.EncodeToString(hasher.Sum(nil))
+
+		if err := bcrypt.CompareHashAndPassword([]byte(s.Admin.Password), []byte(sha256Hash)); err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(
+				models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
+			)
+		}
+	} else {
+		// If no password is set but setup is true, allow empty password?
+		// "лучше просто задать никнейм а пароль установить позже"
+		if req.Password != "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(
+				models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
+			)
+		}
 	}
 
 	// Create user info object
@@ -98,48 +146,6 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 	}
 
 	// Generate JWT session token
-	sessionToken, err := h.authService.GenerateSessionToken(userInfo)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create session"),
-		)
-	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"token":   sessionToken,
-		"user": fiber.Map{
-			"username": userInfo.Username,
-		},
-	})
-}
-
-// LoginTokenRequest represents the token auth login request
-type LoginTokenRequest struct {
-	Token string `json:"token" validate:"required"`
-}
-
-// LoginToken handles admin token authentication login
-func (h *AuthHandler) LoginToken(c fiber.Ctx) error {
-	var req LoginTokenRequest
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(
-			models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"),
-		)
-	}
-
-	// Constant-time comparison to prevent timing attacks
-	if subtle.ConstantTimeCompare([]byte(h.cfg.Garage.AdminToken), []byte(req.Token)) != 1 {
-		return c.Status(fiber.StatusUnauthorized).JSON(
-			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid admin token"),
-		)
-	}
-
-	userInfo := &auth.UserInfo{
-		Username:   "admin-token",
-		AuthMethod: "token",
-	}
-
 	sessionToken, err := h.authService.GenerateSessionToken(userInfo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(

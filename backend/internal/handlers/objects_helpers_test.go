@@ -36,9 +36,9 @@ func TestSafeContentType_RewritesExecutableTypes(t *testing.T) {
 
 func TestContentDispositionHeader_StripsPathAndEscapes(t *testing.T) {
 	cases := []struct {
-		name       string
-		disp, key  string
-		mustContain []string
+		name           string
+		disp, key      string
+		mustContain    []string
 		mustNotContain []string
 	}{
 		{
@@ -51,13 +51,13 @@ func TestContentDispositionHeader_StripsPathAndEscapes(t *testing.T) {
 		{
 			name: "path components stripped",
 			disp: "attachment", key: "a/b/c/file.txt",
-			mustContain: []string{`filename="file.txt"`, `filename*=UTF-8''file.txt`},
+			mustContain:    []string{`filename="file.txt"`, `filename*=UTF-8''file.txt`},
 			mustNotContain: []string{`a/b/c`},
 		},
 		{
 			name: "quote and backslash replaced in ASCII fallback",
 			disp: "inline", key: `"evil\name".txt`,
-			mustContain: []string{`filename="_evil_name_.txt"`},
+			mustContain:    []string{`filename="_evil_name_.txt"`},
 			mustNotContain: []string{`"evil`, `\name`},
 		},
 		{
