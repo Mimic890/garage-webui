@@ -21,13 +21,12 @@ import {ProtectedRoute} from '@/components/auth/ProtectedRoute';
 import {LoadingSpinner} from '@/components/auth/LoadingSpinner';
 
 function ThemedToaster() {
-  const { theme } = useTheme();
-  const toasterTheme = theme === 'dark' || theme === 'ocean' ? 'dark' : 'light';
+  const { mode } = useTheme();
   return (
     <Toaster
       richColors
       position="bottom-right"
-      theme={toasterTheme}
+      theme={mode}
       toastOptions={{
         classNames: {
           toast:
@@ -53,7 +52,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="Noooste/garage-ui-theme">
+      <ThemeProvider defaultPalette="warm" defaultMode="dark">
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
