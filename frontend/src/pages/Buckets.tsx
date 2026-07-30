@@ -5,9 +5,10 @@ import { useBuckets, useCreateBucket, useDeleteBucket } from '@/hooks/useApi';
 import { usePermissions } from '@/hooks/usePermissions';
 import { BucketListView } from '@/components/buckets/BucketListView';
 import { CreateBucketDialog } from '@/components/buckets/CreateBucketDialog';
-import { DangerousConfirmDialog } from '@/components/ui/dangerous-confirm-dialog';
+import { DeleteBucketDialog } from '@/components/buckets/DeleteBucketDialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
+import { bucketsApi } from '@/lib/api';
 import type { Bucket } from '@/types';
 
 export function Buckets() {
@@ -15,7 +16,6 @@ export function Buckets() {
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Bucket | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const { hasAnyPerm } = usePermissions();
   const { data: buckets = [], isLoading } = useBuckets();
@@ -28,19 +28,6 @@ export function Buckets() {
       return true;
     } catch {
       return false;
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteMutation.mutateAsync(deleteTarget.name);
-      setDeleteTarget(null);
-    } catch {
-      // error toast handled by axios interceptor
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -76,16 +63,19 @@ export function Buckets() {
         onCreateBucket={createBucket}
       />
 
-      <DangerousConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title={deleteTarget ? `Delete bucket "${deleteTarget.name}"?` : ''}
-        description="All objects in this bucket will be permanently removed."
-        confirmationText={deleteTarget?.name ?? ''}
-        confirmLabel="Delete bucket"
-        loading={deleting}
-        onConfirm={confirmDelete}
-      />
+      {deleteTarget && (
+        <DeleteBucketDialog
+          open={!!deleteTarget}
+          onOpenChange={(o) => !o && setDeleteTarget(null)}
+          bucketName={deleteTarget.name}
+          objectCount={deleteTarget.objectCount ?? 0}
+          onEmptyBucket={() => bucketsApi.emptyBucket(deleteTarget.name).then(() => {})}
+          onDeleteBucket={async () => {
+            await deleteMutation.mutateAsync(deleteTarget.name);
+            setDeleteTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

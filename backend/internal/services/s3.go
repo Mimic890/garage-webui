@@ -740,6 +740,31 @@ func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefi
 	return s.DeleteMultipleObjects(ctx, bucketName, keys)
 }
 
+// DeleteAllObjects deletes every object in a bucket and returns the count of
+// deleted objects. This is used to empty a bucket before deletion.
+func (s *S3Service) DeleteAllObjects(ctx context.Context, bucketName string) (int, error) {
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
+	}
+
+	keys := make([]string, 0)
+	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
+		Recursive: true,
+	}) {
+		if obj.Err != nil {
+			return 0, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, obj.Err)
+		}
+		keys = append(keys, obj.Key)
+	}
+
+	if len(keys) == 0 {
+		return 0, nil
+	}
+
+	return s.DeleteMultipleObjects(ctx, bucketName, keys)
+}
+
 // GetPresignedURL generates a pre-signed URL for temporary access to an object
 // This is useful for sharing files without exposing credentials
 func (s *S3Service) GetPresignedURL(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error) {
