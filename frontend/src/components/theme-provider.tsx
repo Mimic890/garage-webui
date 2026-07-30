@@ -1,6 +1,15 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'dark' | 'light' | 'system';
+export type Theme =
+  | 'light'
+  | 'dark'
+  | 'sage'
+  | 'cobalt'
+  | 'lavender'
+  | 'moss'
+  | 'berry'
+  | 'ocean'
+  | 'system';
 
 interface ThemeProviderProps {
   children: React.ReactNode;
@@ -32,19 +41,22 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = window.document.documentElement;
+    const allThemeClasses = ['light', 'dark', 'sage', 'cobalt', 'lavender', 'moss', 'berry', 'ocean'];
 
-    root.classList.remove('light', 'dark');
+    root.classList.remove(...allThemeClasses);
 
+    let activeTheme = theme;
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+      activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
-
-      root.classList.add(systemTheme);
-      return;
     }
 
-    root.classList.add(theme);
+    if (activeTheme === 'dark' || activeTheme === 'ocean') {
+      root.classList.add('dark');
+    }
+
+    root.classList.add(activeTheme);
   }, [theme]);
 
   const value = {
@@ -69,3 +81,4 @@ export const useTheme = () => {
 
   return context;
 };
+

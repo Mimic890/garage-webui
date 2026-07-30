@@ -1,16 +1,14 @@
 import * as React from 'react';
-import { User, LogOut, Monitor, Moon, Sun } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 import { Breadcrumb, type BreadcrumbItem } from '@/components/ui/breadcrumb';
-import { useTheme } from '@/components/theme-provider';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useAuthStore } from '@/store/auth-store';
-import { cn } from '@/lib/utils';
 
 interface TopBarProps {
   crumbs: BreadcrumbItem[];
 }
 
 export function TopBar({ crumbs }: TopBarProps) {
-  const { theme, setTheme } = useTheme();
   const { user, config, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
@@ -34,7 +32,7 @@ export function TopBar({ crumbs }: TopBarProps) {
         <Breadcrumb items={crumbs} />
       </div>
       <div className="flex items-center gap-1">
-        <ThemeMiniToggle theme={theme} setTheme={setTheme} />
+        <ThemeToggle />
         {hasUser && (
           <div ref={menuRef} className="relative">
             <button
@@ -68,30 +66,5 @@ export function TopBar({ crumbs }: TopBarProps) {
         )}
       </div>
     </div>
-  );
-}
-
-function ThemeMiniToggle({
-  theme,
-  setTheme,
-}: {
-  theme: 'light' | 'dark' | 'system';
-  setTheme: (t: 'light' | 'dark' | 'system') => void;
-}) {
-  const next = theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark';
-  const Icon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
-  return (
-    <button
-      type="button"
-      onClick={() => setTheme(next)}
-      aria-label={`Switch theme (current: ${theme})`}
-      className={cn(
-        'inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--muted-foreground)]',
-        'hover:bg-[var(--accent)] hover:text-[var(--foreground)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
-      )}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
   );
 }
