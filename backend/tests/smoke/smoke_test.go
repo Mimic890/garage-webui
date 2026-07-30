@@ -191,6 +191,7 @@ func (s *testState) do(t *testing.T, method, path string, body io.Reader, conten
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	req.Header.Set("X-Cluster-Id", "default")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
