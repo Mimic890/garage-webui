@@ -11,6 +11,9 @@ import { cn } from '@/lib/utils';
 export interface PaletteConfig {
   id: Palette;
   name: string;
+  group: string;
+  /** When set, this palette locks brightness (Catppuccin flavors). */
+  fixedMode?: 'light' | 'dark';
   colors: {
     dark: { text: string; bg: string; primary: string; secondary: string; accent: string };
     light: { text: string; bg: string; primary: string; secondary: string; accent: string };
@@ -21,49 +24,70 @@ export const PALETTES: PaletteConfig[] = [
   {
     id: 'warm',
     name: 'Warm',
+    group: 'Brand',
     colors: {
       dark: { text: '#e8eaed', bg: '#1a1d29', primary: '#ff9447', secondary: '#3a3f52', accent: '#2d3142' },
       light: { text: '#1c1917', bg: '#faf7f2', primary: '#ff9447', secondary: '#f3efe8', accent: '#e7e2d8' },
     },
   },
   {
-    id: 'sage',
-    name: 'Sage',
+    id: 'catppuccin-latte',
+    name: 'Latte',
+    group: 'Catppuccin',
+    fixedMode: 'light',
     colors: {
-      dark: { text: '#e2ede8', bg: '#111614', primary: '#78998d', secondary: '#2a3d36', accent: '#88b7a6' },
-      light: { text: '#121313', bg: '#f8f9f8', primary: '#78998d', secondary: '#b1cac1', accent: '#88b7a6' },
+      // Flavor is light-only; both swatch slots show Latte.
+      dark: { text: '#4c4f69', bg: '#eff1f5', primary: '#8839ef', secondary: '#ccd0da', accent: '#e6e9ef' },
+      light: { text: '#4c4f69', bg: '#eff1f5', primary: '#8839ef', secondary: '#ccd0da', accent: '#e6e9ef' },
     },
   },
   {
-    id: 'cobalt',
-    name: 'Cobalt',
+    id: 'catppuccin-frappe',
+    name: 'Frappé',
+    group: 'Catppuccin',
+    fixedMode: 'dark',
     colors: {
-      dark: { text: '#e5ecf9', bg: '#0c1019', primary: '#4e82f4', secondary: '#23355e', accent: '#3f68c0' },
-      light: { text: '#0c0d10', bg: '#f2f4f9', primary: '#3f68c0', secondary: '#92aeec', accent: '#4e82f4' },
+      dark: { text: '#c6d0f5', bg: '#303446', primary: '#ca9ee6', secondary: '#414559', accent: '#292c3c' },
+      light: { text: '#c6d0f5', bg: '#303446', primary: '#ca9ee6', secondary: '#414559', accent: '#292c3c' },
     },
   },
   {
-    id: 'lavender',
-    name: 'Lavender',
+    id: 'catppuccin-macchiato',
+    name: 'Macchiato',
+    group: 'Catppuccin',
+    fixedMode: 'dark',
     colors: {
-      dark: { text: '#f0ebf8', bg: '#110d1a', primary: '#b569d5', secondary: '#382650', accent: '#b596e2' },
-      light: { text: '#070c18', bg: '#eff3fb', primary: '#416fca', secondary: '#b596e2', accent: '#b569d5' },
+      dark: { text: '#cad3f5', bg: '#24273a', primary: '#c6a0f6', secondary: '#363a4f', accent: '#1e2030' },
+      light: { text: '#cad3f5', bg: '#24273a', primary: '#c6a0f6', secondary: '#363a4f', accent: '#1e2030' },
     },
   },
   {
-    id: 'moss',
-    name: 'Moss',
+    id: 'catppuccin-mocha',
+    name: 'Mocha',
+    group: 'Catppuccin',
+    fixedMode: 'dark',
     colors: {
-      dark: { text: '#e6eae8', bg: '#111613', primary: '#6f9580', secondary: '#2b3630', accent: '#9e97b2' },
-      light: { text: '#0f1411', bg: '#f6f8f7', primary: '#6f9580', secondary: '#aaadc0', accent: '#9e97b2' },
+      dark: { text: '#cdd6f4', bg: '#1e1e2e', primary: '#cba6f7', secondary: '#313244', accent: '#181825' },
+      light: { text: '#cdd6f4', bg: '#1e1e2e', primary: '#cba6f7', secondary: '#313244', accent: '#181825' },
     },
   },
   {
-    id: 'berry',
-    name: 'Berry',
+    id: 'github',
+    name: 'GitHub',
+    group: 'Others',
     colors: {
-      dark: { text: '#f8e8f3', bg: '#171224', primary: '#af719d', secondary: '#3e284a', accent: '#f8b2b2' },
-      light: { text: '#403d88', bg: '#fdf6fa', primary: '#8b639b', secondary: '#af719d', accent: '#f8b2b2' },
+      dark: { text: '#e6edf3', bg: '#0d1117', primary: '#2f81f7', secondary: '#21262d', accent: '#161b22' },
+      light: { text: '#1f2328', bg: '#ffffff', primary: '#0969da', secondary: '#f6f8fa', accent: '#d0d7de' },
+    },
+  },
+  {
+    id: 'kanagawa',
+    name: 'Kanagawa',
+    group: 'Others',
+    colors: {
+      // Wave (dark) / Lotus (light)
+      dark: { text: '#dcd7ba', bg: '#1f1f28', primary: '#7e9cd8', secondary: '#2a2a37', accent: '#16161d' },
+      light: { text: '#545464', bg: '#f2ecbc', primary: '#4d699b', secondary: '#e7dba0', accent: '#e4d794' },
     },
   },
 ];
@@ -86,11 +110,27 @@ function PaletteRectangle({
   );
 }
 
+function groupPalettes(palettes: PaletteConfig[]) {
+  const groups: { name: string; items: PaletteConfig[] }[] = [];
+  for (const p of palettes) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === p.group) {
+      last.items.push(p);
+    } else {
+      groups.push({ name: p.group, items: [p] });
+    }
+  }
+  return groups;
+}
+
 export function ThemeToggle() {
   const { palette, mode, setPalette, setMode } = useTheme();
 
   const currentPaletteConfig = PALETTES.find((p) => p.id === palette) || PALETTES[0];
-  const activeColors = currentPaletteConfig.colors[mode];
+  const swatchMode = currentPaletteConfig.fixedMode ?? mode;
+  const activeColors = currentPaletteConfig.colors[swatchMode];
+  const groups = groupPalettes(PALETTES);
+  const isCatppuccin = palette.startsWith('catppuccin-');
 
   return (
     <DropdownMenu>
@@ -102,39 +142,50 @@ export function ThemeToggle() {
         <ChevronDown className="h-3.5 w-3.5 opacity-60 transition-transform duration-200" />
         <span className="sr-only">Toggle theme</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 p-1.5 space-y-0.5">
-        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          Color Palette
-        </div>
-        {PALETTES.map((p) => {
-          const isSelected = palette === p.id;
-          const pColors = p.colors[mode];
-          return (
-            <DropdownMenuItem
-              key={p.id}
-              closeOnClick={false}
-              onClick={() => setPalette(p.id)}
-              className="flex items-center justify-between cursor-pointer py-1.5 px-2.5 rounded-md hover:bg-accent hover:text-accent-foreground"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-4 flex items-center justify-center">
-                  {isSelected && <Check className="h-3.5 w-3.5 text-primary font-bold" />}
-                </div>
-                <span className={`text-sm ${isSelected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                  {p.name}
-                </span>
-              </div>
-              <PaletteRectangle colors={pColors} />
-            </DropdownMenuItem>
-          );
-        })}
+      <DropdownMenuContent align="end" className="w-60 p-1.5 space-y-0.5 max-h-[min(80vh,32rem)] overflow-y-auto">
+        {groups.map((group) => (
+          <div key={group.name}>
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
+              {group.name === 'Brand' ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : null}
+              {group.name}
+            </div>
+            {group.items.map((p) => {
+              const isSelected = palette === p.id;
+              const pColors = p.colors[p.fixedMode ?? mode];
+              return (
+                <DropdownMenuItem
+                  key={p.id}
+                  closeOnClick={false}
+                  onClick={() => setPalette(p.id)}
+                  className="flex items-center justify-between cursor-pointer py-1.5 px-2.5 rounded-md hover:bg-accent hover:text-accent-foreground"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-4 flex items-center justify-center shrink-0">
+                      {isSelected && <Check className="h-3.5 w-3.5 text-primary font-bold" />}
+                    </div>
+                    <span
+                      className={`text-sm truncate ${isSelected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                    >
+                      {p.name}
+                    </span>
+                  </div>
+                  <PaletteRectangle colors={pColors} />
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+        ))}
 
         <div className="my-1.5 border-t border-border" />
 
         <div className="px-2 py-1 text-xs font-semibold text-muted-foreground tracking-wider uppercase">
           Theme Mode
         </div>
+        {isCatppuccin ? (
+          <p className="px-2.5 pb-1.5 text-[11px] text-muted-foreground leading-snug">
+            On Catppuccin, Light → Latte and Dark → Mocha. Pick Frappé / Macchiato from the list.
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-1 p-1 bg-muted/50 rounded-lg border border-border/50">
           <button
             type="button"
@@ -167,5 +218,3 @@ export function ThemeToggle() {
     </DropdownMenu>
   );
 }
-
-
