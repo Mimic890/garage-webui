@@ -22,11 +22,12 @@ import {LoadingSpinner} from '@/components/auth/LoadingSpinner';
 
 function ThemedToaster() {
   const { theme } = useTheme();
+  const toasterTheme = theme === 'dark' || theme === 'ocean' ? 'dark' : 'light';
   return (
     <Toaster
       richColors
       position="bottom-right"
-      theme={theme}
+      theme={toasterTheme}
       toastOptions={{
         classNames: {
           toast:
