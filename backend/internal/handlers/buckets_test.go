@@ -21,8 +21,9 @@ import (
 func newBucketsTestApp(t *testing.T) (*fiber.App, *mocks.AdminMock) {
 	t.Helper()
 	admin := &mocks.AdminMock{}
-	h := NewBucketHandler(admin, nil) // s3 unused in this handler
+	h := NewBucketHandler()
 	app := fiber.New()
+	app.Use(injectServices(admin, nil))
 	app.Get("/buckets", h.ListBuckets)
 	app.Post("/buckets", h.CreateBucket)
 	app.Get("/buckets/:name", h.GetBucketInfo)

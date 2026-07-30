@@ -66,7 +66,11 @@ func findLine(t *testing.T, buf *bytes.Buffer, msg string) map[string]any {
 	return nil
 }
 
-func TestAuthMiddleware_BothDisabled_AllowsRequest(t *testing.T) {
+func TestAuthMiddleware_BothDisabled_StillRequiresCredentials(t *testing.T) {
+	// After the multi-cluster refactor, authentication is always required for
+	// protected routes: admin accounts live in state, not only in config flags.
+	// Disabling cfg.Admin/OIDC only turns off those identity sources; unauthenticated
+	// requests still get 401.
 	authCfg := &config.AuthConfig{
 		Admin: config.AdminAuthConfig{Enabled: false},
 		OIDC:  config.OIDCConfig{Enabled: false},
@@ -81,18 +85,12 @@ func TestAuthMiddleware_BothDisabled_AllowsRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	if resp.StatusCode != 401 {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}
-	var body map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if body["ok"] != true {
-		t.Errorf("ok = %v, want true", body["ok"])
-	}
-	if body["username"] != "" {
-		t.Errorf("username should be empty when auth disabled, got %q", body["username"])
+	warn := findLine(t, &buf, "authentication_failed")
+	if warn["auth_method"] != "none" {
+		t.Errorf("auth_method = %v, want none", warn["auth_method"])
 	}
 }
 

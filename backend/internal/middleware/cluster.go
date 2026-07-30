@@ -17,7 +17,7 @@ import (
 func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		clusterID := c.Get("X-Cluster-Id")
-		
+
 		if clusterID == "" {
 			path := c.Path()
 			if strings.HasPrefix(path, "/api/v1/panel") || path == "/api/v1/capabilities" || path == "/api/v1/health" {
@@ -67,12 +67,24 @@ func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
 		// Inject into fiber.Locals for handlers to retrieve
 		c.Locals("adminService", adminService)
 		c.Locals("s3Service", s3Service)
-		
+
 		// If we need standard context:
-		ctx := context.WithValue(c.Context(), "adminService", adminService)
-		ctx = context.WithValue(ctx, "s3Service", s3Service)
-		// Set it in fiber.UserContext or just pass locals
-		
+		_ = context.WithValue(c.Context(), "adminService", adminService)
+
+		return c.Next()
+	}
+}
+
+// StaticClusterMiddleware injects fixed Admin/S3 services on every request.
+// Used by unit and route tests so handlers run without a live Garage cluster.
+func StaticClusterMiddleware(admin services.AdminService, s3 services.S3Storage) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		if admin != nil {
+			c.Locals("adminService", admin)
+		}
+		if s3 != nil {
+			c.Locals("s3Service", s3)
+		}
 		return c.Next()
 	}
 }

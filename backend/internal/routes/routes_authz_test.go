@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,9 +16,11 @@ import (
 	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
+	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
+	"Noooste/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -95,19 +98,26 @@ func newEnabledPolicyFixture(t *testing.T) (*routeFixture, string) {
 	admin := &mocks.AdminMock{}
 	s3 := &mocks.S3Mock{}
 
+	sm, err := state.NewManager(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
 	app := fiber.New()
 	SetupRoutes(
 		app,
 		cfg,
 		svc,
 		handlers.NewHealthHandler("test"),
-		handlers.NewBucketHandler(admin, s3),
-		handlers.NewObjectHandler(s3, svc),
-		handlers.NewUserHandler(admin),
-		handlers.NewClusterHandler(admin),
-		handlers.NewMonitoringHandler(admin, s3),
+		handlers.NewBucketHandler(),
+		handlers.NewObjectHandler(svc),
+		handlers.NewUserHandler(),
+		handlers.NewClusterHandler(),
+		handlers.NewMonitoringHandler(),
 		handlers.NewCapabilitiesHandler("v2", services.CapabilitiesV2(), false),
 		az,
+		sm,
+		WithClusterMiddleware(middleware.StaticClusterMiddleware(admin, s3)),
 	)
 
 	token, err := svc.GenerateSessionToken(&auth.UserInfo{
@@ -120,7 +130,7 @@ func newEnabledPolicyFixture(t *testing.T) (*routeFixture, string) {
 		t.Fatalf("GenerateSessionToken: %v", err)
 	}
 
-	return &routeFixture{App: app, Admin: admin, S3: s3, Auth: svc, Cfg: cfg}, token
+	return &routeFixture{App: app, Admin: admin, S3: s3, Auth: svc, Cfg: cfg, State: sm}, token
 }
 
 // TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade locks in the Fiber

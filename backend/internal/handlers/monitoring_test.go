@@ -19,8 +19,9 @@ import (
 func newMonitoringTestApp(t *testing.T) (*fiber.App, *mocks.AdminMock) {
 	t.Helper()
 	admin := &mocks.AdminMock{}
-	h := NewMonitoringHandler(admin, nil) // s3Service unused by this handler
+	h := NewMonitoringHandler()
 	app := fiber.New()
+	app.Use(injectServices(admin, nil))
 	app.Get("/monitoring/metrics", h.GetMetrics)
 	app.Get("/monitoring/admin-health", h.CheckAdminHealth)
 	app.Get("/monitoring/dashboard", h.GetDashboardMetrics)

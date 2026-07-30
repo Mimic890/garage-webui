@@ -18,9 +18,10 @@ func TestGetBucketInfoPopulatesEffectivePermissions(t *testing.T) {
 	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
 		return &models.GarageBucketInfo{ID: "id-1"}, nil
 	}
-	h := NewBucketHandler(admin, nil)
+	h := NewBucketHandler()
 
 	app := fiber.New()
+	app.Use(injectServices(admin, nil))
 	app.Get("/buckets/:name", func(c fiber.Ctx) error {
 		c.Locals(authz.SubjectLocalsKey, teamSubject())
 		return h.GetBucketInfo(c)

@@ -18,8 +18,9 @@ import (
 func newClusterTestApp(t *testing.T) (*fiber.App, *mocks.AdminMock) {
 	t.Helper()
 	admin := &mocks.AdminMock{}
-	h := NewClusterHandler(admin)
+	h := NewClusterHandler()
 	app := fiber.New()
+	app.Use(injectServices(admin, nil))
 	app.Get("/cluster/health", h.GetHealth)
 	app.Get("/cluster/status", h.GetStatus)
 	app.Get("/cluster/statistics", h.GetStatistics)

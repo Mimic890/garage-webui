@@ -20,8 +20,9 @@ import (
 func newUsersTestApp(t *testing.T) (*fiber.App, *mocks.AdminMock) {
 	t.Helper()
 	admin := &mocks.AdminMock{}
-	h := NewUserHandler(admin)
+	h := NewUserHandler()
 	app := fiber.New()
+	app.Use(injectServices(admin, nil))
 	app.Get("/users", h.ListUsers)
 	app.Post("/users", h.CreateUser)
 	app.Get("/users/:access_key", h.GetUser)
