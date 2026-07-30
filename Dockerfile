@@ -42,7 +42,8 @@ FROM alpine:3.23.3
 
 WORKDIR /app
 
-RUN apk --no-cache add ca-certificates wget
+# su-exec: drop root after fixing volume ownership in the entrypoint
+RUN apk --no-cache add ca-certificates wget su-exec
 
 RUN addgroup -g 1000 garageui && \
     adduser -D -u 1000 -G garageui garageui && \
@@ -51,12 +52,16 @@ RUN addgroup -g 1000 garageui && \
 
 COPY --from=backend-builder --chown=garageui:garageui /app/garage-ui .
 COPY --from=frontend-builder --chown=garageui:garageui /app/frontend/dist ./frontend/dist
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 
-USER garageui
-
+# Start as root so the entrypoint can chown mounted volumes, then it drops
+# to garageui (uid 1000) before exec'ing the app. If the orchestrator forces
+# runAsNonRoot, entrypoint skips chown and relies on fsGroup / pre-fixed perms.
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["./garage-ui"]

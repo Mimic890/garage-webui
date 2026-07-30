@@ -6,12 +6,13 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      # Data directory for SQLite/JSON persistence
+      # Persisted admin account + cluster list (entrypoint chowns to uid 1000)
       - garage_ui_data:/app/data
     environment:
       # Minimal environment variables, just for server basics
       - GARAGE_UI_SERVER_HOST=0.0.0.0
       - GARAGE_UI_SERVER_PORT=8080
+      - GARAGE_UI_DATA_DIR=/app/data
       - GARAGE_UI_LOGGING_LEVEL=info # Options: trace, debug, info, warn, error
       # - GARAGE_UI_LOGGING_FORMAT=text # Options: text, json
       # - GARAGE_UI_SERVER_PROTOCOL=http

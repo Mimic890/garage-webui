@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -38,8 +39,9 @@ type Manager struct {
 func NewManager(path string) (*Manager, error) {
 	m := &Manager{path: path}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return nil, err
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("create state directory %q: %w", dir, err)
 	}
 
 	data, err := os.ReadFile(path)
@@ -48,13 +50,16 @@ func NewManager(path string) (*Manager, error) {
 			m.state = State{
 				Clusters: []ClusterConfig{},
 			}
-			return m, m.Save()
+			if err := m.Save(); err != nil {
+				return nil, err
+			}
+			return m, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read state file %q: %w", path, err)
 	}
 
 	if err := json.Unmarshal(data, &m.state); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse state file %q: %w", path, err)
 	}
 
 	return m, nil
@@ -65,7 +70,35 @@ func (m *Manager) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.path, data, 0600)
+	// Write via temp + rename so a crash mid-write cannot leave a truncated file.
+	dir := filepath.Dir(m.path)
+	tmp, err := os.CreateTemp(dir, "state-*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp state file in %q: %w", dir, err)
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp state file: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp state file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp state file: %w", err)
+	}
+	if err := os.Rename(tmpName, m.path); err != nil {
+		return fmt.Errorf("replace state file %q: %w", m.path, err)
+	}
+	cleanup = false
+	return nil
 }
 
 func (m *Manager) GetState() State {
