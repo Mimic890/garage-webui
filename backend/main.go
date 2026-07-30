@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"syscall"
@@ -96,11 +97,17 @@ func main() {
 		Str("environment", cfg.Server.Environment).
 		Msg("Starting Garage UI Backend")
 
-	// Initialize state manager
-	logger.Info().Msg("Initializing State Manager")
-	stateManager, err := state.NewManager("data/state.json")
+	// Initialize state manager (admin account + cluster list). Path is under
+	// GARAGE_UI_DATA_DIR (default "data", i.e. /app/data when WORKDIR is /app).
+	dataDir := os.Getenv("GARAGE_UI_DATA_DIR")
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	statePath := filepath.Join(dataDir, "state.json")
+	logger.Info().Str("path", statePath).Msg("Initializing State Manager")
+	stateManager, err := state.NewManager(statePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to initialize state manager")
+		logger.Fatal().Err(err).Str("path", statePath).Msg("Failed to initialize state manager")
 	}
 
 	// Auto-provision state from environment if setup is not complete
