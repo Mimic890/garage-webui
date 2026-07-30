@@ -16,7 +16,7 @@ A modern, fast, and highly customizable web interface to manage your <a href="ht
 - **Multi-Cluster Support** - Easily switch between multiple Garage clusters right from the top navigation bar.
 - **Bucket & Object Management** - Create, configure, and browse buckets. Upload, download, and delete objects natively.
 - **Access Control** - Manage S3 access keys and assign granular permissions for different buckets.
-- **Dynamic Theming** - Features multiple aesthetic color palettes (Warm, Sage, Cobalt, Lavender, Moss, Berry) with full Dark/Light mode support.
+- **Dynamic Theming** - Warm (brand), full Catppuccin (Latte / Frappé / Macchiato / Mocha), GitHub, and Kanagawa — with Dark/Light mode where it applies.
 - **Internationalization (i18n)** - Interface fully translated into English and Russian.
 - **Timezone Awareness** - Configure your timezone for accurate chart metrics and logs.
 - **Admin Security** - Secure, password-based local authentication protecting your cluster.
