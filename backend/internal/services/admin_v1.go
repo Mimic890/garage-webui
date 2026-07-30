@@ -1,10 +1,10 @@
 package services
 
 import (
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/pkg/utils"
+	"Noooste/garage-ui/internal/state"
 	logpkg "Noooste/garage-ui/pkg/logger"
+	"Noooste/garage-ui/pkg/utils"
 	"context"
 	"fmt"
 	"io"
@@ -20,7 +20,7 @@ type GarageV1AdminService struct {
 	httpClient *azuretls.Session
 }
 
-func NewGarageV1AdminService(cfg *config.GarageConfig, logLevel string) *GarageV1AdminService {
+func NewGarageV1AdminService(cfg *state.ClusterConfig, logLevel string) *GarageV1AdminService {
 	session := azuretls.NewSession()
 	if logLevel == "debug" {
 		session.Log()

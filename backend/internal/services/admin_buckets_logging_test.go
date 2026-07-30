@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 	logpkg "Noooste/garage-ui/pkg/logger"
 
 	"github.com/rs/zerolog"
@@ -22,7 +22,7 @@ func newAdminWithServer(t *testing.T, handler http.HandlerFunc) *GarageV2AdminSe
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	cfg := &config.GarageConfig{
+	cfg := &state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}

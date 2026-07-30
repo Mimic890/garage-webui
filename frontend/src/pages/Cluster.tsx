@@ -9,6 +9,9 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import type {ClusterNode, LocalNodeInfo, NodeStatistics} from '@/types';
 import {useState} from 'react';
 import { useCapabilities } from '@/hooks/useCapabilities';
+import { useClusterStore } from '@/store/cluster-store';
+import { Navigate } from 'react-router-dom';
+import { useTranslation } from '@/lib/i18n';
 
 function UnsupportedFeatureCard({ title, description }: { title: string; description?: string }) {
   return (
@@ -31,40 +34,49 @@ function UnsupportedFeatureCard({ title, description }: { title: string; descrip
 
 export function Cluster() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const { data: capabilities } = useCapabilities();
   const features = capabilities?.features;
+
+  const { clusters, activeClusterId } = useClusterStore();
 
   const { data: health, isLoading: healthLoading } = useQuery({
     queryKey: ['cluster-health'],
     queryFn: () => garageApi.getClusterHealth(),
     refetchInterval: 10000,
+    enabled: !!activeClusterId,
   });
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['cluster-status'],
     queryFn: () => garageApi.getClusterStatus(),
     refetchInterval: 15000,
+    enabled: !!activeClusterId,
   });
 
   const { data: statistics, isLoading: statisticsLoading } = useQuery({
     queryKey: ['cluster-statistics'],
     queryFn: () => garageApi.getClusterStatistics(),
     refetchInterval: 30000,
-    enabled: !!features && features.clusterStatistics !== false,
+    enabled: !!activeClusterId && !!features && features.clusterStatistics !== false,
   });
 
   const { data: nodeInfo, isLoading: nodeInfoLoading } = useQuery({
     queryKey: ['node-info', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeInfo(selectedNodeId || '*'),
-    enabled: !!features && features.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
+    enabled: !!activeClusterId && !!features && features.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
   });
 
   const { data: nodeStats } = useQuery({
     queryKey: ['node-statistics', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeStatistics(selectedNodeId || '*'),
-    enabled: !!features && features.nodeStatistics !== false && !!selectedNodeId,
+    enabled: !!activeClusterId && !!features && features.nodeStatistics !== false && !!selectedNodeId,
   });
+
+  if (clusters.length === 0) {
+    return <Navigate to="/" replace />;
+  }
 
   const isLoading = healthLoading || statusLoading || statisticsLoading;
 
@@ -120,7 +132,7 @@ export function Cluster() {
 
   return (
     <div>
-      <PageHeader title="Cluster management" subtitle="Node layout, partitions, and health" />
+      <PageHeader title={t('nav.status')} subtitle="Node layout, partitions, and health" />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Cluster Health Overview */}
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">

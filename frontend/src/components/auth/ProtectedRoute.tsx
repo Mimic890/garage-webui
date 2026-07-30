@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
+import { useClusterStore } from '@/store/cluster-store';
 import { LoadingSpinner } from './LoadingSpinner';
 
 interface ProtectedRouteProps {
@@ -7,11 +9,22 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, config } = useAuthStore();
+  const { isAuthenticated, isLoading, config, isSetup } = useAuthStore();
+  const { fetchClusters } = useClusterStore();
   const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchClusters();
+    }
+  }, [isAuthenticated, fetchClusters]);
 
   if (isLoading) {
     return <LoadingSpinner />;
+  }
+
+  if (!isSetup) {
+    return <Navigate to="/setup" state={{ from: location }} replace />;
   }
 
   // If no auth is enabled, always allow access

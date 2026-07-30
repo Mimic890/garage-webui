@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 	logpkg "Noooste/garage-ui/pkg/logger"
 	"Noooste/garage-ui/pkg/utils"
 
@@ -21,12 +21,12 @@ import (
 // S3Service handles all S3 operations with Garage using MinIO SDK
 type S3Service struct {
 	client       *minio.Client
-	config       *config.GarageConfig
+	config       *state.ClusterConfig
 	adminService AdminService
 }
 
 // NewS3Service creates a new S3 service instance using MinIO SDK
-func NewS3Service(cfg *config.GarageConfig, adminService AdminService) *S3Service {
+func NewS3Service(cfg *state.ClusterConfig, adminService AdminService) *S3Service {
 	// Create MinIO client for Garage
 	// trim http or https from endpoint
 	if strings.HasPrefix(cfg.Endpoint, "http://") {

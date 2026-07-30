@@ -5,6 +5,7 @@ import { authApi } from '@/lib/api';
 
 interface AuthStore extends AuthState {
   config: AuthConfig | null;
+  isSetup: boolean;
 
   // Actions
   setUser: (user: AuthUser | null) => void;
@@ -26,6 +27,7 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       user: null,
       config: null,
+      isSetup: true,
       isAuthenticated: false,
       isLoading: true,
       error: null,
@@ -40,10 +42,14 @@ export const useAuthStore = create<AuthStore>()(
         try {
           set({ isLoading: true, error: null });
 
-          // Fetch auth configuration
-          const configResponse = await authApi.getConfig();
+          // Fetch auth configuration and setup status
+          const [configResponse, setupResponse] = await Promise.all([
+            authApi.getConfig(),
+            authApi.getSetupStatus(),
+          ]);
           const config = configResponse.data as AuthConfig;
-          set({ config });
+          const isSetup = setupResponse.data.setup as boolean;
+          set({ config, isSetup });
 
           // If no auth is enabled, mark as authenticated immediately
           if (!config.admin.enabled && !config.oidc.enabled && !config.token.enabled) {

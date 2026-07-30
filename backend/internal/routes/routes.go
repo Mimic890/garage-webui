@@ -6,6 +6,7 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
+	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/logger"
 	"net/url"
 	"os"
@@ -14,9 +15,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	// Swagger imports
-	_ "Noooste/garage-ui/docs"
-
-	"github.com/Noooste/swagger"
+	//_ "Noooste/garage-ui/docs"
 )
 
 // SetupRoutes configures all API routes
@@ -32,19 +31,24 @@ func SetupRoutes(
 	monitoringHandler *handlers.MonitoringHandler,
 	capabilitiesHandler *handlers.CapabilitiesHandler,
 	az *authz.Middleware,
+	stateManager *state.Manager,
 ) {
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
+
+	// Apply IP Whitelist middleware globally
+	app.Use(middleware.IPWhitelistMiddleware(&cfg.Server))
 
 	// Health check endpoint (no auth required)
 	app.Get("/health", healthHandler.Check)
 	app.Get("/api/v1/health", healthHandler.Check)
 
 	// Swagger documentation endpoint (no auth required)
-	app.Get("/docs/*", swagger.HandlerDefault)
+	// app.Get("/docs/*", swagger.HandlerDefault)
 
-	// Create auth handler
-	authHandler := handlers.NewAuthHandler(cfg, authService)
+	// Create auth and panel handlers
+	authHandler := handlers.NewAuthHandler(cfg, authService, stateManager)
+	panelHandler := handlers.NewPanelHandler(stateManager)
 
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
@@ -64,11 +68,25 @@ func SetupRoutes(
 
 	// Apply authentication middleware to all API routes
 	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
+	
+	// Apply cluster middleware to inject cluster services based on X-Cluster-Id
+	api.Use(middleware.ClusterMiddleware(stateManager))
 
 	// Resolve the authz Subject once per request, right after authentication.
 	api.Use(az.ResolveSubject())
 
 	api.Get("/capabilities", capabilitiesHandler.GetCapabilities)
+
+	// Panel setup and cluster management routes (these do not require X-Cluster-Id)
+	panel := api.Group("/panel")
+	{
+		panel.Get("/setup", panelHandler.GetSetupStatus)
+		panel.Post("/setup", panelHandler.SetupPanel)
+		// Clusters need auth. If there's an admin account, require login for /clusters
+		panel.Get("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.GetClusters)
+		panel.Post("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.AddCluster)
+		panel.Delete("/clusters/:id", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.DeleteCluster)
+	}
 
 	// Bucket routes
 	buckets := api.Group("/buckets")
@@ -89,7 +107,7 @@ func SetupRoutes(
 		objects.Post("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.UploadObject)                          // Upload object (multipart)
 		objects.Post("/upload-multiple", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.UploadMultipleObjects)  // Upload multiple objects
 		objects.Post("/delete-multiple", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.DeleteMultipleObjects) // Delete multiple objects
-		objects.Post("/empty", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.EmptyBucket)                   // Delete all objects in bucket
+		objects.Post("/empty", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.EmptyBucket)                     // Delete all objects in bucket
 	}
 
 	// Directory routes (zero-byte directory markers)
@@ -137,11 +155,11 @@ func SetupRoutes(
 	// api, the api group's .Use() middlewares (AuthMiddleware, ResolveSubject)
 	// cascade onto them by path prefix, so ResolveSubject is not repeated here
 	// (TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade locks that in).
-	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
-	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
-	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
+	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
+	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
+	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
 
-	// User/Key management routes
+	// Access Control (Users/Keys) routes
 	users := api.Group("/users")
 	{
 		users.Get("/", az.Require(authz.ScopeNone, authz.PermKeyList), userHandler.ListUsers)                                // List all users/keys
@@ -152,7 +170,7 @@ func SetupRoutes(
 		users.Patch("/:access_key", az.Require(authz.ScopeNone, authz.PermKeyUpdate), userHandler.UpdateUserPermissions)     // Update user permissions
 	}
 
-	// Cluster management routes
+	// Cluster and Monitoring routes
 	cluster := api.Group("/cluster")
 	{
 		cluster.Get("/health", az.Require(authz.ScopeNone, authz.PermClusterHealth), clusterHandler.GetHealth)                             // Get cluster health
@@ -170,20 +188,11 @@ func SetupRoutes(
 		monitoring.Get("/dashboard", az.Require(authz.ScopeNone, authz.PermClusterStatistics), monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
 	}
 
-	// Admin auth login endpoint (only if admin is enabled)
-	if cfg.Auth.Admin.Enabled {
-		app.Post("/auth/login", authHandler.LoginAdmin)
-	}
+	// Admin auth login endpoint
+	app.Post("/auth/login", authHandler.LoginAdmin)
 
-	// Token auth login endpoint (only if token auth is enabled)
-	if cfg.Auth.Token.Enabled {
-		app.Post("/auth/login-token", authHandler.LoginToken)
-	}
-
-	// Auth "me" endpoint (if any auth is enabled)
-	if cfg.Auth.Admin.Enabled || cfg.Auth.OIDC.Enabled || cfg.Auth.Token.Enabled {
-		app.Get("/auth/me", middleware.AuthMiddleware(&cfg.Auth, authService), authHandler.GetMe)
-	}
+	// Auth "me" endpoint
+	app.Get("/auth/me", middleware.AuthMiddleware(&cfg.Auth, authService), authHandler.GetMe)
 
 	// OIDC authentication routes (only if OIDC is enabled)
 	if cfg.Auth.OIDC.Enabled {

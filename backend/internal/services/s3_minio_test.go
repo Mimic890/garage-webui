@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/utils"
 )
 
@@ -62,13 +62,13 @@ func newS3TestService(t *testing.T, s3Handler http.Handler) *S3Service {
 	srv := httptest.NewServer(combined)
 	t.Cleanup(srv.Close)
 
-	admin := NewGarageV2AdminService(&config.GarageConfig{
+	admin := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test",
 	}, "")
 
 	// strip scheme for S3 endpoint (NewS3Service does this itself if http:// prefix)
-	s3 := NewS3Service(&config.GarageConfig{
+	s3 := NewS3Service(&state.ClusterConfig{
 		Endpoint: srv.URL, // http://127.0.0.1:NNNN
 		Region:   "garage",
 	}, admin)

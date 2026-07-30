@@ -45,6 +45,26 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  let clusterId = null;
+  try {
+    const storageData = localStorage.getItem('cluster-storage');
+    if (storageData) {
+      const parsed = JSON.parse(storageData);
+      clusterId = parsed.state?.activeClusterId;
+    }
+  } catch (e) {
+    // Ignore parsing errors
+  }
+  
+  if (!clusterId) {
+    clusterId = localStorage.getItem('cluster-id');
+  }
+
+  if (clusterId) {
+    config.headers['X-Cluster-Id'] = clusterId;
+  }
+  
   return config;
 });
 
@@ -135,6 +155,16 @@ export const authApi = {
       oidc: { enabled: boolean; provider?: string };
       token: { enabled: boolean };
     }>('/config');
+    return response;
+  },
+
+  getSetupStatus: async () => {
+    const response = await api.get<{ setup: boolean; admin: { nickname: string } }>('/v1/panel/setup');
+    return response;
+  },
+
+  setupPanel: async (data: any) => {
+    const response = await api.post<{ success: boolean }>('/v1/panel/setup', data);
     return response;
   },
 

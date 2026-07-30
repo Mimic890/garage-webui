@@ -9,6 +9,21 @@ export interface AuthConfig {
   token: {
     enabled: boolean;
   };
+  server: {
+    host: string;
+    port: number;
+    protocol?: string;
+    root_url?: string;
+    allowed_ips?: string[];
+    max_body_size?: number;
+    max_header_size?: number;
+    read_buffer_size?: number;
+    write_buffer_size?: number;
+  };
+  logging: {
+    level: string;
+    format: string;
+  };
 }
 
 export interface AuthUser {

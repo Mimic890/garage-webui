@@ -10,15 +10,15 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 )
 
 func newV1TestServer(t *testing.T, handler http.Handler) *GarageV1AdminService {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return NewGarageV1AdminService(&config.GarageConfig{
+	return NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}, "")
@@ -116,7 +116,7 @@ func newV1RecordingServer(t *testing.T, status int, body any) (*GarageV1AdminSer
 	h, rec := v1RecordingHandler(t, status, body)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	svc := NewGarageV1AdminService(&config.GarageConfig{
+	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}, "")
@@ -441,7 +441,7 @@ func TestV1_ErrorPaths(t *testing.T) {
 		w.Write([]byte(`{"error":"internal"}`))
 	}))
 	t.Cleanup(srv500.Close)
-	svc := NewGarageV1AdminService(&config.GarageConfig{
+	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv500.URL,
 		AdminToken:    "tok",
 	}, "")
@@ -620,7 +620,7 @@ func TestV1_GetMetrics(t *testing.T) {
 		w.Write([]byte("garage_up 1\n"))
 	}))
 	t.Cleanup(srv.Close)
-	svc := NewGarageV1AdminService(&config.GarageConfig{
+	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "tok",
 	}, "")
