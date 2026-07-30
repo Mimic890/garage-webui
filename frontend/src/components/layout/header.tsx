@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from './theme-toggle';
+import { ClusterSwitcher } from './cluster-switcher';
 
 interface HeaderProps {
   title: string;
@@ -22,6 +23,7 @@ export function Header({ title }: HeaderProps) {
               className="pl-8 w-full"
             />
           </div>
+          <ClusterSwitcher />
           <ThemeToggle />
         </div>
       </div>

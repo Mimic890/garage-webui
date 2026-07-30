@@ -9,17 +9,11 @@ import (
 )
 
 // BucketHandler handles bucket-related HTTP requests.
-type BucketHandler struct {
-	adminService services.AdminService
-	s3Service    services.S3Storage
-}
+type BucketHandler struct{}
 
 // NewBucketHandler creates a new bucket handler.
-func NewBucketHandler(adminService services.AdminService, s3Service services.S3Storage) *BucketHandler {
-	return &BucketHandler{
-		adminService: adminService,
-		s3Service:    s3Service,
-	}
+func NewBucketHandler() *BucketHandler {
+	return &BucketHandler{}
 }
 
 // ListBuckets lists all buckets
@@ -36,7 +30,7 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 	ctx := c.Context()
 
 	// List all buckets from Garage Admin API
-	adminBuckets, err := h.adminService.ListBuckets(ctx)
+	adminBuckets, err := getAdminService(c).ListBuckets(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeListFailed, "Failed to list buckets: "+err.Error()),
@@ -56,7 +50,7 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 		}
 
 		// Get detailed bucket info from Admin API to retrieve object count and size
-		detailedInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+		detailedInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 		if err != nil {
 			// If we can't get detailed info, return basic info without stats
 			buckets = append(buckets, models.BucketInfo{
@@ -129,7 +123,7 @@ func (h *BucketHandler) CreateBucket(c fiber.Ctx) error {
 		GlobalAlias: &req.Name,
 	}
 
-	if _, err := h.adminService.CreateBucket(ctx, createBucketReq); err != nil {
+	if _, err := getAdminService(c).CreateBucket(ctx, createBucketReq); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create bucket: "+err.Error()),
 		)
@@ -169,7 +163,7 @@ func (h *BucketHandler) DeleteBucket(c fiber.Ctx) error {
 	}
 
 	// Check if bucket already exists
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	bucketInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check bucket existence: "+err.Error()),
@@ -183,7 +177,7 @@ func (h *BucketHandler) DeleteBucket(c fiber.Ctx) error {
 	}
 
 	// Delete the bucket
-	if err := h.adminService.DeleteBucket(ctx, bucketInfo.ID); err != nil {
+	if err := getAdminService(c).DeleteBucket(ctx, bucketInfo.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete bucket: "+err.Error()),
 		)
@@ -223,7 +217,7 @@ func (h *BucketHandler) GetBucketInfo(c fiber.Ctx) error {
 	}
 
 	// Check if bucket already exists
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	bucketInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check bucket existence: "+err.Error()),
@@ -284,7 +278,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 	}
 
 	// Get bucket info to retrieve bucket ID
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	bucketInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
@@ -314,7 +308,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 	var result *models.GarageBucketInfo
 
 	if allow.Read || allow.Write || allow.Owner {
-		r, err := h.adminService.AllowBucketKey(ctx, models.BucketKeyPermRequest{
+		r, err := getAdminService(c).AllowBucketKey(ctx, models.BucketKeyPermRequest{
 			BucketID:    bucketInfo.ID,
 			AccessKeyID: req.AccessKeyID,
 			Permissions: allow,
@@ -328,7 +322,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 	}
 
 	if deny.Read || deny.Write || deny.Owner {
-		r, err := h.adminService.DenyBucketKey(ctx, models.BucketKeyPermRequest{
+		r, err := getAdminService(c).DenyBucketKey(ctx, models.BucketKeyPermRequest{
 			BucketID:    bucketInfo.ID,
 			AccessKeyID: req.AccessKeyID,
 			Permissions: deny,
@@ -344,7 +338,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 	if result == nil {
 		// Caller passed all-false on a key with no existing perms — nothing to do.
 		// Fetch current bucket state to return a consistent response.
-		r, err := h.adminService.GetBucketInfo(ctx, bucketInfo.ID)
+		r, err := getAdminService(c).GetBucketInfo(ctx, bucketInfo.ID)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeInternalError, "Failed to fetch bucket info: "+err.Error()),
@@ -397,7 +391,7 @@ func (h *BucketHandler) UpdateBucketWebsite(c fiber.Ctx) error {
 		)
 	}
 
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	bucketInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
@@ -424,7 +418,7 @@ func (h *BucketHandler) UpdateBucketWebsite(c fiber.Ctx) error {
 		WebsiteAccess: websiteAccess,
 	}
 
-	result, err := h.adminService.UpdateBucket(ctx, bucketInfo.ID, updateReq)
+	result, err := getAdminService(c).UpdateBucket(ctx, bucketInfo.ID, updateReq)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update bucket website: "+err.Error()),
@@ -476,7 +470,7 @@ func (h *BucketHandler) UpdateBucketQuotas(c fiber.Ctx) error {
 		)
 	}
 
-	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	bucketInfo, err := getAdminService(c).GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
@@ -495,7 +489,7 @@ func (h *BucketHandler) UpdateBucketQuotas(c fiber.Ctx) error {
 		},
 	}
 
-	result, err := h.adminService.UpdateBucket(ctx, bucketInfo.ID, updateReq)
+	result, err := getAdminService(c).UpdateBucket(ctx, bucketInfo.ID, updateReq)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update bucket quotas: "+err.Error()),

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -79,14 +78,12 @@ const previewTokenTTL = time.Hour
 
 // ObjectHandler handles object-related HTTP requests.
 type ObjectHandler struct {
-	s3Service     services.S3Storage
 	previewTokens PreviewTokenMinter
 }
 
 // NewObjectHandler creates a new object handler.
-func NewObjectHandler(s3Service services.S3Storage, previewTokens PreviewTokenMinter) *ObjectHandler {
+func NewObjectHandler(previewTokens PreviewTokenMinter) *ObjectHandler {
 	return &ObjectHandler{
-		s3Service:     s3Service,
 		previewTokens: previewTokens,
 	}
 }
@@ -127,7 +124,7 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	// the backend scans and filters. This bypasses page-token pagination and
 	// max_keys, see S3Service.SearchObjects -> pagination is handled frontend side.
 	if search := c.Query("search", ""); search != "" {
-		results, err := h.s3Service.SearchObjects(ctx, bucketName, prefix, search)
+		results, err := getS3Service(c).SearchObjects(ctx, bucketName, prefix, search)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeListFailed, "Failed to search objects: "+err.Error()),
@@ -150,7 +147,7 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	}
 
 	// List objects in the bucket
-	objects, err := h.s3Service.ListObjects(ctx, bucketName, prefix, maxKeys, continuationToken)
+	objects, err := getS3Service(c).ListObjects(ctx, bucketName, prefix, maxKeys, continuationToken)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeListFailed, "Failed to list objects: "+err.Error()),
@@ -214,7 +211,7 @@ func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 	contentType := file.Header.Get("Content-Type")
 
 	// Upload to Garage
-	uploadResult, err := h.s3Service.UploadObject(ctx, bucketName, key, fileHandle, contentType)
+	uploadResult, err := getS3Service(c).UploadObject(ctx, bucketName, key, fileHandle, contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to upload object: "+err.Error()),
@@ -266,7 +263,7 @@ func (h *ObjectHandler) CreateDirectory(c fiber.Ctx) error {
 		key += "/"
 	}
 
-	result, err := h.s3Service.CreateDirectoryMarker(ctx, bucketName, key)
+	result, err := getS3Service(c).CreateDirectoryMarker(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to create directory: "+err.Error()),
@@ -315,7 +312,7 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 func (h *ObjectHandler) serveFullObject(c fiber.Ctx, bucketName, key string) error {
 	ctx := c.Context()
 
-	body, objectInfo, err := h.s3Service.GetObject(ctx, bucketName, key)
+	body, objectInfo, err := getS3Service(c).GetObject(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
@@ -351,7 +348,7 @@ func (h *ObjectHandler) serveFullObject(c fiber.Ctx, bucketName, key string) err
 func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader string) error {
 	ctx := c.Context()
 
-	info, err := h.s3Service.GetObjectMetadata(ctx, bucketName, key)
+	info, err := getS3Service(c).GetObjectMetadata(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
@@ -368,7 +365,7 @@ func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader
 		return h.serveFullObject(c, bucketName, key)
 	}
 
-	body, err := h.s3Service.GetObjectRange(ctx, bucketName, key, rng.start, rng.end)
+	body, err := getS3Service(c).GetObjectRange(ctx, bucketName, key, rng.start, rng.end)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
@@ -429,7 +426,7 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 	}
 
 	// Check if object exists
-	exists, err := h.s3Service.ObjectExists(ctx, bucketName, key)
+	exists, err := getS3Service(c).ObjectExists(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check object existence: "+err.Error()),
@@ -443,7 +440,7 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 	}
 
 	// Delete the object
-	if err := h.s3Service.DeleteObject(ctx, bucketName, key); err != nil {
+	if err := getS3Service(c).DeleteObject(ctx, bucketName, key); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete object: "+err.Error()),
 		)
@@ -491,7 +488,7 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 	}
 
 	// Get object metadata
-	metadata, err := h.s3Service.GetObjectMetadata(ctx, bucketName, key)
+	metadata, err := getS3Service(c).GetObjectMetadata(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
@@ -552,7 +549,7 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	}
 
 	// Check if object exists
-	exists, err := h.s3Service.ObjectExists(ctx, bucketName, key)
+	exists, err := getS3Service(c).ObjectExists(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check object existence: "+err.Error()),
@@ -566,7 +563,7 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	}
 
 	// Generate pre-signed URL
-	url, err := h.s3Service.GetPresignedURL(ctx, bucketName, key, time.Duration(expiresIn)*time.Second)
+	url, err := getS3Service(c).GetPresignedURL(ctx, bucketName, key, time.Duration(expiresIn)*time.Second)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to generate pre-signed URL: "+err.Error()),
@@ -692,7 +689,7 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 
 	// Delete the individually selected objects in a single batch call.
 	if len(req.Keys) > 0 {
-		n, err := h.s3Service.DeleteMultipleObjects(ctx, bucketName, req.Keys)
+		n, err := getS3Service(c).DeleteMultipleObjects(ctx, bucketName, req.Keys)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete objects: "+err.Error()),
@@ -703,7 +700,7 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 
 	// Recursively delete every object under each selected folder prefix.
 	for _, prefix := range prefixes {
-		n, err := h.s3Service.DeleteObjectsByPrefix(ctx, bucketName, prefix)
+		n, err := getS3Service(c).DeleteObjectsByPrefix(ctx, bucketName, prefix)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete folder "+prefix+": "+err.Error()),
@@ -774,7 +771,9 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	for i, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
-			for _, f := range opened { f.Close() }
+			for _, f := range opened {
+				f.Close()
+			}
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to open file "+fileHeader.Filename+": "+err.Error()),
 			)
@@ -800,10 +799,12 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	}
 
 	// Upload all files using the service method
-	results := h.s3Service.UploadMultipleObjects(ctx, bucketName, uploadFiles)
+	results := getS3Service(c).UploadMultipleObjects(ctx, bucketName, uploadFiles)
 
 	// Close all opened files immediately to free file descriptors
-	for _, f := range opened { f.Close() }
+	for _, f := range opened {
+		f.Close()
+	}
 
 	// Process results and categorize successes and failures
 	var successFiles []models.ObjectUploadResult
@@ -876,7 +877,7 @@ func (h *ObjectHandler) EmptyBucket(c fiber.Ctx) error {
 		)
 	}
 
-	deleted, err := h.s3Service.DeleteAllObjects(ctx, bucketName)
+	deleted, err := getS3Service(c).DeleteAllObjects(ctx, bucketName)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to empty bucket: "+err.Error()),

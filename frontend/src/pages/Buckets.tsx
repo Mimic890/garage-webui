@@ -10,9 +10,13 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { bucketsApi } from '@/lib/api';
 import type { Bucket } from '@/types';
+import { useClusterStore } from '@/store/cluster-store';
+import { Navigate } from 'react-router-dom';
+import { useTranslation } from '@/lib/i18n';
 
 export function Buckets() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Bucket | null>(null);
@@ -21,6 +25,7 @@ export function Buckets() {
   const { data: buckets = [], isLoading } = useBuckets();
   const createMutation = useCreateBucket();
   const deleteMutation = useDeleteBucket();
+  const { clusters } = useClusterStore();
 
   const createBucket = async (name: string, region?: string) => {
     try {
@@ -31,15 +36,19 @@ export function Buckets() {
     }
   };
 
+  if (clusters.length === 0) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div>
       <PageHeader
-        title="Buckets"
-        subtitle={`${buckets.length} bucket${buckets.length === 1 ? '' : 's'}`}
+        title={t('buckets.title')}
+        subtitle={`${buckets.length} ${t('nav.buckets').toLowerCase()}`}
         actions={
           hasAnyPerm('bucket.create') && (
             <Button onClick={() => setCreateOpen(true)}>
-              <Plus /> Create bucket
+              <Plus /> {t('buckets.create')}
             </Button>
           )
         }
