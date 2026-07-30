@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 )
 
 // newAdminTestServer wires an httptest.Server (with the supplied handler) to a
@@ -22,7 +22,7 @@ func newAdminTestServer(t *testing.T, handler http.Handler) (*GarageV2AdminServi
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	svc := NewGarageV2AdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token-xyz",
 	}, "")
@@ -579,7 +579,7 @@ func TestAllMethods_Non2xxReturnsError(t *testing.T) {
 // TestDebugLogLevelEnablesSessionLog exercises the NewGarageV2AdminService
 // branch that enables azuretls' session logging when logLevel == "debug".
 func TestDebugLogLevelEnablesSessionLog(t *testing.T) {
-	svc := NewGarageV2AdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: "http://127.0.0.1:1",
 		AdminToken:    "t",
 	}, "debug")
@@ -598,7 +598,7 @@ func TestDoRequest_RetriesExhaustOnConnectionRefused(t *testing.T) {
 		t.Fatalf("close listener: %v", err)
 	}
 
-	svc := NewGarageV2AdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: "http://" + addr,
 		AdminToken:    "irrelevant",
 	}, "")

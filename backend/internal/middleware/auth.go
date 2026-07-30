@@ -19,11 +19,10 @@ import (
 // tried and a reason — never the token value.
 func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// If no auth is enabled, allow all requests.
-		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled && !cfg.Token.Enabled {
+		// Allow unauthenticated access to the setup endpoint
+		if strings.HasPrefix(c.Path(), "/api/v1/panel/setup") {
 			return c.Next()
 		}
-
 		// Preview tokens authenticate object GETs from media elements, which
 		// cannot send an Authorization header. The token was minted behind an
 		// object.read check, names one exact object, and expires on its own.
@@ -52,7 +51,7 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Han
 		authHeader := c.Get("Authorization")
 
 		// Try bearer token auth (works for admin, token, or any JWT session)
-		if (cfg.Admin.Enabled || cfg.Token.Enabled) && authHeader != "" {
+		if authHeader != "" {
 			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 				token := authHeader[7:]
 				userInfo, err := authService.ValidateSessionToken(token)

@@ -10,15 +10,11 @@ import (
 )
 
 // UserHandler handles user and access key HTTP requests.
-type UserHandler struct {
-	adminService services.AdminService
-}
+type UserHandler struct{}
 
 // NewUserHandler creates a new user handler.
-func NewUserHandler(adminService services.AdminService) *UserHandler {
-	return &UserHandler{
-		adminService: adminService,
-	}
+func NewUserHandler() *UserHandler {
+	return &UserHandler{}
 }
 
 // ListUsers lists all users/access keys
@@ -33,7 +29,7 @@ func NewUserHandler(adminService services.AdminService) *UserHandler {
 func (h *UserHandler) ListUsers(c fiber.Ctx) error {
 	ctx := c.Context()
 
-	keys, err := h.adminService.ListKeys(ctx)
+	keys, err := getAdminService(c).ListKeys(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to list users: "+err.Error()),
@@ -44,7 +40,7 @@ func (h *UserHandler) ListUsers(c fiber.Ctx) error {
 	users := make([]models.UserInfo, 0, len(keys))
 	for _, key := range keys {
 		// Get full key info to retrieve bucket permissions
-		keyInfo, err := h.adminService.GetKeyInfo(ctx, key.ID, false)
+		keyInfo, err := getAdminService(c).GetKeyInfo(ctx, key.ID, false)
 		if err != nil {
 			// If we can't get full info, skip this key or use basic info
 			continue
@@ -133,7 +129,7 @@ func (h *UserHandler) CreateUser(c fiber.Ctx) error {
 	}
 
 	// Create the key
-	keyInfo, err := h.adminService.CreateKey(ctx, createReq)
+	keyInfo, err := getAdminService(c).CreateKey(ctx, createReq)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create user: "+err.Error()),
@@ -186,7 +182,7 @@ func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
 	}
 
 	// Delete the key
-	err := h.adminService.DeleteKey(ctx, accessKey)
+	err := getAdminService(c).DeleteKey(ctx, accessKey)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to delete user: "+err.Error()),
@@ -225,7 +221,7 @@ func (h *UserHandler) GetUser(c fiber.Ctx) error {
 	}
 
 	// Get key information (without secret key)
-	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, false)
+	keyInfo, err := getAdminService(c).GetKeyInfo(ctx, accessKey, false)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get user info: "+err.Error()),
@@ -277,7 +273,7 @@ func (h *UserHandler) GetUserSecretKey(c fiber.Ctx) error {
 	}
 
 	// Get key information WITH secret key
-	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, true)
+	keyInfo, err := getAdminService(c).GetKeyInfo(ctx, accessKey, true)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get secret key: "+err.Error()),
@@ -349,7 +345,7 @@ func (h *UserHandler) UpdateUserPermissions(c fiber.Ctx) error {
 	}
 
 	// Update the key
-	keyInfo, err := h.adminService.UpdateKey(ctx, accessKey, updateReq)
+	keyInfo, err := getAdminService(c).UpdateKey(ctx, accessKey, updateReq)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update user: "+err.Error()),

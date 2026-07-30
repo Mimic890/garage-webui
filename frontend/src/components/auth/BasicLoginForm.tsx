@@ -4,24 +4,15 @@ import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LogIn } from 'lucide-react';
-import type { AuthConfig } from '@/types/auth';
-
-interface BasicLoginFormProps {
-  showOIDC?: boolean;
-  config?: AuthConfig | null;
-}
-
-export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps) {
+export function BasicLoginForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { loginAdmin, loginOIDC } = useAuthStore();
+  const { loginAdmin } = useAuthStore();
 
   const returnUrl = searchParams.get('returnUrl') || '/';
-  const providerName = config?.oidc?.provider || 'OIDC Provider';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +67,6 @@ export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
               disabled={isLoading}
               autoComplete="current-password"
             />
@@ -84,30 +74,11 @@ export function BasicLoginForm({ showOIDC = false, config }: BasicLoginFormProps
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading || !username || !password}
+            disabled={isLoading || !username}
           >
             {isLoading ? 'Signing in...' : 'Sign in'}
           </Button>
         </form>
-
-        {showOIDC && (
-          <div className="mt-4">
-            <div className="relative mb-4">
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-card px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={loginOIDC}
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign in with {providerName}
-            </Button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
