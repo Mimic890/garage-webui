@@ -18,6 +18,22 @@ import (
 	//_ "Noooste/garage-ui/docs"
 )
 
+// setupOptions holds optional overrides for SetupRoutes (primarily for tests).
+type setupOptions struct {
+	clusterMW fiber.Handler
+}
+
+// SetupOption configures optional SetupRoutes behaviour.
+type SetupOption func(*setupOptions)
+
+// WithClusterMiddleware replaces the default X-Cluster-Id middleware.
+// Tests use this with middleware.StaticClusterMiddleware to inject mocks.
+func WithClusterMiddleware(mw fiber.Handler) SetupOption {
+	return func(o *setupOptions) {
+		o.clusterMW = mw
+	}
+}
+
 // SetupRoutes configures all API routes
 func SetupRoutes(
 	app *fiber.App,
@@ -32,7 +48,16 @@ func SetupRoutes(
 	capabilitiesHandler *handlers.CapabilitiesHandler,
 	az *authz.Middleware,
 	stateManager *state.Manager,
+	opts ...SetupOption,
 ) {
+	so := setupOptions{
+		clusterMW: middleware.ClusterMiddleware(stateManager),
+	}
+	for _, opt := range opts {
+		opt(&so)
+	}
+	clusterMW := so.clusterMW
+
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
 
@@ -59,8 +84,10 @@ func SetupRoutes(
 	// authenticated /api/v1/monitoring/metrics route is unaffected. Because it is
 	// registered before the SPA fallback below, Fiber matches it first.
 	// Protect it at the network layer (NetworkPolicy / trusted scrape network).
+	// clusterMW injects Admin/S3 locals (static mocks in tests; real cluster
+	// resolution in production requires X-Cluster-Id on this path too).
 	if cfg.Auth.MetricsPublic {
-		app.Get("/metrics", monitoringHandler.GetMetrics)
+		app.Get("/metrics", clusterMW, monitoringHandler.GetMetrics)
 	}
 
 	// API v1 group
@@ -68,9 +95,9 @@ func SetupRoutes(
 
 	// Apply authentication middleware to all API routes
 	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
-	
+
 	// Apply cluster middleware to inject cluster services based on X-Cluster-Id
-	api.Use(middleware.ClusterMiddleware(stateManager))
+	api.Use(clusterMW)
 
 	// Resolve the authz Subject once per request, right after authentication.
 	api.Use(az.ResolveSubject())
@@ -155,9 +182,9 @@ func SetupRoutes(
 	// api, the api group's .Use() middlewares (AuthMiddleware, ResolveSubject)
 	// cascade onto them by path prefix, so ResolveSubject is not repeated here
 	// (TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade locks that in).
-	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
-	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
-	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), middleware.ClusterMiddleware(stateManager), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
+	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
+	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
+	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
 
 	// Access Control (Users/Keys) routes
 	users := api.Group("/users")

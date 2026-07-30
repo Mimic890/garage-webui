@@ -16,22 +16,20 @@ import (
 	"Noooste/garage-ui/internal/models"
 )
 
-// newNoAuthFixture builds a fixture with both admin and OIDC disabled. The
-// AuthMiddleware short-circuits with c.Next(), letting handler logic run so
-// wildcard-route dispatch can be exercised.
-func newNoAuthFixture(t *testing.T) *routeFixture {
+// newAuthedFixture builds a fixture with admin auth enabled and disabled
+// access_control (Require is passthrough). Used to exercise handler dispatch
+// without real Garage services (mocks injected via StaticClusterMiddleware).
+func newAuthedFixture(t *testing.T) *routeFixture {
 	return newTestApp(t, func(c *config.Config) {
-		c.Auth.Admin.Enabled = false
+		c.Auth.Admin.Enabled = true
+		c.Auth.Admin.Username = "admin"
+		c.Auth.Admin.Password = "pw"
 		c.Auth.OIDC.Enabled = false
 	})
 }
 
-func plainReq(method, path string, body io.Reader) *http.Request {
-	return httptest.NewRequest(method, path, body)
-}
-
 func TestRoutes_ObjectWildcard_GET_DefaultRoutesToGetObject(t *testing.T) {
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	var gotBucket, gotKey string
 	f.S3.GetObjectFn = func(_ context.Context, bucket, key string) (io.ReadCloser, *models.ObjectInfo, error) {
@@ -39,7 +37,7 @@ func TestRoutes_ObjectWildcard_GET_DefaultRoutesToGetObject(t *testing.T) {
 		return io.NopCloser(strings.NewReader("hello")), &models.ObjectInfo{Key: key, Size: 5, ContentType: "text/plain"}, nil
 	}
 
-	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/folder/subdir/file.txt", nil)
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/objects/folder/subdir/file.txt")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -54,7 +52,7 @@ func TestRoutes_ObjectWildcard_GET_DefaultRoutesToGetObject(t *testing.T) {
 }
 
 func TestRoutes_ObjectWildcard_GET_MetadataSuffixRoutesToMetadata(t *testing.T) {
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	var gotKey string
 	f.S3.GetObjectMetadataFn = func(_ context.Context, _ string, key string) (*models.ObjectInfo, error) {
@@ -62,7 +60,7 @@ func TestRoutes_ObjectWildcard_GET_MetadataSuffixRoutesToMetadata(t *testing.T) 
 		return &models.ObjectInfo{Key: key, Size: 42, ContentType: "application/json"}, nil
 	}
 
-	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/data/file.bin/metadata", nil)
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/objects/data/file.bin/metadata")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -78,7 +76,7 @@ func TestRoutes_ObjectWildcard_GET_MetadataSuffixRoutesToMetadata(t *testing.T) 
 }
 
 func TestRoutes_ObjectWildcard_GET_PresignSuffixRoutesToPresigned(t *testing.T) {
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	// The object must exist for the presign handler to succeed.
 	f.S3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
@@ -89,7 +87,7 @@ func TestRoutes_ObjectWildcard_GET_PresignSuffixRoutesToPresigned(t *testing.T) 
 		return "https://signed.example/k", nil
 	}
 
-	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/sub/file.bin/presign", nil)
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/objects/sub/file.bin/presign")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -104,8 +102,8 @@ func TestRoutes_ObjectWildcard_GET_PresignSuffixRoutesToPresigned(t *testing.T) 
 }
 
 func TestRoutes_ObjectWildcard_GET_PreviewURLSuffixRoutesToPreviewURL(t *testing.T) {
-	f := newNoAuthFixture(t)
-	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/sub/clip.mp4/preview-url", nil)
+	f := newAuthedFixture(t)
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/objects/sub/clip.mp4/preview-url")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -128,7 +126,7 @@ func TestRoutes_ObjectWildcard_GET_PreviewURLSuffixRoutesToPreviewURL(t *testing
 }
 
 func TestRoutes_ObjectWildcard_DELETE_RoutesToDeleteObject(t *testing.T) {
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	f.S3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
 
@@ -138,7 +136,7 @@ func TestRoutes_ObjectWildcard_DELETE_RoutesToDeleteObject(t *testing.T) {
 		return nil
 	}
 
-	req := plainReq(http.MethodDelete, "/api/v1/buckets/b1/objects/path/to/delete.txt", nil)
+	req := f.authedRequest(t, http.MethodDelete, "/api/v1/buckets/b1/objects/path/to/delete.txt")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -153,7 +151,7 @@ func TestRoutes_ObjectWildcard_DELETE_RoutesToDeleteObject(t *testing.T) {
 }
 
 func TestRoutes_ObjectWildcard_HEAD_RoutesToMetadata(t *testing.T) {
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	var gotKey string
 	f.S3.GetObjectMetadataFn = func(_ context.Context, _ string, key string) (*models.ObjectInfo, error) {
@@ -161,7 +159,7 @@ func TestRoutes_ObjectWildcard_HEAD_RoutesToMetadata(t *testing.T) {
 		return &models.ObjectInfo{Key: key, Size: 7, ContentType: "text/plain"}, nil
 	}
 
-	req := plainReq(http.MethodHead, "/api/v1/buckets/b1/objects/deep/nested/x.txt", nil)
+	req := f.authedRequest(t, http.MethodHead, "/api/v1/buckets/b1/objects/deep/nested/x.txt")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -177,7 +175,7 @@ func TestRoutes_ObjectWildcard_HEAD_RoutesToMetadata(t *testing.T) {
 
 func TestRoutes_ObjectWildcard_URLDecodedBeforeDispatch(t *testing.T) {
 	// %20 in the wildcard portion must be decoded before the service is called.
-	f := newNoAuthFixture(t)
+	f := newAuthedFixture(t)
 
 	var gotKey string
 	f.S3.GetObjectFn = func(_ context.Context, _, key string) (io.ReadCloser, *models.ObjectInfo, error) {
@@ -185,7 +183,7 @@ func TestRoutes_ObjectWildcard_URLDecodedBeforeDispatch(t *testing.T) {
 		return io.NopCloser(strings.NewReader("")), &models.ObjectInfo{Key: key}, nil
 	}
 
-	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/with%20space/file.txt", nil)
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/objects/with%20space/file.txt")
 	resp, err := f.App.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
