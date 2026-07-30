@@ -1,7 +1,42 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 
-export type Palette = 'warm' | 'sage' | 'cobalt' | 'lavender' | 'moss' | 'berry';
+/**
+ * Palette ids. Catppuccin ships all four official flavors as separate palettes
+ * (Latte is light; Frappé / Macchiato / Mocha are dark). GitHub and Kanagawa
+ * pair with the light/dark mode toggle; Warm is the brand default.
+ */
+export type Palette =
+  | 'warm'
+  | 'catppuccin-latte'
+  | 'catppuccin-frappe'
+  | 'catppuccin-macchiato'
+  | 'catppuccin-mocha'
+  | 'github'
+  | 'kanagawa';
+
 export type Mode = 'dark' | 'light';
+
+export const ALL_PALETTES: Palette[] = [
+  'warm',
+  'catppuccin-latte',
+  'catppuccin-frappe',
+  'catppuccin-macchiato',
+  'catppuccin-mocha',
+  'github',
+  'kanagawa',
+];
+
+/** Preferred brightness for palettes that are authentically one-sided. */
+export const PALETTE_PREFERRED_MODE: Partial<Record<Palette, Mode>> = {
+  'catppuccin-latte': 'light',
+  'catppuccin-frappe': 'dark',
+  'catppuccin-macchiato': 'dark',
+  'catppuccin-mocha': 'dark',
+};
+
+function isPalette(value: string | null): value is Palette {
+  return value !== null && (ALL_PALETTES as string[]).includes(value);
+}
 
 interface ThemeProviderProps {
   children: React.ReactNode;
@@ -37,19 +72,35 @@ export function ThemeProvider({
   storageKeyPrefix = 'garage-ui',
   ...props
 }: ThemeProviderProps) {
-  const [palette, setPaletteState] = useState<Palette>(
-    () => (localStorage.getItem(`${storageKeyPrefix}-palette`) as Palette) || defaultPalette
-  );
+  const [palette, setPaletteState] = useState<Palette>(() => {
+    const stored = localStorage.getItem(`${storageKeyPrefix}-palette`);
+    return isPalette(stored) ? stored : defaultPalette;
+  });
 
-  const [mode, setModeState] = useState<Mode>(
-    () => (localStorage.getItem(`${storageKeyPrefix}-mode`) as Mode) || defaultMode
-  );
+  const [mode, setModeState] = useState<Mode>(() => {
+    const stored = localStorage.getItem(`${storageKeyPrefix}-mode`) as Mode | null;
+    if (stored === 'dark' || stored === 'light') return stored;
+    return defaultMode;
+  });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    const allPalettes = ['warm', 'sage', 'cobalt', 'lavender', 'moss', 'berry'];
 
-    root.classList.remove(...allPalettes);
+    // Clear current + legacy palette classes.
+    root.classList.remove(
+      'warm',
+      'catppuccin-latte',
+      'catppuccin-frappe',
+      'catppuccin-macchiato',
+      'catppuccin-mocha',
+      'github',
+      'kanagawa',
+      'sage',
+      'cobalt',
+      'lavender',
+      'moss',
+      'berry'
+    );
 
     if (mode === 'dark') {
       root.classList.add('dark');
@@ -60,14 +111,28 @@ export function ThemeProvider({
     root.classList.add(palette);
   }, [palette, mode]);
 
+  const setMode = (m: Mode) => {
+    // On Catppuccin, light/dark maps across flavors so the toggle still works:
+    // light → Latte, dark → Mocha (pick Frappé / Macchiato from the list).
+    localStorage.setItem(`${storageKeyPrefix}-mode`, m);
+    setModeState(m);
+    if (palette.startsWith('catppuccin-')) {
+      const next: Palette = m === 'light' ? 'catppuccin-latte' : 'catppuccin-mocha';
+      localStorage.setItem(`${storageKeyPrefix}-palette`, next);
+      setPaletteState(next);
+    }
+  };
+
   const setPalette = (p: Palette) => {
     localStorage.setItem(`${storageKeyPrefix}-palette`, p);
     setPaletteState(p);
-  };
-
-  const setMode = (m: Mode) => {
-    localStorage.setItem(`${storageKeyPrefix}-mode`, m);
-    setModeState(m);
+    // Catppuccin flavors are fixed brightness — keep mode in sync so charts
+    // and any .dark-dependent UI stay correct.
+    const preferred = PALETTE_PREFERRED_MODE[p];
+    if (preferred) {
+      localStorage.setItem(`${storageKeyPrefix}-mode`, preferred);
+      setModeState(preferred);
+    }
   };
 
   const value: ThemeProviderState = {
@@ -93,5 +158,3 @@ export const useTheme = () => {
 
   return context;
 };
-
-
