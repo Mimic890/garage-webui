@@ -164,20 +164,6 @@ func (s *GarageV2AdminService) DeleteKey(ctx context.Context, keyID string) erro
 	return nil
 }
 
-// ImportKey imports an existing API access key
-func (s *GarageV2AdminService) ImportKey(ctx context.Context, req models.ImportKeyRequest) (*models.GarageKeyInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/ImportKey", req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-
-	var result models.GarageKeyInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
 
 // ListBuckets returns all buckets in the cluster.
 func (s *GarageV2AdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
@@ -359,35 +345,7 @@ func (s *GarageV2AdminService) DeleteBucket(ctx context.Context, bucketID string
 	return nil
 }
 
-// AddBucketAlias adds an alias to a bucket
-func (s *GarageV2AdminService) AddBucketAlias(ctx context.Context, req models.AddBucketAliasRequest) (*models.GarageBucketInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/AddBucketAlias", req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
 
-	var result models.GarageBucketInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// RemoveBucketAlias removes an alias from a bucket
-func (s *GarageV2AdminService) RemoveBucketAlias(ctx context.Context, req models.RemoveBucketAliasRequest) (*models.GarageBucketInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/RemoveBucketAlias", req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-
-	var result models.GarageBucketInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
 
 // AllowBucketKey grants permissions for a key on a bucket.
 func (s *GarageV2AdminService) AllowBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {

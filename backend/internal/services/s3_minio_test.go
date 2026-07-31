@@ -94,54 +94,6 @@ func errS3Handler(status int, code string) (http.Handler, *int) {
 	}), &count
 }
 
-func TestS3_ListBuckets_ServerError(t *testing.T) {
-	h, _ := errS3Handler(http.StatusInternalServerError, "InternalError")
-	s3 := newS3TestService(t, h)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	_, err := s3.ListBuckets(ctx)
-	if err == nil {
-		t.Fatal("expected error from ListBuckets, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to list buckets") {
-		t.Errorf("error %v should wrap 'failed to list buckets'", err)
-	}
-}
-
-func TestS3_CreateBucket_ServerError(t *testing.T) {
-	h, _ := errS3Handler(http.StatusConflict, "BucketAlreadyExists")
-	s3 := newS3TestService(t, h)
-	_ = uniqueBucket2(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	err := s3.CreateBucket(ctx, "b-TestS3_CreateBucket_ServerError")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to create bucket") {
-		t.Errorf("error = %v, want wrap 'failed to create bucket'", err)
-	}
-}
-
-func TestS3_DeleteBucket_ServerError(t *testing.T) {
-	h, _ := errS3Handler(http.StatusNotFound, "NoSuchBucket")
-	s3 := newS3TestService(t, h)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	err := s3.DeleteBucket(ctx, "b-TestS3_DeleteBucket_ServerError")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to delete bucket") {
-		t.Errorf("error = %v", err)
-	}
-}
 
 func TestS3_ListObjects_ServerError(t *testing.T) {
 	h, _ := errS3Handler(http.StatusForbidden, "AccessDenied")

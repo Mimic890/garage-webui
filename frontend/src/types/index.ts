@@ -89,25 +89,6 @@ export interface BucketPermission {
   owner: boolean;
 }
 
-export interface Permission {
-  resource: string;
-  actions: string[];
-  effect: 'Allow' | 'Deny';
-}
-
-export interface BucketPolicy {
-  bucketName: string;
-  policy: PolicyStatement[];
-}
-
-export interface PolicyStatement {
-  sid?: string;
-  effect: 'Allow' | 'Deny';
-  principal: string | string[];
-  action: string | string[];
-  resource: string | string[];
-  condition?: Record<string, any>;
-}
 
 // User types
 export interface User {
@@ -160,14 +141,6 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-// Filter and Sort types
-export interface TableFilter {
-  search?: string;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-  pageSize?: number;
-  page?: number;
-}
 
 // Garage Cluster types
 export interface ClusterHealth {
