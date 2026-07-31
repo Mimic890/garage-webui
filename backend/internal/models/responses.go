@@ -193,19 +193,15 @@ func ErrorResponse(code, message string) APIResponse {
 
 // Common error codes
 const (
-	ErrCodeBadRequest        = "BAD_REQUEST"
-	ErrCodeUnauthorized      = "UNAUTHORIZED"
-	ErrCodeForbidden         = "FORBIDDEN"
-	ErrCodeNotFound          = "NOT_FOUND"
-	ErrCodeConflict          = "CONFLICT"
-	ErrCodeInternalError     = "INTERNAL_ERROR"
-	ErrCodeBucketExists      = "BUCKET_ALREADY_EXISTS"
+	ErrCodeBadRequest    = "BAD_REQUEST"
+	ErrCodeUnauthorized  = "UNAUTHORIZED"
+	ErrCodeForbidden     = "FORBIDDEN"
+	ErrCodeNotFound      = "NOT_FOUND"
+	ErrCodeInternalError = "INTERNAL_ERROR"
+	ErrCodeUnsupported   = "UNSUPPORTED"
 	ErrCodeBucketNotFound    = "BUCKET_NOT_FOUND"
 	ErrCodeObjectNotFound    = "OBJECT_NOT_FOUND"
-	ErrCodeInvalidBucketName = "INVALID_BUCKET_NAME"
-	ErrCodeInvalidObjectKey  = "INVALID_OBJECT_KEY"
 	ErrCodeUploadFailed      = "UPLOAD_FAILED"
 	ErrCodeDeleteFailed      = "DELETE_FAILED"
 	ErrCodeListFailed        = "LIST_FAILED"
-	ErrCodeUnsupported       = "UNSUPPORTED"
 )

@@ -9,7 +9,6 @@ import type {
   ClusterStatistics,
   ClusterStatus,
   GarageCapabilities,
-  GarageMetrics,
   MultiNodeResponse,
   MultiNodeStatisticsResponse,
   ObjectListResponse,
@@ -203,13 +202,6 @@ export const authApi = {
   },
 };
 
-// Health API
-export const healthApi = {
-  getVersion: async (): Promise<string> => {
-    const response = await api.get('/v1/health');
-    return response.data.data.version as string;
-  },
-};
 
 // Capabilities API
 export const capabilitiesApi = {
@@ -255,9 +247,6 @@ export const bucketsApi = {
     });
   },
 
-  updateSettings: async (name: string, settings: Partial<BucketDetails>): Promise<void> => {
-    await api.patch(`/v1/buckets/${name}/settings`, settings);
-  },
 
   updateBucketWebsite: async (
     name: string,
@@ -506,35 +495,6 @@ export const garageApi = {
     return response.data.data;
   },
 
-  getFullMetrics: async (): Promise<GarageMetrics> => {
-    // Fetch all cluster-related metrics
-    const [health, statistics, storageMetrics] = await Promise.all([
-      garageApi.getClusterHealth(),
-      garageApi.getClusterStatistics(),
-      analyticsApi.getMetrics(),
-    ]);
-
-    return {
-      ...storageMetrics,
-      clusterHealth: health,
-      clusterStatistics: statistics,
-    };
-  },
-};
-
-// Monitoring API
-export const monitoringApi = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getMetrics: async (): Promise<any> => {
-    const response = await api.get('/v1/monitoring/metrics');
-    return response.data.data;
-  },
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  checkAdminHealth: async (): Promise<any> => {
-    const response = await api.get('/v1/monitoring/admin-health');
-    return response.data.data;
-  },
 };
 
 export default api;
