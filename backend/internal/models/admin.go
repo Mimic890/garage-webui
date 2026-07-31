@@ -55,12 +55,6 @@ type UpdateKeyRequest struct {
 	Deny         *KeyPermissions `json:"deny,omitempty"`
 }
 
-// ImportKeyRequest represents the request to import an existing key
-type ImportKeyRequest struct {
-	AccessKeyID     string  `json:"accessKeyId"`
-	SecretAccessKey string  `json:"secretAccessKey"`
-	Name            *string `json:"name,omitempty"`
-}
 
 // ListKeysResponseItem represents a single key in the list response
 type ListKeysResponseItem struct {
@@ -152,21 +146,6 @@ type BucketLocalAlias struct {
 	Alias       string `json:"alias"`
 }
 
-// AddBucketAliasRequest represents the request to add a bucket alias
-type AddBucketAliasRequest struct {
-	BucketID    string  `json:"bucketId"`
-	GlobalAlias *string `json:"globalAlias,omitempty"`
-	LocalAlias  *string `json:"localAlias,omitempty"`
-	AccessKeyID *string `json:"accessKeyId,omitempty"`
-}
-
-// RemoveBucketAliasRequest represents the request to remove a bucket alias
-type RemoveBucketAliasRequest struct {
-	BucketID    string  `json:"bucketId"`
-	GlobalAlias *string `json:"globalAlias,omitempty"`
-	LocalAlias  *string `json:"localAlias,omitempty"`
-	AccessKeyID *string `json:"accessKeyId,omitempty"`
-}
 
 // BucketKeyPermRequest represents a request to change bucket-key permissions
 type BucketKeyPermRequest struct {
@@ -241,20 +220,6 @@ type NodeRole struct {
 type FreeSpaceInfo struct {
 	Available int64 `json:"available"`
 	Total     int64 `json:"total"`
-}
-
-// NodeInfoResponse represents the response for GetNodeInfo
-type NodeInfoResponse struct {
-	NodeID         string   `json:"nodeId"`
-	GarageVersion  string   `json:"garageVersion"`
-	RustVersion    string   `json:"rustVersion"`
-	DBEngine       string   `json:"dbEngine"`
-	GarageFeatures []string `json:"garageFeatures,omitempty"`
-}
-
-// NodeStatisticsResponse represents the response for GetNodeStatistics
-type NodeStatisticsResponse struct {
-	Freeform string `json:"freeform"`
 }
 
 // MultiNodeResponse represents responses from multiple nodes

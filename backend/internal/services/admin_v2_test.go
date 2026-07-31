@@ -218,26 +218,6 @@ func TestDeleteKey_NoBodyOnSuccess(t *testing.T) {
 	}
 }
 
-func TestImportKey_PostsToImportEndpoint(t *testing.T) {
-	want := &models.GarageKeyInfo{AccessKeyID: "imported"}
-	h, rec := recordingHandler(t, http.StatusOK, want)
-	svc, _ := newAdminTestServer(t, h)
-
-	req := models.ImportKeyRequest{
-		AccessKeyID:     "imported",
-		SecretAccessKey: "shhh",
-	}
-	got, err := svc.ImportKey(context.Background(), req)
-	if err != nil {
-		t.Fatalf("ImportKey: %v", err)
-	}
-	if rec.path != "/v2/ImportKey" {
-		t.Errorf("path = %q", rec.path)
-	}
-	if got.AccessKeyID != "imported" {
-		t.Errorf("AccessKeyID = %q, want imported", got.AccessKeyID)
-	}
-}
 
 func TestListBuckets_Success(t *testing.T) {
 	want := []models.ListBucketsResponseItem{{ID: "b1"}, {ID: "b2"}}
@@ -329,22 +309,7 @@ func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 		fn   func(s *GarageV2AdminService) error
 		path string
 	}{
-		{
-			name: "AddBucketAlias",
-			fn: func(s *GarageV2AdminService) error {
-				_, err := s.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{})
-				return err
-			},
-			path: "/v2/AddBucketAlias",
-		},
-		{
-			name: "RemoveBucketAlias",
-			fn: func(s *GarageV2AdminService) error {
-				_, err := s.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{})
-				return err
-			},
-			path: "/v2/RemoveBucketAlias",
-		},
+
 		{
 			name: "AllowBucketKey",
 			fn: func(s *GarageV2AdminService) error {
@@ -548,15 +513,14 @@ func TestAllMethods_Non2xxReturnsError(t *testing.T) {
 		"GetKeyInfo":           func() error { _, err := svc.GetKeyInfo(ctx, "k", false); return err },
 		"UpdateKey":            func() error { _, err := svc.UpdateKey(ctx, "k", models.UpdateKeyRequest{}); return err },
 		"DeleteKey":            func() error { return svc.DeleteKey(ctx, "k") },
-		"ImportKey":            func() error { _, err := svc.ImportKey(ctx, models.ImportKeyRequest{}); return err },
+
 		"ListBuckets":          func() error { _, err := svc.ListBuckets(ctx); return err },
 		"GetBucketInfo":        func() error { _, err := svc.GetBucketInfo(ctx, "b"); return err },
 		"GetBucketInfoByAlias": func() error { _, err := svc.GetBucketInfoByAlias(ctx, "b"); return err },
 		"CreateBucket":         func() error { _, err := svc.CreateBucket(ctx, models.CreateBucketAdminRequest{}); return err },
 		"UpdateBucket":         func() error { _, err := svc.UpdateBucket(ctx, "b", models.UpdateBucketRequest{}); return err },
 		"DeleteBucket":         func() error { return svc.DeleteBucket(ctx, "b") },
-		"AddBucketAlias":       func() error { _, err := svc.AddBucketAlias(ctx, models.AddBucketAliasRequest{}); return err },
-		"RemoveBucketAlias":    func() error { _, err := svc.RemoveBucketAlias(ctx, models.RemoveBucketAliasRequest{}); return err },
+
 		"AllowBucketKey":       func() error { _, err := svc.AllowBucketKey(ctx, models.BucketKeyPermRequest{}); return err },
 		"DenyBucketKey":        func() error { _, err := svc.DenyBucketKey(ctx, models.BucketKeyPermRequest{}); return err },
 		"GetClusterHealth":     func() error { _, err := svc.GetClusterHealth(ctx); return err },
