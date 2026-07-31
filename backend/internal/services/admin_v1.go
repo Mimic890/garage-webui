@@ -119,17 +119,6 @@ func (s *GarageV1AdminService) DeleteKey(ctx context.Context, keyID string) erro
 	return nil
 }
 
-func (s *GarageV1AdminService) ImportKey(ctx context.Context, req models.ImportKeyRequest) (*models.GarageKeyInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodPost, "/v1/key/import", req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	var result models.GarageKeyInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-	return &result, nil
-}
 
 func (s *GarageV1AdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
 	log := logpkg.FromCtx(ctx).With().Str("component", "admin-v1").Str("operation", "list_buckets").Logger()
@@ -238,45 +227,6 @@ func (s *GarageV1AdminService) DenyBucketKey(ctx context.Context, req models.Buc
 	return &result, nil
 }
 
-func (s *GarageV1AdminService) AddBucketAlias(ctx context.Context, req models.AddBucketAliasRequest) (*models.GarageBucketInfo, error) {
-	var path string
-	if req.GlobalAlias != nil {
-		path = fmt.Sprintf("/v1/bucket/alias/global?id=%s&alias=%s", req.BucketID, *req.GlobalAlias)
-	} else if req.LocalAlias != nil && req.AccessKeyID != nil {
-		path = fmt.Sprintf("/v1/bucket/alias/local?id=%s&accessKeyId=%s&alias=%s", req.BucketID, *req.AccessKeyID, *req.LocalAlias)
-	} else {
-		return nil, fmt.Errorf("AddBucketAlias requires either globalAlias or localAlias+accessKeyId")
-	}
-	resp, err := s.doRequest(ctx, http.MethodPut, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	var result models.GarageBucketInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-	return &result, nil
-}
-
-func (s *GarageV1AdminService) RemoveBucketAlias(ctx context.Context, req models.RemoveBucketAliasRequest) (*models.GarageBucketInfo, error) {
-	var path string
-	if req.GlobalAlias != nil {
-		path = fmt.Sprintf("/v1/bucket/alias/global?id=%s&alias=%s", req.BucketID, *req.GlobalAlias)
-	} else if req.LocalAlias != nil && req.AccessKeyID != nil {
-		path = fmt.Sprintf("/v1/bucket/alias/local?id=%s&accessKeyId=%s&alias=%s", req.BucketID, *req.AccessKeyID, *req.LocalAlias)
-	} else {
-		return nil, fmt.Errorf("RemoveBucketAlias requires either globalAlias or localAlias+accessKeyId")
-	}
-	resp, err := s.doRequest(ctx, http.MethodDelete, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	var result models.GarageBucketInfo
-	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-	return &result, nil
-}
 
 func (s *GarageV1AdminService) GetClusterHealth(ctx context.Context) (*models.ClusterHealth, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v1/health", nil)

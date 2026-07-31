@@ -190,24 +190,6 @@ func TestV1_DeleteKey(t *testing.T) {
 	}
 }
 
-func TestV1_ImportKey(t *testing.T) {
-	want := &models.GarageKeyInfo{AccessKeyID: "GKimported"}
-	svc, rec := newV1RecordingServer(t, 200, want)
-
-	got, err := svc.ImportKey(context.Background(), models.ImportKeyRequest{
-		AccessKeyID:     "GKimported",
-		SecretAccessKey: "secret",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.method != http.MethodPost || rec.path != "/v1/key/import" {
-		t.Errorf("request = %s %s", rec.method, rec.path)
-	}
-	if got.AccessKeyID != "GKimported" {
-		t.Errorf("got %q", got.AccessKeyID)
-	}
-}
 
 func TestV1_ListBuckets(t *testing.T) {
 	want := []models.ListBucketsResponseItem{{ID: "b1", GlobalAliases: []string{"mybucket"}}}
@@ -336,57 +318,6 @@ func TestV1_DenyBucketKey(t *testing.T) {
 	}
 }
 
-func TestV1_AddBucketAlias_Global(t *testing.T) {
-	want := &models.GarageBucketInfo{ID: "b1"}
-	svc, rec := newV1RecordingServer(t, 200, want)
-
-	alias := "myalias"
-	_, err := svc.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{
-		BucketID: "b1", GlobalAlias: &alias,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.method != http.MethodPut || rec.path != "/v1/bucket/alias/global" {
-		t.Errorf("request = %s %s", rec.method, rec.path)
-	}
-	if !strings.Contains(rec.rawURL, "id=b1") || !strings.Contains(rec.rawURL, "alias=myalias") {
-		t.Errorf("rawURL = %q", rec.rawURL)
-	}
-}
-
-func TestV1_AddBucketAlias_Local(t *testing.T) {
-	want := &models.GarageBucketInfo{ID: "b1"}
-	svc, rec := newV1RecordingServer(t, 200, want)
-
-	alias := "localname"
-	keyID := "GK1"
-	_, err := svc.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{
-		BucketID: "b1", LocalAlias: &alias, AccessKeyID: &keyID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.method != http.MethodPut || rec.path != "/v1/bucket/alias/local" {
-		t.Errorf("request = %s %s", rec.method, rec.path)
-	}
-}
-
-func TestV1_RemoveBucketAlias_Global(t *testing.T) {
-	want := &models.GarageBucketInfo{ID: "b1"}
-	svc, rec := newV1RecordingServer(t, 200, want)
-
-	alias := "myalias"
-	_, err := svc.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{
-		BucketID: "b1", GlobalAlias: &alias,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.method != http.MethodDelete || rec.path != "/v1/bucket/alias/global" {
-		t.Errorf("request = %s %s", rec.method, rec.path)
-	}
-}
 
 func TestV1_GetClusterStatus(t *testing.T) {
 	raw := map[string]any{
@@ -463,9 +394,7 @@ func TestV1_ErrorPaths(t *testing.T) {
 	if err := svc.DeleteKey(ctx, "k"); err == nil {
 		t.Error("DeleteKey: expected error")
 	}
-	if _, err := svc.ImportKey(ctx, models.ImportKeyRequest{}); err == nil {
-		t.Error("ImportKey: expected error")
-	}
+
 	if _, err := svc.ListBuckets(ctx); err == nil {
 		t.Error("ListBuckets: expected error")
 	}
@@ -490,13 +419,7 @@ func TestV1_ErrorPaths(t *testing.T) {
 	if _, err := svc.DenyBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
 		t.Error("DenyBucketKey: expected error")
 	}
-	alias := "a"
-	if _, err := svc.AddBucketAlias(ctx, models.AddBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
-		t.Error("AddBucketAlias: expected error")
-	}
-	if _, err := svc.RemoveBucketAlias(ctx, models.RemoveBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
-		t.Error("RemoveBucketAlias: expected error")
-	}
+
 	if _, err := svc.GetClusterHealth(ctx); err == nil {
 		t.Error("GetClusterHealth: expected error")
 	}
@@ -532,9 +455,7 @@ func TestV1_RequestFailurePaths(t *testing.T) {
 	if err := svc.DeleteKey(ctx, "k"); err == nil {
 		t.Error("DeleteKey: expected error")
 	}
-	if _, err := svc.ImportKey(ctx, models.ImportKeyRequest{}); err == nil {
-		t.Error("ImportKey: expected error")
-	}
+
 	if _, err := svc.ListBuckets(ctx); err == nil {
 		t.Error("ListBuckets: expected error")
 	}
@@ -559,13 +480,7 @@ func TestV1_RequestFailurePaths(t *testing.T) {
 	if _, err := svc.DenyBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
 		t.Error("DenyBucketKey: expected error")
 	}
-	alias := "a"
-	if _, err := svc.AddBucketAlias(ctx, models.AddBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
-		t.Error("AddBucketAlias: expected error")
-	}
-	if _, err := svc.RemoveBucketAlias(ctx, models.RemoveBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
-		t.Error("RemoveBucketAlias: expected error")
-	}
+
 	if _, err := svc.GetClusterHealth(ctx); err == nil {
 		t.Error("GetClusterHealth: expected error")
 	}
@@ -580,38 +495,6 @@ func TestV1_RequestFailurePaths(t *testing.T) {
 	}
 }
 
-func TestV1_AddBucketAlias_MissingFields(t *testing.T) {
-	svc, _ := newV1RecordingServer(t, 200, nil)
-	// Neither globalAlias nor localAlias set
-	_, err := svc.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{BucketID: "b"})
-	if err == nil {
-		t.Fatal("expected error for missing alias fields")
-	}
-}
-
-func TestV1_RemoveBucketAlias_MissingFields(t *testing.T) {
-	svc, _ := newV1RecordingServer(t, 200, nil)
-	_, err := svc.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{BucketID: "b"})
-	if err == nil {
-		t.Fatal("expected error for missing alias fields")
-	}
-}
-
-func TestV1_RemoveBucketAlias_Local(t *testing.T) {
-	want := &models.GarageBucketInfo{ID: "b1"}
-	svc, rec := newV1RecordingServer(t, 200, want)
-	alias := "localname"
-	keyID := "GK1"
-	_, err := svc.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{
-		BucketID: "b1", LocalAlias: &alias, AccessKeyID: &keyID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rec.method != http.MethodDelete || rec.path != "/v1/bucket/alias/local" {
-		t.Errorf("request = %s %s", rec.method, rec.path)
-	}
-}
 
 func TestV1_GetMetrics(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -155,76 +155,6 @@ func (s *S3Service) getMinioClient(ctx context.Context, bucketName string, op Op
 	return client, nil
 }
 
-// ListBuckets retrieves all buckets from Garage
-func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse, error) {
-	var bucketInfos []minio.BucketInfo
-
-	// Call MinIO ListBuckets API with retry logic
-	retryConfig := utils.DefaultRetryConfig()
-	err := utils.RetryWithBackoff(ctx, retryConfig, func() error {
-		var listErr error
-		bucketInfos, listErr = s.client.ListBuckets(ctx)
-		return listErr
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list buckets: %w", err)
-	}
-
-	// Convert MinIO buckets to our model
-	buckets := make([]models.BucketInfo, 0, len(bucketInfos))
-	for _, bucket := range bucketInfos {
-		buckets = append(buckets, models.BucketInfo{
-			Name:         bucket.Name,
-			CreationDate: bucket.CreationDate,
-		})
-	}
-
-	return &models.BucketListResponse{
-		Buckets: buckets,
-		Count:   len(buckets),
-	}, nil
-}
-
-// CreateBucket creates a new bucket in Garage
-func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getMinioClient(ctx, bucketName, OpRead|OpWrite)
-	if err != nil {
-		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
-	}
-
-	// Call MinIO MakeBucket API with retry logic
-	retryConfig := utils.DefaultRetryConfig()
-	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
-		return client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{
-			Region: s.config.Region,
-		})
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
-	}
-
-	return nil
-}
-
-// DeleteBucket deletes a bucket from Garage
-func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getMinioClient(ctx, bucketName, OpRead|OpWrite)
-	if err != nil {
-		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
-	}
-
-	// Call MinIO RemoveBucket API with retry logic
-	retryConfig := utils.DefaultRetryConfig()
-	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
-		return client.RemoveBucket(ctx, bucketName)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to delete bucket %s: %w", bucketName, err)
-	}
-
-	return nil
-}
-
 // ListObjects lists objects in a bucket with optional prefix filter and pagination
 func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error) {
 	// Get bucket-specific MinIO client
@@ -853,27 +783,3 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 	return results
 }
 
-// BucketStatistics holds statistical information about a bucket
-type BucketStatistics struct {
-	ObjectCount int64
-	TotalSize   int64
-}
-
-// GetBucketStatistics retrieves bucket statistics from Garage Admin API
-// This is much more efficient than iterating through all objects
-func (s *S3Service) GetBucketStatistics(ctx context.Context, bucketName string) (*BucketStatistics, error) {
-	// Get bucket info from Garage Admin API which includes object count and size
-	bucketInfo, err := s.adminService.GetBucketInfoByAlias(ctx, bucketName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get bucket info for %s: %w", bucketName, err)
-	}
-	if bucketInfo == nil {
-		return nil, fmt.Errorf("failed to get bucket info for %s: bucket not found", bucketName)
-	}
-
-	// Return statistics from Admin API
-	return &BucketStatistics{
-		ObjectCount: bucketInfo.Objects,
-		TotalSize:   bucketInfo.Bytes,
-	}, nil
-}
