@@ -38,7 +38,7 @@ jobs:
           charts_dir: helm
           skip_existing: true
         env:
-          CR_TOKEN: ${{ secrets.HELM_RELEASE_TOKEN }}
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.2
