@@ -65,7 +65,7 @@ jobs:
             --username "${GHCR_USER}" --password-stdin
 
           push_output=$(helm push "/tmp/chart/garage-ui-${chart_version}.tgz" \
-            oci://ghcr.io/noooste/charts 2>&1 | tee /dev/stderr)
+            oci://ghcr.io/mimic890/charts 2>&1 | tee /dev/stderr)
 
           digest=$(echo "$push_output" | grep -oE 'sha256:[a-f0-9]{64}' | head -n1)
           if [ -z "$digest" ]; then
@@ -73,9 +73,9 @@ jobs:
             exit 1
           fi
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-          echo "Pushed oci://ghcr.io/noooste/charts/garage-ui:${chart_version} (${digest})"
+          echo "Pushed oci://ghcr.io/mimic890/charts/garage-ui:${chart_version} (${digest})"
 
       - name: Sign chart with cosign (keyless)
         run: |
           cosign sign --yes \
-            "ghcr.io/noooste/charts/garage-ui@${{ steps.oci_push.outputs.digest }}"
+            "ghcr.io/mimic890/charts/garage-ui@${{ steps.oci_push.outputs.digest }}"
