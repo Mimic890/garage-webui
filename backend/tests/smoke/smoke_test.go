@@ -24,7 +24,7 @@ const (
 	backendBaseURL = "http://127.0.0.1:18080"
 	adminToken     = "smoke-admin-token-do-not-use-in-prod"
 	adminUsername  = "smokeadmin"
-	adminPassword  = "smokepass"
+	adminPassword  = "smokepassword"
 	readyTimeout   = 90 * time.Second
 	readyPollEvery = 1 * time.Second
 )
