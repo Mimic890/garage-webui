@@ -24,4 +24,4 @@
 2. To view logs:
   kubectl logs -f deployment/{{ include "garage-ui.fullname" . }} -n {{ .Release.Namespace }}
 
-For more information, see the README at https://github.com/Noooste/garage-ui/blob/main/helm/garage-ui/README.md
+For more information, see the README at https://github.com/Mimic890/garage-ui/blob/main/helm/garage-ui/README.md

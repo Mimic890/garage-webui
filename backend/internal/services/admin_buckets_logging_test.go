@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
-	logpkg "Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
+	logpkg "Mimic890/garage-ui/pkg/logger"
 
 	"github.com/rs/zerolog"
 )

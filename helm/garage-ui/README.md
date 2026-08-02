@@ -1,6 +1,6 @@
 # Garage UI Helm Chart
 
-A Helm chart for deploying [Garage UI](https://github.com/Noooste/garage-ui), a modern web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) distributed object storage systems.
+A Helm chart for deploying [Garage UI](https://github.com/Mimic890/garage-ui), a modern web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) distributed object storage systems.
 
 [![Version](https://img.shields.io/badge/version-0.10.0?color=blue)](Chart.yaml) <!-- x-release-please-version -->
 [![App Version](https://img.shields.io/badge/app%20version-v0.10.0?color=green)](Chart.yaml) <!-- x-release-please-version -->
@@ -116,7 +116,7 @@ signing. To verify the signature before installing:
 
 ```bash
 cosign verify ghcr.io/noooste/charts/garage-ui:<x.y.z> \
-  --certificate-identity-regexp 'https://github.com/Noooste/garage-ui/.+' \
+  --certificate-identity-regexp 'https://github.com/Mimic890/garage-ui/.+' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -1053,9 +1053,9 @@ imagePullSecrets:
 
 ## Additional Resources
 
-- **GitHub Repository**: https://github.com/Noooste/garage-ui
+- **GitHub Repository**: https://github.com/Mimic890/garage-ui
 - **Garage Documentation**: https://garagehq.deuxfleurs.fr/
-- **Issue Tracker**: https://github.com/Noooste/garage-ui/issues
+- **Issue Tracker**: https://github.com/Mimic890/garage-ui/issues
 - **Helm Documentation**: https://helm.sh/docs/
 
 ## Support
@@ -1063,7 +1063,7 @@ imagePullSecrets:
 For help and support:
 
 1. **Documentation**: Check this README and the [values.yaml](values.yaml) file
-2. **GitHub Issues**: Report bugs or request features at https://github.com/Noooste/garage-ui/issues
+2. **GitHub Issues**: Report bugs or request features at https://github.com/Mimic890/garage-ui/issues
 3. **Garage Community**: Visit https://garagehq.deuxfleurs.fr/ for Garage-specific questions
 
 ## Contributing

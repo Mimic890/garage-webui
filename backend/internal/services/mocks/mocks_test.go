@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/services"
 )
 
 // The mocks are exercised across the handlers test suite, but Go's per-

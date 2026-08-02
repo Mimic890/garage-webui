@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/config"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -387,7 +387,7 @@ func extractRoles(claims map[string]interface{}, path string) []string {
 // A scalar string is treated as a single-element list: IdPs commonly emit a
 // single role as a bare string (e.g. "garage_role": "garage-ui-admin") rather
 // than a one-element array, and discarding it would make admin_role checks
-// fail with a spurious 403, see https://github.com/Noooste/garage-ui/issues/75
+// fail with a spurious 403, see https://github.com/Mimic890/garage-ui/issues/75
 func extractStringArray(value interface{}) []string {
 	// Try a scalar string (single role emitted as a bare value)
 	if str, ok := value.(string); ok {

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
-	"Noooste/garage-ui/pkg/utils"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/pkg/utils"
 )
 
 func TestNewS3Service_StripsHTTPPrefix(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
 )
 
 func newV1TestServer(t *testing.T, handler http.Handler) *GarageV1AdminService {
@@ -190,7 +190,6 @@ func TestV1_DeleteKey(t *testing.T) {
 	}
 }
 
-
 func TestV1_ListBuckets(t *testing.T) {
 	want := []models.ListBucketsResponseItem{{ID: "b1", GlobalAliases: []string{"mybucket"}}}
 	svc, rec := newV1RecordingServer(t, 200, want)
@@ -317,7 +316,6 @@ func TestV1_DenyBucketKey(t *testing.T) {
 		t.Errorf("request = %s %s", rec.method, rec.path)
 	}
 }
-
 
 func TestV1_GetClusterStatus(t *testing.T) {
 	raw := map[string]any{
@@ -494,7 +492,6 @@ func TestV1_RequestFailurePaths(t *testing.T) {
 		t.Error("GetMetrics: expected error")
 	}
 }
-
 
 func TestV1_GetMetrics(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

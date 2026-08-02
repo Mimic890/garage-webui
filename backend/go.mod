@@ -1,4 +1,4 @@
-module Noooste/garage-ui
+module Mimic890/garage-ui
 
 go 1.26.5
 

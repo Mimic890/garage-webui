@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/state"
-	logpkg "Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/state"
+	logpkg "Mimic890/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/rs/zerolog"

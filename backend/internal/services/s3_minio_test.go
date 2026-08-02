@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
-	"Noooste/garage-ui/pkg/utils"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/pkg/utils"
 )
 
 // s3ErrorXML writes an S3-style error response that the MinIO SDK parses.

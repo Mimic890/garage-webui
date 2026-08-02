@@ -1,7 +1,7 @@
 package services
 
 import (
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/state"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -91,7 +91,7 @@ func TestDetectVersion_Unreachable(t *testing.T) {
 
 // Garage v2.x serves /v1/health too, so a transient failure of the /v2 probe
 // must not cause a permanent downgrade to the (broken on v2.x) v1 client.
-// Regression test for https://github.com/Noooste/garage-ui/issues/78
+// Regression test for https://github.com/Mimic890/garage-ui/issues/78
 func TestDetectVersion_V2_TransientProbeFailure(t *testing.T) {
 	var v2Hits int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

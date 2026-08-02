@@ -1,7 +1,7 @@
 package authz
 
 import (
-	"Noooste/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/auth"
 )
 
 // TeamResolver maps an authenticated identity to an authorization Subject.

@@ -12,9 +12,9 @@ keywords:
   - ui
   - dashboard
   - web-ui
-home: https://github.com/Noooste/garage-ui
+home: https://github.com/Mimic890/garage-ui
 sources:
-  - https://github.com/Noooste/garage-ui
+  - https://github.com/Mimic890/garage-ui
 maintainers:
-  - name: Noooste
+  - name: Mimic890
 kubeVersion: '>=1.19.0-0'

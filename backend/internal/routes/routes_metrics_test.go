@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/authz"
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/authz"
+	"Mimic890/garage-ui/internal/config"
 )
 
 // Flag off (default): /metrics is not registered, and the authenticated

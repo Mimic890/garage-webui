@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/models"
 )
 
 // AdminService is the set of Garage Admin API operations used by HTTP handlers.

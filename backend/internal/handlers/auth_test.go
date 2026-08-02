@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
 )

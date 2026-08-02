@@ -55,7 +55,6 @@ type UpdateKeyRequest struct {
 	Deny         *KeyPermissions `json:"deny,omitempty"`
 }
 
-
 // ListKeysResponseItem represents a single key in the list response
 type ListKeysResponseItem struct {
 	ID         string     `json:"id"`
@@ -145,7 +144,6 @@ type BucketLocalAlias struct {
 	AccessKeyID string `json:"accessKeyId"`
 	Alias       string `json:"alias"`
 }
-
 
 // BucketKeyPermRequest represents a request to change bucket-key permissions
 type BucketKeyPermRequest struct {

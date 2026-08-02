@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/services"
 )
 
 // s3NotConfigured mirrors errNotConfigured but keys messages on S3Mock so

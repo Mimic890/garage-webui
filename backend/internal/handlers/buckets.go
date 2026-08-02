@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"Noooste/garage-ui/internal/authz"
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services"
+	"Mimic890/garage-ui/internal/authz"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/services"
 
 	"github.com/gofiber/fiber/v3"
 )

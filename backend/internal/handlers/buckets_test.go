@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/services/mocks"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/services/mocks"
 
 	"github.com/gofiber/fiber/v3"
 )
