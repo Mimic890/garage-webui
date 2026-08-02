@@ -306,8 +306,8 @@ func ValidateClusterEndpoints(endpoints ...string) error {
 			return fmt.Errorf("cluster endpoint host could not be resolved")
 		}
 		for _, ip := range ips {
-			if ip.String() == "169.254.169.254" {
-				return fmt.Errorf("cluster endpoint targets a metadata address")
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.String() == "169.254.169.254" {
+				return fmt.Errorf("cluster endpoint targets a local or metadata address")
 			}
 		}
 	}

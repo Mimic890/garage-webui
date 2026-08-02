@@ -30,7 +30,7 @@ func postJSON(t *testing.T, app *fiber.App, path string, body any) *http.Respons
 	data, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, fiber.TestConfig{Timeout: 0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestAccountLocalAuthorizationAndChange(t *testing.T) {
 		data, _ := json.Marshal(map[string]string{"current_password": "correct-password", "email": "admin@example.com", "new_password": "new-password-long"})
 		req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(data))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := app.Test(req)
+		resp, err := app.Test(req, fiber.TestConfig{Timeout: 0})
 		if err != nil {
 			t.Fatal(err)
 		}
