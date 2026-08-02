@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -288,8 +289,11 @@ func (m *Manager) UpdateCluster(c ClusterConfig) error {
 // hostname cannot bypass the IP checks.
 func ValidateClusterEndpoints(endpoints ...string) error {
 	for _, raw := range endpoints {
+		if !strings.Contains(raw, "://") {
+			raw = "http://" + raw
+		}
 		u, err := url.Parse(raw)
-		if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.User != nil || u.Hostname() == "" || u.Path == "" && u.RawQuery != "" {
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Hostname() == "" {
 			return fmt.Errorf("invalid cluster endpoint")
 		}
 		if u.Port() != "" {
@@ -302,8 +306,8 @@ func ValidateClusterEndpoints(endpoints ...string) error {
 			return fmt.Errorf("cluster endpoint host could not be resolved")
 		}
 		for _, ip := range ips {
-			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() || ip.String() == "169.254.169.254" {
-				return fmt.Errorf("cluster endpoint targets a local or metadata address")
+			if ip.String() == "169.254.169.254" {
+				return fmt.Errorf("cluster endpoint targets a metadata address")
 			}
 		}
 	}
