@@ -10,8 +10,8 @@ func TestRedactKey(t *testing.T) {
 	}{
 		{"empty", "", "***"},
 		{"short", "abc", "***"},
-		{"just-under-threshold", "abcdefghijk", "***"},   // 11 chars
-		{"at-threshold", "abcdefghijkl", "abcd…ijkl"},     // 12 chars
+		{"just-under-threshold", "abcdefghijk", "***"}, // 11 chars
+		{"at-threshold", "abcdefghijkl", "abcd…ijkl"},  // 12 chars
 		{"long", "GK5a9bfcdefghijklzW9q", "GK5a…zW9q"},
 	}
 	for _, tc := range cases {
