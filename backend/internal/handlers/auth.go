@@ -6,6 +6,7 @@ import (
 	"Mimic890/garage-ui/internal/models"
 	"Mimic890/garage-ui/internal/state"
 	"crypto/subtle"
+	"net/url"
 
 	"sync"
 
@@ -228,7 +229,15 @@ func (h *AuthHandler) setSessionCookie(c fiber.Ctx, token string) {
 	if sameSite == "" {
 		sameSite = "lax"
 	}
-	c.Cookie(&fiber.Cookie{Name: name, Value: token, Path: "/", MaxAge: maxAge, Secure: h.cfg.IsProduction() || h.cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: sameSite})
+	c.Cookie(&fiber.Cookie{Name: name, Value: token, Path: "/", MaxAge: maxAge, Secure: h.sessionCookieSecure(), HTTPOnly: true, SameSite: sameSite})
+}
+
+func (h *AuthHandler) sessionCookieSecure() bool {
+	root, err := url.Parse(h.cfg.Server.RootURL)
+	if err == nil && root.Scheme == "http" {
+		return false
+	}
+	return h.cfg.Auth.OIDC.CookieSecure
 }
 
 // GetMe returns the current authenticated user's information
