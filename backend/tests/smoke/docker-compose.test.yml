@@ -28,7 +28,7 @@ services:
       GARAGE_UI_GARAGE_ADMIN_TOKEN: "smoke-admin-token-do-not-use-in-prod"
       GARAGE_UI_AUTH_ADMIN_ENABLED: "true"
       GARAGE_UI_AUTH_ADMIN_USERNAME: "smokeadmin"
-      GARAGE_UI_AUTH_ADMIN_PASSWORD: "smokepass"
+      GARAGE_UI_AUTH_ADMIN_PASSWORD: "smokepassword"
       GARAGE_UI_CORS_ENABLED: "false"
       GARAGE_UI_LOGGING_LEVEL: "info"
       GARAGE_UI_LOGGING_FORMAT: "json"
