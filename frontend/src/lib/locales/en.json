@@ -539,8 +539,6 @@
   "settings.user.openAction": "Open user settings",
   "setup.errors.failed": "Failed to set up the panel",
   "setup.errors.nicknameRequired": "Nickname is required",
-  "setup.form.bootstrapTokenHelp": "Enter the bootstrap token printed by the server, if required.",
-  "setup.form.bootstrapTokenLabel": "Bootstrap token",
   "setup.form.description": "Create the first local administrator account.",
   "setup.form.nicknameLabel": "Nickname (required)",
   "setup.form.nicknamePlaceholder": "admin",

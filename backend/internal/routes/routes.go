@@ -80,7 +80,7 @@ func SetupRoutes(
 
 	// Create auth and panel handlers
 	authHandler := handlers.NewAuthHandler(cfg, authService, stateManager)
-	panelHandler := handlers.NewPanelHandler(stateManager, cfg.Auth.BootstrapToken, cfg.IsProduction())
+	panelHandler := handlers.NewPanelHandler(stateManager)
 
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
