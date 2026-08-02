@@ -407,10 +407,21 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 		return nil, nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
+	var stat minio.ObjectInfo
 	var object *minio.Object
 
-	// Call MinIO GetObject API with retry logic
+	// Get metadata first; calling Stat on the GetObject stream breaks reads with Garage.
 	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var statErr error
+		stat, statErr = client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
+		return statErr
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get object info for %s in bucket %s: %w", key, bucketName, err)
+	}
+
+	// Call MinIO GetObject API with retry logic
 	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
 		var getErr error
 		object, getErr = client.GetObject(ctx, bucketName, key, minio.GetObjectOptions{})
@@ -418,13 +429,6 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get object %s from bucket %s: %w", key, bucketName, err)
-	}
-
-	// Get object info
-	stat, err := object.Stat()
-	if err != nil {
-		object.Close()
-		return nil, nil, fmt.Errorf("failed to get object info for %s in bucket %s: %w", key, bucketName, err)
 	}
 
 	// Create object info
