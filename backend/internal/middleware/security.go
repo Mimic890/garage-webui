@@ -32,6 +32,9 @@ func RequestTimeout(d time.Duration) fiber.Handler {
 
 func CSRFOrigin(rootURL string, cookieNames ...string) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		if c.Path() == "/api/v1/panel/setup" {
+			return c.Next()
+		}
 		if c.Method() == fiber.MethodGet || c.Method() == fiber.MethodHead || c.Method() == fiber.MethodOptions {
 			return c.Next()
 		}
