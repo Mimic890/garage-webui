@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/models"
 
 	"github.com/gofiber/fiber/v3"
 )

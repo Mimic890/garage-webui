@@ -4,8 +4,8 @@ import (
 	"strings"
 	"sync"
 
-	"Noooste/garage-ui/internal/services"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/services"
+	"Mimic890/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/rs/zerolog/log"

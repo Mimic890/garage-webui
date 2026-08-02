@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/pkg/logger"
 )
 
 // Config represents the application configuration

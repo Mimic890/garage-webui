@@ -3,7 +3,7 @@ package middleware
 import (
 	"time"
 
-	logpkg "Noooste/garage-ui/pkg/logger"
+	logpkg "Mimic890/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/rs/zerolog"

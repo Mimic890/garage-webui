@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"

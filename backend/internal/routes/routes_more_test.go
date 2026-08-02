@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/models"
 )
 
 func TestRoutes_ObjectQueryKeyPreservesReservedCharacters(t *testing.T) {

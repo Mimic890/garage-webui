@@ -103,7 +103,7 @@ All API routes under `/api/v1` require auth (JWT bearer token or OIDC cookie). `
 ## Code Conventions
 
 ### Backend (Go)
-- **Module path:** `Noooste/garage-ui` (not a standard domain path).
+- **Module path:** `Mimic890/garage-ui` (not a standard domain path).
 - **Interfaces:** `AdminService` and `S3Storage` in `services/interfaces.go`. Hand-rolled mocks in `services/mocks/` (not codegen).
 - **JSON tags:** `snake_case` for API-facing structs (`json:"access_key_id"`); Garage admin models use `camelCase` matching Garage's JSON (`json:"accessKeyId"`).
 - **Error responses:** All handlers return `models.ErrorResponse(code, message)` (sets `success: false`) or `models.SuccessResponse(data)`. Error codes are string constants (`models.ErrCodeBadRequest`, etc.).
@@ -155,7 +155,7 @@ swag init -g backend/main.go -o backend/docs --parseDependency --parseInternal
 3. **Credential cache:** `s3.go` caches per-bucket S3 credentials (`key:<bucket>:<op>`) for 1 hour. `InvalidateBucketCredsCache(bucket)` is called after `GrantBucketPermission`; `ClearAllCredsCache()` after `DeleteUser` / `UpdateUser`. If you add new permission-changing endpoints, add invalidation calls.
 4. **Authz is UI-layer only:** `authz` package implements a permission policy but explicitly states it is NOT a security boundary — garage-ui talks to Garage with a single admin token. Real isolation is at the network/Garage credential level.
 5. **Directory markers:** `CreateDirectoryMarker` uses `PutObject` with `size=0` (not `-1`). minio-go with `size=-1` triggers multipart upload, which Garage rejects for empty bodies.
-6. **`docs/` package not in git:** `swag init` generates `backend/docs/` from swagger comments. The Go build will fail without it (`import _ "Noooste/garage-ui/docs"`). Run `swag init` before `go build` if building outside Docker/CI.
+6. **`docs/` package not in git:** `swag init` generates `backend/docs/` from swagger comments. The Go build will fail without it (`import _ "Mimic890/garage-ui/docs"`). Run `swag init` before `go build` if building outside Docker/CI.
 7. **ListObjects StatObject fan-out:** `ListObjects` spawns up to 10 concurrent `StatObject` goroutines (semaphore-bounded) with 10s timeout each, to fetch `ContentType` which `ListObjectsV2` does not return.
 8. **Upload re-entry guard:** `useBucketObjects.uploadFiles` has an `uploadingRef` guard — a second call while uploads are in progress is rejected with a toast.
 9. **Selection clears on navigation:** `ObjectBrowserView` clears `selectedFileKeys`/`selectedFolderKeys` when `currentPath` changes, preventing bulk-delete of objects in a folder the user navigated away from.

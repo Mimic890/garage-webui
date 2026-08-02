@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/services"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/services"
+	"Mimic890/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
 )

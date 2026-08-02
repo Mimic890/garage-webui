@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/config"
 )
 
 // PermSet is a set of concrete permission names.

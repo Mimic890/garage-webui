@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/config"
 )
 
 // newOIDCTeamFixture builds an OIDC-enabled fixture with team_attribute_path

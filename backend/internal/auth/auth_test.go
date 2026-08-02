@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/config"
 )
 
 func TestExtractRolesFromAccessToken_Keycloak(t *testing.T) {

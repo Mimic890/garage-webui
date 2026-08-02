@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"Noooste/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/config"
 
 	"github.com/gofiber/fiber/v3"
 )

@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
 	"crypto/subtle"
 
 	"sync"

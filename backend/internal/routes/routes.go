@@ -1,13 +1,13 @@
 package routes
 
 import (
-	"Noooste/garage-ui/internal/auth"
-	"Noooste/garage-ui/internal/authz"
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/internal/handlers"
-	"Noooste/garage-ui/internal/middleware"
-	"Noooste/garage-ui/internal/state"
-	"Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/internal/auth"
+	"Mimic890/garage-ui/internal/authz"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/internal/handlers"
+	"Mimic890/garage-ui/internal/middleware"
+	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/pkg/logger"
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"net/url"
@@ -19,7 +19,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/oauth2"
 	// Swagger imports
-	//_ "Noooste/garage-ui/docs"
+	//_ "Mimic890/garage-ui/docs"
 )
 
 // setupOptions holds optional overrides for SetupRoutes (primarily for tests).

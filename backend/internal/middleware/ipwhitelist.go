@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"Noooste/garage-ui/internal/config"
-	"Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/internal/config"
+	"Mimic890/garage-ui/pkg/logger"
 	"net"
 	"strings"
 

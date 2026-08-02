@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"Noooste/garage-ui/internal/state"
-	"Noooste/garage-ui/pkg/logger"
+	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/pkg/logger"
 
 	"github.com/Noooste/azuretls-client"
 )

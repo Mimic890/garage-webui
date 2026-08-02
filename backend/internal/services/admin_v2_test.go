@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/state"
 )
 
 // newAdminTestServer wires an httptest.Server (with the supplied handler) to a
@@ -217,7 +217,6 @@ func TestDeleteKey_NoBodyOnSuccess(t *testing.T) {
 		t.Errorf("raw URL = %q", rec.rawURL)
 	}
 }
-
 
 func TestListBuckets_Success(t *testing.T) {
 	want := []models.ListBucketsResponseItem{{ID: "b1"}, {ID: "b2"}}
@@ -508,11 +507,11 @@ func TestAllMethods_Non2xxReturnsError(t *testing.T) {
 	ctx := context.Background()
 
 	calls := map[string]func() error{
-		"ListKeys":             func() error { _, err := svc.ListKeys(ctx); return err },
-		"CreateKey":            func() error { _, err := svc.CreateKey(ctx, models.CreateKeyRequest{}); return err },
-		"GetKeyInfo":           func() error { _, err := svc.GetKeyInfo(ctx, "k", false); return err },
-		"UpdateKey":            func() error { _, err := svc.UpdateKey(ctx, "k", models.UpdateKeyRequest{}); return err },
-		"DeleteKey":            func() error { return svc.DeleteKey(ctx, "k") },
+		"ListKeys":   func() error { _, err := svc.ListKeys(ctx); return err },
+		"CreateKey":  func() error { _, err := svc.CreateKey(ctx, models.CreateKeyRequest{}); return err },
+		"GetKeyInfo": func() error { _, err := svc.GetKeyInfo(ctx, "k", false); return err },
+		"UpdateKey":  func() error { _, err := svc.UpdateKey(ctx, "k", models.UpdateKeyRequest{}); return err },
+		"DeleteKey":  func() error { return svc.DeleteKey(ctx, "k") },
 
 		"ListBuckets":          func() error { _, err := svc.ListBuckets(ctx); return err },
 		"GetBucketInfo":        func() error { _, err := svc.GetBucketInfo(ctx, "b"); return err },
