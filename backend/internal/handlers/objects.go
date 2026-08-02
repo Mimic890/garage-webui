@@ -315,7 +315,7 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 
 // serveFullObject streams the whole object with a 200, the pre-Range behavior.
 func (h *ObjectHandler) serveFullObject(c fiber.Ctx, bucketName, key string) error {
-	ctx := c.Context()
+	ctx := context.WithoutCancel(c.Context())
 
 	body, objectInfo, err := getS3Service(c).GetObject(ctx, bucketName, key)
 	if err != nil {
@@ -341,17 +341,14 @@ func (h *ObjectHandler) serveFullObject(c fiber.Ctx, bucketName, key string) err
 		disposition = "attachment"
 	}
 	c.Set("Content-Disposition", contentDispositionHeader(disposition, key))
-
-	// SendStream (not SendStreamWriter) keeps the declared Content-Length: the
-	// streaming writer variant forces fasthttp into unknown-length chunked
-	// transfer, dropping the header we just set above.
-	return c.SendStream(body, int(objectInfo.Size))
+	c.Response().SetBodyStream(body, int(objectInfo.Size))
+	return nil
 }
 
 // getObjectRange serves a single-range request with 206 Partial Content.
 // Malformed and multi-range headers fall back to the full 200 response.
 func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader string) error {
-	ctx := c.Context()
+	ctx := context.WithoutCancel(c.Context())
 
 	info, err := getS3Service(c).GetObjectMetadata(ctx, bucketName, key)
 	if err != nil {
@@ -396,12 +393,9 @@ func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader
 		disposition = "attachment"
 	}
 	c.Set("Content-Disposition", contentDispositionHeader(disposition, key))
-
 	c.Status(fiber.StatusPartialContent)
-	// SendStream (not SendStreamWriter) keeps the declared Content-Length: the
-	// streaming writer variant forces fasthttp into unknown-length chunked
-	// transfer, dropping the header we just set above.
-	return c.SendStream(body, int(rng.end-rng.start+1))
+	c.Response().SetBodyStream(body, int(rng.end-rng.start+1))
+	return nil
 }
 
 // DeleteObject deletes an object from a bucket

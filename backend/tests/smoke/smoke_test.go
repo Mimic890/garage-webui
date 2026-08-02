@@ -137,7 +137,7 @@ func TestMain(m *testing.M) {
 	}
 
 	fmt.Fprintln(os.Stderr, "[smoke] starting backend...")
-	runComposeNoT("up", "-d", "backend")
+	runComposeNoT("up", "-d", "--build", "backend")
 
 	if err := waitForHTTP(ctx, backendBaseURL+"/health", readyTimeout); err != nil {
 		fmt.Fprintf(os.Stderr, "[smoke] backend not ready: %v\n", err)
@@ -186,11 +186,12 @@ func (s *testState) do(t *testing.T, method, path string, body io.Reader, conten
 		t.Fatalf("build request: %v", err)
 	}
 	if s.token != "" {
-		req.Header.Set("Authorization", "Bearer "+s.token)
+		req.AddCookie(&http.Cookie{Name: "garage_session", Value: s.token})
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	req.Header.Set("Origin", backendBaseURL)
 	req.Header.Set("X-Cluster-Id", "default")
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -231,16 +232,23 @@ func TestSmokeGoldenPath(t *testing.T) {
 			t.Fatalf("login status = %d, body = %s", resp.StatusCode, body)
 		}
 		var parsed struct {
-			Success bool   `json:"success"`
-			Token   string `json:"token"`
+			Success bool `json:"success"`
 		}
 		if err := json.Unmarshal(body, &parsed); err != nil {
 			t.Fatalf("parse login body: %v, body=%s", err, body)
 		}
-		if !parsed.Success || parsed.Token == "" {
-			t.Fatalf("login did not return token: %s", body)
+		if !parsed.Success {
+			t.Fatalf("login did not succeed: %s", body)
 		}
-		state.token = parsed.Token
+		for _, cookie := range resp.Cookies() {
+			if cookie.Name == "garage_session" {
+				state.token = cookie.Value
+				break
+			}
+		}
+		if state.token == "" {
+			t.Fatalf("login did not set garage_session cookie: %s", body)
+		}
 	})
 
 	t.Run("CreateBucket", func(t *testing.T) {
@@ -348,7 +356,7 @@ func TestSmokeGoldenPath(t *testing.T) {
 			t.Fatalf("download status = %d, body = %s", resp.StatusCode, body)
 		}
 		if !bytes.Equal(body, state.sourceBody) {
-			t.Fatalf("downloaded bytes differ: got %d bytes, want %d bytes", len(body), len(state.sourceBody))
+			t.Fatalf("downloaded bytes differ: got %d bytes, want %d bytes, content-length=%q, content-type=%q, body=%q", len(body), len(state.sourceBody), resp.Header.Get("Content-Length"), resp.Header.Get("Content-Type"), body)
 		}
 	})
 
