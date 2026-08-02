@@ -34,22 +34,27 @@ func (h *PanelHandler) GetSetupStatus(c fiber.Ctx) error {
 }
 
 type SetupRequest struct {
-	Nickname string `json:"nickname" validate:"required"`
-	Password string `json:"password" validate:"required,min=12"`
+	Nickname       string `json:"nickname" validate:"required"`
+	Password       string `json:"password" validate:"required,min=12"`
+	BootstrapToken string `json:"bootstrap_token"`
 }
 
 // SetupPanel performs initial admin account setup
 func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
+	var req SetupRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
+	}
+
 	if h.production {
 		token := strings.TrimSpace(c.Get("X-Bootstrap-Token"))
+		if token == "" {
+			token = strings.TrimSpace(req.BootstrapToken)
+		}
 		bootstrapToken := strings.TrimSpace(h.bootstrapToken)
 		if bootstrapToken == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(bootstrapToken)) != 1 {
 			return c.Status(fiber.StatusForbidden).JSON(models.ErrorResponse(models.ErrCodeForbidden, "Bootstrap token required"))
 		}
-	}
-	var req SetupRequest
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
 	}
 
 	if req.Nickname == "" {
