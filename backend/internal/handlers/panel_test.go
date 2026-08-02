@@ -10,11 +10,14 @@ import (
 )
 
 func TestSetupPanelRequiresProductionBootstrapToken(t *testing.T) {
-	app := fiber.New()
-	h := NewPanelHandler(newTestStateManager(t, "", ""), "bootstrap-secret", true)
-	app.Post("/setup", h.SetupPanel)
 	body := []byte(`{"nickname":"admin","password":"long-password"}`)
+	newApp := func() *fiber.App {
+		app := fiber.New()
+		app.Post("/setup", NewPanelHandler(newTestStateManager(t, "", ""), "bootstrap-secret", true).SetupPanel)
+		return app
+	}
 
+	app := newApp()
 	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/setup", bytes.NewReader(body)))
 	if err != nil {
 		t.Fatalf("request without token: %v", err)
@@ -32,5 +35,14 @@ func TestSetupPanelRequiresProductionBootstrapToken(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("with token status = %d, want 200", resp.StatusCode)
+	}
+
+	bodyToken := []byte(`{"nickname":"admin","password":"long-password","bootstrap_token":" bootstrap-secret\n"}`)
+	resp, err = newApp().Test(httptest.NewRequest(http.MethodPost, "/setup", bytes.NewReader(bodyToken)))
+	if err != nil {
+		t.Fatalf("request with body token: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("with body token status = %d, want 200", resp.StatusCode)
 	}
 }

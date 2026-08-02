@@ -168,7 +168,10 @@ export const authApi = {
   },
 
   setupPanel: async (data: { nickname: string; password: string }, bootstrapToken?: string) => {
-    const response = await api.post<{ success: boolean }>('/v1/panel/setup', data, {
+    const response = await api.post<{ success: boolean }>('/v1/panel/setup', {
+      ...data,
+      bootstrap_token: bootstrapToken,
+    }, {
       headers: bootstrapToken ? { 'X-Bootstrap-Token': bootstrapToken } : undefined,
     });
     return response;
