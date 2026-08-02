@@ -226,6 +226,31 @@ func TestLoginAdmin_HappyPath(t *testing.T) {
 	}
 }
 
+func TestLoginAdmin_HTTPRootURLUsesInsecureCookie(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "production", RootURL: "http://10.8.0.2:8060"},
+		Auth: config.AuthConfig{
+			Admin: config.AdminAuthConfig{Enabled: true, Username: "admin", Password: "s3cret"},
+			OIDC:  config.OIDCConfig{CookieSecure: true},
+		},
+	}
+	app, _ := newAuthTestApp(t, cfg, "admin")
+
+	body, _ := json.Marshal(map[string]string{"username": "admin", "password": "s3cret"})
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+
+	cookies := resp.Cookies()
+	if len(cookies) != 1 || cookies[0].Secure {
+		t.Fatalf("cookie Secure = %#v, want one insecure cookie for HTTP root_url", cookies)
+	}
+}
+
 func TestLoginAdmin_WrongPasswordReturns401(t *testing.T) {
 	cfg := &config.Config{
 		Auth: config.AuthConfig{Admin: config.AdminAuthConfig{Enabled: true, Username: "admin", Password: "s3cret"}},
