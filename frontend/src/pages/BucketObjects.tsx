@@ -23,14 +23,14 @@ export function BucketObjects() {
     searchParams.get('page') ?? undefined,
   );
   const [initialItemsPerPage, setInitialItemsPerPage] = useState<number>(
-    parseInt(searchParams.get('limit') ?? '25', 10),
+    Math.max(1, parseInt(searchParams.get('limit') ?? '25', 10) || 25),
   );
 
   useEffect(() => {
     const prefix = searchParams.get('prefix') ?? '';
     if (prefix !== currentPath) setCurrentPath(prefix);
     setInitialPageToken(searchParams.get('page') ?? undefined);
-    setInitialItemsPerPage(parseInt(searchParams.get('limit') ?? '25', 10));
+    setInitialItemsPerPage(Math.max(1, parseInt(searchParams.get('limit') ?? '25', 10) || 25));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -51,7 +51,7 @@ export function BucketObjects() {
     deleteMultipleObjects,
     createDirectory,
     fetchObjects,
-  } = useBucketObjects(bucketName, currentPath, searchQuery, deepSearch);
+  } = useBucketObjects(bucketName, currentPath, searchQuery, deepSearch, initialPageToken, initialItemsPerPage);
 
   const handleNavigateToFolder = (path: string) => {
     setCurrentPath(path);

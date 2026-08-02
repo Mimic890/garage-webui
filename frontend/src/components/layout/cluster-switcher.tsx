@@ -8,8 +8,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '@/lib/i18n';
 
 export function ClusterSwitcher() {
+  const { t } = useTranslation();
   const { clusters, activeClusterId, setActiveCluster } = useClusterStore();
   const navigate = useNavigate();
 
@@ -20,7 +22,7 @@ export function ClusterSwitcher() {
       <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-md px-2.5 text-[14px] font-medium transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
         <Globe className="h-4 w-4 text-[var(--muted-foreground)]" />
         <span className="truncate max-w-[150px]">
-          {activeCluster ? activeCluster.name : 'Select Cluster'}
+          {activeCluster ? activeCluster.name : t('clusters.switcher.selectCluster')}
         </span>
       </DropdownMenuTrigger>
 
@@ -51,7 +53,7 @@ export function ClusterSwitcher() {
           className="flex items-center gap-2 cursor-pointer py-1.5 px-2.5 rounded-sm hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
         >
           <Plus className="h-4 w-4" />
-          <span>Add Garage S3</span>
+          <span>{t('clusters.switcher.addGarage')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

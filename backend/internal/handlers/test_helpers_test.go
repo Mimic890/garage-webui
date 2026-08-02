@@ -1,16 +1,14 @@
 package handlers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"path/filepath"
 	"testing"
 
+	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // injectServices middleware sets adminService / s3Service Locals for handler tests.
@@ -39,16 +37,13 @@ func newTestStateManager(t *testing.T, nickname, password string) *state.Manager
 	if nickname == "" {
 		return m
 	}
-	hasher := sha256.New()
-	hasher.Write([]byte(password))
-	sha256Hash := hex.EncodeToString(hasher.Sum(nil))
-	hash, err := bcrypt.GenerateFromPassword([]byte(sha256Hash), bcrypt.MinCost)
+	hash, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatalf("bcrypt: %v", err)
 	}
 	if err := m.UpdateAdmin(state.AdminAccount{
 		Nickname: nickname,
-		Password: string(hash),
+		Password: hash,
 		Setup:    true,
 	}); err != nil {
 		t.Fatalf("UpdateAdmin: %v", err)

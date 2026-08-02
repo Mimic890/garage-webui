@@ -10,6 +10,8 @@ import {UploadProgress} from './UploadProgress';
 import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, ScanSearch, Search, Trash, Upload} from 'lucide-react';
 import {getBreadcrumbs} from '@/lib/file-utils';
 import type {S3Object, UploadTask} from '@/types';
+import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
 
 interface ObjectBrowserViewProps {
   bucketName: string;
@@ -70,6 +72,7 @@ export function ObjectBrowserView({
   initialPageToken,
   initialItemsPerPage,
 }: ObjectBrowserViewProps) {
+  const { t, language } = useTranslation();
   const [showUploadZone, setShowUploadZone] = useState(false);
   const [deleteObjectDialogOpen, setDeleteObjectDialogOpen] = useState(false);
   const [selectedObject, setSelectedObject] = useState<S3Object | null>(null);
@@ -134,50 +137,46 @@ export function ObjectBrowserView({
   });
 
   // Helper function to traverse file/directory tree
-  const traverseFileTree = async (item: any, path: string, files: File[]): Promise<void> => {
-    return new Promise(async (resolve) => {
-      if (item.isFile) {
-        item.file((file: File) => {
-          const fullPath = path + file.name;
-          Object.defineProperty(file, 'webkitRelativePath', {
-            value: fullPath,
-            writable: false
-          });
-          files.push(file);
-          resolve();
-        });
-      } else if (item.isDirectory) {
-        const dirReader = item.createReader();
-        const readAllEntries = () =>
-          new Promise<any[]>((resolve, reject) => {
-            const entries: any[] = [];
-            const step = () =>
-              dirReader.readEntries(
-                (batch: any[]) => {
-                  if (batch.length === 0) return resolve(entries);
-                  entries.push(...batch);
-                  step();
-                },
-                (err: any) => reject(err),
-              );
-            step();
-          });
-        try {
-          const entries = await readAllEntries();
-          for (const entry of entries) {
-            await traverseFileTree(entry, path + item.name + '/', files);
-          }
-        } catch {
-          // If reading directory entries fails, skip this directory
-        }
-        resolve();
-      } else {
-        resolve();
-      }
+  const traverseFileTree = async (item: FileSystemEntry, path: string, files: File[]): Promise<void> => {
+    if (item.isFile) {
+      await new Promise<void>((resolve) => {
+        (item as FileSystemFileEntry).file(
+          (file) => {
+            const fullPath = path + file.name;
+            Object.defineProperty(file, 'webkitRelativePath', { value: fullPath, writable: false });
+            files.push(file);
+            resolve();
+          },
+          () => {
+            toast.error(t('buckets.upload.errors.read_file', { name: `${path}${item.name}` }));
+            resolve();
+          },
+        );
+      });
+      return;
+    }
+    if (!item.isDirectory) return;
+
+    const dirReader = (item as FileSystemDirectoryEntry).createReader();
+    const readAllEntries = () => new Promise<FileSystemEntry[]>((resolve, reject) => {
+      const entries: FileSystemEntry[] = [];
+      const step = () => dirReader.readEntries((batch) => {
+        if (batch.length === 0) return resolve(entries);
+        entries.push(...batch);
+        step();
+      }, reject);
+      step();
     });
+    try {
+      const entries = await readAllEntries();
+      for (const entry of entries) await traverseFileTree(entry, path + item.name + '/', files);
+    } catch {
+      toast.error(t('buckets.upload.errors.read_folder', { name: item.name }));
+    }
   };
 
   const selectedCount = selectedFileKeys.size + selectedFolderKeys.size;
+  const breadcrumbs = getBreadcrumbs(currentPath);
 
   const toggleInSet = (set: Set<string>, key: string) => {
     const next = new Set(set);
@@ -286,20 +285,20 @@ export function ObjectBrowserView({
         {/* Back Button */}
         <Button variant="secondary" onClick={onBackToBuckets} className="text-sm sm:text-base">
           <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Back to Buckets</span>
-          <span className="sm:hidden">Back</span>
+          <span className="hidden sm:inline">{t('buckets.actions.back_to_buckets')}</span>
+          <span className="sm:hidden">{t('buckets.actions.back')}</span>
         </Button>
 
         {/* Breadcrumb Navigation */}
         <div className="flex items-center gap-2 text-xs sm:text-sm overflow-x-auto">
           <Home className="h-4 w-4 text-muted-foreground" />
-          {getBreadcrumbs(currentPath).map((crumb, index) => (
+          {breadcrumbs.map((crumb, index) => (
             <div key={index} className="flex items-center gap-2">
               {index > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               <button
                 onClick={() => onNavigateToFolder(crumb.path)}
                 className={
-                  index === getBreadcrumbs(currentPath).length - 1
+                  index === breadcrumbs.length - 1
                     ? 'font-medium'
                     : 'text-muted-foreground hover:text-foreground'
                 }
@@ -316,7 +315,7 @@ export function ObjectBrowserView({
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={deepSearch ? 'Deep search names…' : 'Search by name prefix…'}
+                placeholder={deepSearch ? t('buckets.objects.deep_search_placeholder') : t('buckets.objects.prefix_search_placeholder')}
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 className="pl-8"
@@ -329,39 +328,39 @@ export function ObjectBrowserView({
               aria-pressed={deepSearch}
               title={
                 deepSearch
-                  ? 'Deep search: ON. Matches names anywhere and descends into subfolders. Scans the bucket, results may be partial on very large buckets. Click for fast prefix search.'
-                  : 'Fast prefix search: matches the start of object names in this folder (like the AWS S3 / Cloudflare R2 console). Click to enable deep search (substring + subfolders).'
+                  ? t('buckets.objects.deep_search_on_tooltip')
+                  : t('buckets.objects.prefix_search_tooltip')
               }
               className="shrink-0"
             >
               <ScanSearch className="h-4 w-4" />
-              <span className="hidden sm:inline">Deep</span>
+              <span className="hidden sm:inline">{t('buckets.objects.deep_search_button')}</span>
             </Button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {onDeleteMultipleObjects && selectedCount > 0 && (
               <Button
                 onClick={handleRequestBulkDelete}
-                title={`Delete ${selectedCount} selected item(s)`}
+                title={t('buckets.bulk_delete.selected_tooltip', { count: selectedCount.toLocaleString(language) })}
                 className="bg-transparent border border-red-500 text-red-500 hover:bg-red-500/5"
               >
                 <Trash className="h-4 w-4" />
-                Delete {selectedCount} item{selectedCount !== 1 ? 's' : ''}
+                {t('buckets.bulk_delete.selected_button', { count: selectedCount.toLocaleString(language) })}
               </Button>
             )}
             {onUploadFiles && (
               <Button variant="secondary" onClick={() => setShowUploadZone(!showUploadZone)} className="flex-1 sm:flex-initial">
                 <Upload className="h-4 w-4" />
-                <span className="hidden sm:inline">Upload</span>
+                <span className="hidden sm:inline">{t('buckets.actions.upload')}</span>
               </Button>
             )}
             {onCreateDirectory && (
               <Button onClick={() => setCreateDirDialogOpen(true)} className="flex-1 sm:flex-initial">
                 <FolderPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add Directory</span>
+                <span className="hidden sm:inline">{t('buckets.actions.add_directory')}</span>
               </Button>
             )}
-            <Button variant="secondary" size="icon" onClick={onRefresh} title="Refresh" disabled={isRefreshing}>
+            <Button variant="secondary" size="icon" onClick={onRefresh} title={t('buckets.actions.refresh')} aria-label={t('buckets.actions.refresh')} disabled={isRefreshing}>
               <RotateCwIcon className={`h-4 w-4 transition-transform duration-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
@@ -399,19 +398,19 @@ export function ObjectBrowserView({
                   }`}
                 >
                   <p className="text-sm">
-                    Drag and drop files/folders or{' '}
+                    {t('buckets.upload.drop_or')}{' '}
                     <label
                       htmlFor="file-input"
                       className="font-medium text-primary hover:underline cursor-pointer"
                     >
-                      select files
+                      {t('buckets.upload.select_files')}
                     </label>
                     {' / '}
                     <label
                       htmlFor="folder-input"
                       className="font-medium text-primary hover:underline cursor-pointer"
                     >
-                      select folder
+                      {t('buckets.upload.select_folder')}
                     </label>
                   </p>
                   <input
@@ -472,8 +471,8 @@ export function ObjectBrowserView({
                     </div>
                   </div>
                   <div className="text-center space-y-2">
-                    <p className="text-lg font-semibold text-primary">Drop files here to upload</p>
-                    <p className="text-sm text-muted-foreground">Files will be uploaded to {currentPath || 'root'}</p>
+                    <p className="text-lg font-semibold text-primary">{t('buckets.upload.drop_here')}</p>
+                    <p className="text-sm text-muted-foreground">{t('buckets.upload.destination', { location: currentPath || t('buckets.common.root') })}</p>
                   </div>
                 </div>
               </div>
@@ -536,9 +535,9 @@ export function ObjectBrowserView({
         onOpenChange={(open) => {
           if (!open && !bulkDeleting) setPendingDelete(null);
         }}
-        title={getBulkDeleteTitle(pendingDelete)}
-        description={getBulkDeleteDescription(pendingDelete)}
-        confirmLabel="Delete"
+        title={getBulkDeleteTitle(pendingDelete, t, language)}
+        description={getBulkDeleteDescription(pendingDelete, t, language)}
+        confirmLabel={t('buckets.actions.delete')}
         loading={bulkDeleting}
         onConfirm={handleConfirmBulkDelete}
       />
@@ -547,35 +546,31 @@ export function ObjectBrowserView({
 }
 
 // Builds a concise title summarising what the bulk-delete dialog will remove.
-function getBulkDeleteTitle(pending: { keys: string[]; prefixes: string[] } | null): string {
-  if (!pending) return 'Delete items?';
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function getBulkDeleteTitle(pending: { keys: string[]; prefixes: string[] } | null, t: Translate, language: string): string {
+  if (!pending) return t('buckets.bulk_delete.title.items');
   const { keys, prefixes } = pending;
   const total = keys.length + prefixes.length;
   if (keys.length === 0 && prefixes.length === 1) {
-    return 'Delete folder?';
+    return t('buckets.bulk_delete.title.folder');
   }
-  return `Delete ${total} item${total !== 1 ? 's' : ''}?`;
+  return t('buckets.bulk_delete.title.count', { count: total.toLocaleString(language) });
 }
 
 // Spells out the file/folder counts and warns that folders are removed recursively.
 function getBulkDeleteDescription(
   pending: { keys: string[]; prefixes: string[] } | null,
+  t: Translate,
+  language: string,
 ): string {
   if (!pending) return '';
   const { keys, prefixes } = pending;
-  const parts: string[] = [];
-  if (keys.length > 0) {
-    parts.push(`${keys.length} file${keys.length !== 1 ? 's' : ''}`);
-  }
   if (prefixes.length > 0) {
-    parts.push(`${prefixes.length} folder${prefixes.length !== 1 ? 's' : ''}`);
+    return t('buckets.bulk_delete.description.with_folders', {
+      files: keys.length.toLocaleString(language),
+      folders: prefixes.length.toLocaleString(language),
+    });
   }
-  const summary = parts.join(' and ');
-
-  if (prefixes.length > 0) {
-    return `This will permanently delete ${summary}. Every object stored inside the selected folder${
-      prefixes.length !== 1 ? 's' : ''
-    } will be removed recursively.`;
-  }
-  return `This will permanently delete ${summary}.`;
+  return t('buckets.bulk_delete.description.files_only', { files: keys.length.toLocaleString(language) });
 }

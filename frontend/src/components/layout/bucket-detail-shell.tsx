@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { useBuckets } from '@/hooks/useApi';
 import { useBucketCan } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
+import { formatBytes } from '@/lib/file-utils';
 
 interface TabSpec {
   to: string;
@@ -16,25 +18,14 @@ interface TabSpec {
 }
 
 const tabs: TabSpec[] = [
-  { to: 'objects', label: 'Objects', perms: ['object.list'] },
-  { to: 'permissions', label: 'Permissions', perms: ['permission.allow_bucket_key', 'permission.deny_bucket_key'] },
-  { to: 'website', label: 'Website', perms: ['bucket.update'] },
-  { to: 'settings', label: 'Settings', perms: ['bucket.update'] },
+  { to: 'objects', label: 'buckets.tabs.objects', perms: ['object.list'] },
+  { to: 'permissions', label: 'buckets.tabs.permissions', perms: ['permission.allow_bucket_key', 'permission.deny_bucket_key'] },
+  { to: 'website', label: 'buckets.tabs.website', perms: ['bucket.update'] },
+  { to: 'settings', label: 'buckets.tabs.settings', perms: ['bucket.update'] },
 ];
 
-function formatBytes(n?: number) {
-  if (n == null) return '';
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = n / 1024;
-  for (const u of units) {
-    if (v < 1024) return `${v.toFixed(v >= 10 ? 0 : 1)} ${u}`;
-    v /= 1024;
-  }
-  return `${v.toFixed(0)} PB`;
-}
-
 export function BucketDetailShell() {
+  const { t, language } = useTranslation();
   const { bucketName = '' } = useParams<{ bucketName: string }>();
   const location = useLocation();
   const { data: buckets = [], isFetched } = useBuckets();
@@ -48,9 +39,9 @@ export function BucketDetailShell() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 px-7 py-12 text-center">
         <Database className="h-12 w-12 text-muted-foreground opacity-50" />
-        <h2 className="text-xl font-semibold">Bucket not found</h2>
+        <h2 className="text-xl font-semibold">{t('buckets.errors.not_found')}</h2>
         <p className="text-sm text-muted-foreground max-w-md">
-          The bucket "{bucketName}" does not exist or you don't have access to it.
+          {t('buckets.errors.named_not_found_description', { bucket: bucketName })}
         </p>
       </div>
     );
@@ -70,7 +61,7 @@ export function BucketDetailShell() {
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    toast.success('URL copied');
+    toast.success(t('buckets.toast.url_copied'));
   };
 
   return (
@@ -84,19 +75,19 @@ export function BucketDetailShell() {
               <h1 className="truncate text-[26px] font-semibold tracking-[-0.02em]">{bucketName}</h1>
               <p className="mt-1 truncate font-mono text-[13.5px] text-[var(--muted-foreground)]">{s3Url}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Badge variant="success">Active</Badge>
-                {bucket?.objectCount != null && <Badge>{bucket.objectCount.toLocaleString()} objects</Badge>}
+                <Badge variant="success">{t('buckets.common.active')}</Badge>
+                {bucket?.objectCount != null && <Badge>{t('buckets.summary.objects', { count: bucket.objectCount.toLocaleString(language) })}</Badge>}
                 {bucket?.size != null && <Badge>{formatBytes(bucket.size)}</Badge>}
               </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="secondary" onClick={copyUrl}>
-              <Copy /> Copy URL
+              <Copy /> {t('buckets.actions.copy_url')}
             </Button>
             {canBucket(bucket, 'object.write') && isObjectsTab && (
               <Button variant="primary" onClick={() => document.dispatchEvent(new CustomEvent('bucket:upload'))}>
-                <Upload /> Upload
+                <Upload /> {t('buckets.actions.upload')}
               </Button>
             )}
           </div>
@@ -105,11 +96,11 @@ export function BucketDetailShell() {
 
       {/* Tabs */}
       <nav className="flex h-12 items-center gap-0 border-b border-[var(--border)] px-7">
-        {visibleTabs.map((t) => (
+        {visibleTabs.map((tab) => (
           <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
+            key={tab.to}
+            to={tab.to}
+            end={tab.end}
             className={({ isActive }) =>
               cn(
                 'relative -mb-px inline-flex h-12 items-center px-3.5 text-[14px] font-medium transition-colors',
@@ -120,7 +111,7 @@ export function BucketDetailShell() {
               )
             }
           >
-            {t.label}
+            {t(tab.label)}
           </NavLink>
         ))}
       </nav>

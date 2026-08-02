@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/url"
@@ -23,6 +24,7 @@ type S3Service struct {
 	client       *minio.Client
 	config       *state.ClusterConfig
 	adminService AdminService
+	cacheScope   string
 }
 
 // NewS3Service creates a new S3 service instance using MinIO SDK
@@ -46,10 +48,12 @@ func NewS3Service(cfg *state.ClusterConfig, adminService AdminService) *S3Servic
 		panic(fmt.Errorf("failed to create MinIO client: %w", err))
 	}
 
+	tokenHash := sha256.Sum256([]byte(cfg.AdminToken))
 	return &S3Service{
 		client:       client,
 		config:       cfg,
 		adminService: adminService,
+		cacheScope:   fmt.Sprintf("%s|%s|%s|%x", cfg.ID, cfg.Endpoint, cfg.AdminEndpoint, tokenHash),
 	}
 }
 
@@ -76,9 +80,9 @@ func (op Operation) satisfies(perms models.BucketKeyPermission) bool {
 // InvalidateBucketCredsCache removes all cached S3 credentials for a bucket.
 // Call this after granting/revoking bucket permissions or deleting a key.
 func InvalidateBucketCredsCache(bucketName string) {
-	for _, op := range []Operation{OpRead, OpWrite, OpRead | OpWrite} {
-		utils.GlobalCache.Delete(fmt.Sprintf("key:%s:%d", bucketName, op))
-	}
+	// Cache keys include cluster identity; without a service handle, clearing is
+	// the only safe invalidation and is preferable to leaving stale credentials.
+	utils.GlobalCache.Clear()
 }
 
 // ClearAllCredsCache wipes the entire credentials cache. Use when a key is
@@ -87,30 +91,33 @@ func ClearAllCredsCache() {
 	utils.GlobalCache.Clear()
 }
 
-func setKeyInCache(bucketName string, permissions models.BucketKeyPermission, creds *credentials.Credentials) {
+func setKeyInCache(scope, bucketName string, permissions models.BucketKeyPermission, creds *credentials.Credentials) {
 	canWrite := permissions.Write
 	canRead := permissions.Read
 
 	if canWrite {
-		key := fmt.Sprintf("key:%s:%d", bucketName, OpWrite)
+		key := fmt.Sprintf("key:%s:%s:%d", scope, bucketName, OpWrite)
 		utils.GlobalCache.Set(key, creds, time.Hour)
 	}
 
 	if canRead {
-		key := fmt.Sprintf("key:%s:%d", bucketName, OpRead)
+		key := fmt.Sprintf("key:%s:%s:%d", scope, bucketName, OpRead)
 		utils.GlobalCache.Set(key, creds, time.Hour)
 	}
 
 	if canRead && canWrite {
-		key := fmt.Sprintf("key:%s:%d", bucketName, OpRead|OpWrite)
+		key := fmt.Sprintf("key:%s:%s:%d", scope, bucketName, OpRead|OpWrite)
 		utils.GlobalCache.Set(key, creds, time.Hour)
 	}
 }
 
 func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string, op Operation) (*credentials.Credentials, error) {
-	cacheKey := fmt.Sprintf("key:%s:%d", bucketName, op)
+	cacheKey := fmt.Sprintf("key:%s:%s:%d", s.cacheScope, bucketName, op)
 	if cached := utils.GlobalCache.Get(cacheKey); cached != nil {
-		return cached.(*credentials.Credentials), nil
+		if creds, ok := cached.(*credentials.Credentials); ok && creds != nil && !creds.IsExpired() {
+			return creds, nil
+		}
+		utils.GlobalCache.Delete(cacheKey)
 	}
 
 	bucketInfo, err := s.adminService.GetBucketInfoByAlias(ctx, bucketName)
@@ -127,7 +134,10 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string,
 			continue
 		}
 		creds := credentials.NewStaticV4(keyDetails.AccessKeyID, *keyDetails.SecretAccessKey, "")
-		setKeyInCache(bucketName, keyInfo.Permissions, creds)
+		if _, err := creds.GetWithContext(nil); err != nil {
+			continue
+		}
+		setKeyInCache(s.cacheScope, bucketName, keyInfo.Permissions, creds)
 		return creds, nil
 	}
 
@@ -197,37 +207,8 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		contents = append(contents, obj)
 	}
 
-	// Process objects from result.Contents
-	// Note: ListObjectsV2 doesn't return ContentType, so we need to fetch it separately
 	objects := make([]models.ObjectInfo, len(contents))
-
-	// Fetch ContentType concurrently with a bounded worker pool and per-call
-	// timeout, so a slow Garage node can't stall the entire listing.
-	type statResult struct {
-		index       int
-		contentType string
-		err         error
-	}
-
-	statChan := make(chan statResult, len(contents))
-	sem := make(chan struct{}, 10) // limit to 10 concurrent StatObject calls
-
 	for i, obj := range contents {
-		go func(idx int, objKey string) {
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			statCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-
-			stat, err := client.StatObject(statCtx, bucketName, objKey, minio.StatObjectOptions{})
-			if err != nil {
-				statChan <- statResult{index: idx, contentType: "", err: err}
-				return
-			}
-			statChan <- statResult{index: idx, contentType: stat.ContentType, err: nil}
-		}(i, obj.Key)
-
 		objects[i] = models.ObjectInfo{
 			Key:          obj.Key,
 			Size:         obj.Size,
@@ -236,16 +217,6 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 			StorageClass: obj.StorageClass,
 		}
 	}
-
-	// Collect results from goroutines
-	for range contents {
-		res := <-statChan
-		if res.err == nil {
-			objects[res.index].ContentType = res.contentType
-		}
-		// If there was an error, ContentType remains empty, which is acceptable
-	}
-	close(statChan)
 
 	// Process folders from result.CommonPrefixes
 	prefixList := make([]string, 0, len(result.CommonPrefixes)+len(markerKeys))
@@ -366,7 +337,7 @@ scan:
 }
 
 // UploadObject uploads an object to a bucket
-func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error) {
+func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, size int64, contentType string) (*models.ObjectUploadResponse, error) {
 	// Get bucket-specific MinIO client
 	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
@@ -380,13 +351,8 @@ func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, bo
 
 	var info minio.UploadInfo
 
-	// Call MinIO PutObject API with retry logic
-	retryConfig := utils.DefaultRetryConfig()
-	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
-		var uploadErr error
-		info, uploadErr = client.PutObject(ctx, bucketName, key, body, -1, opts)
-		return uploadErr
-	})
+	// Do not retry: a generic reader may already be consumed after a failure.
+	info, err = client.PutObject(ctx, bucketName, key, body, size, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload object %s to bucket %s: %w", key, bucketName, err)
 	}
@@ -477,6 +443,17 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 // resolves the range against the object size beforehand, so this method does
 // not stat the object again.
 func (s *S3Service) GetObjectRange(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error) {
+	return s.getObjectRange(ctx, bucketName, key, start, end, "")
+}
+
+// GetObjectRangeIfMatch keeps range bytes consistent with metadata obtained by
+// the handler. A concurrent overwrite produces a precondition failure instead
+// of mixing old headers with new content.
+func (s *S3Service) GetObjectRangeIfMatch(ctx context.Context, bucketName, key string, start, end int64, etag string) (io.ReadCloser, error) {
+	return s.getObjectRange(ctx, bucketName, key, start, end, etag)
+}
+
+func (s *S3Service) getObjectRange(ctx context.Context, bucketName, key string, start, end int64, etag string) (io.ReadCloser, error) {
 	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
@@ -485,6 +462,11 @@ func (s *S3Service) GetObjectRange(ctx context.Context, bucketName, key string, 
 	opts := minio.GetObjectOptions{}
 	if err := opts.SetRange(start, end); err != nil {
 		return nil, fmt.Errorf("invalid range %d-%d for object %s: %w", start, end, key, err)
+	}
+	if etag != "" {
+		if err := opts.SetMatchETag(etag); err != nil {
+			return nil, fmt.Errorf("invalid ETag for object %s: %w", key, err)
+		}
 	}
 
 	var object *minio.Object
@@ -593,47 +575,37 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	if len(keys) == 0 {
 		return 0, nil
 	}
-
-	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
-	}
-
-	// Create channel for objects to delete
-	objectsCh := make(chan minio.ObjectInfo, len(keys))
-
-	// Send objects to delete in a goroutine
-	go func() {
-		defer close(objectsCh)
-		for _, key := range keys {
-			objectsCh <- minio.ObjectInfo{
-				Key: key,
+	deleted := 0
+	for start := 0; start < len(keys); start += 1000 {
+		end := start + 1000
+		if end > len(keys) {
+			end = len(keys)
+		}
+		client, err := s.getMinioClient(ctx, bucketName, OpWrite)
+		if err != nil {
+			return deleted, err
+		}
+		objectsCh := make(chan minio.ObjectInfo, end-start)
+		for _, key := range keys[start:end] {
+			objectsCh <- minio.ObjectInfo{Key: key}
+		}
+		close(objectsCh)
+		failed := 0
+		var firstErr error
+		for rerr := range client.RemoveObjects(ctx, bucketName, objectsCh, minio.RemoveObjectsOptions{}) {
+			if rerr.Err != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = fmt.Errorf("failed to delete object %s from bucket %s: %w", rerr.ObjectName, bucketName, rerr.Err)
+				}
 			}
 		}
-	}()
-
-	// Call MinIO RemoveObjects API (batch delete). RemoveObjects only surfaces
-	// the objects it FAILED to delete, so we drain the whole channel (which also
-	// avoids leaking the sender goroutine) and count failures.
-	errorCh := client.RemoveObjects(ctx, bucketName, objectsCh, minio.RemoveObjectsOptions{})
-
-	failed := 0
-	var firstErr error
-	for rerr := range errorCh {
-		if rerr.Err != nil {
-			failed++
-			if firstErr == nil {
-				firstErr = fmt.Errorf("failed to delete object %s from bucket %s: %w", rerr.ObjectName, bucketName, rerr.Err)
-			}
+		deleted += end - start - failed
+		if firstErr != nil {
+			return deleted, firstErr
 		}
 	}
-
-	if firstErr != nil {
-		return len(keys) - failed, firstErr
-	}
-
-	return len(keys), nil
+	return deleted, nil
 }
 
 // DeleteObjectsByPrefix recursively deletes every object stored under the given
@@ -652,7 +624,8 @@ func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefi
 
 	// List every object under the prefix recursively (no delimiter), so nested
 	// folders are flattened into their concrete keys.
-	keys := make([]string, 0)
+	keys := make([]string, 0, 1000)
+	deleted := 0
 	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
 		Prefix:    prefix,
 		Recursive: true,
@@ -661,13 +634,32 @@ func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefi
 			return 0, fmt.Errorf("failed to list objects under prefix %s in bucket %s: %w", prefix, bucketName, obj.Err)
 		}
 		keys = append(keys, obj.Key)
+		if len(keys) == 1000 {
+			n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
+			deleted += n
+			if err != nil {
+				return deleted, err
+			}
+			keys = keys[:0]
+		}
 	}
 
-	if len(keys) == 0 {
-		return 0, nil
+	if len(keys) > 0 {
+		n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
+		deleted += n
+		if err != nil {
+			return deleted, err
+		}
 	}
-
-	return s.DeleteMultipleObjects(ctx, bucketName, keys)
+	for upload := range client.ListIncompleteUploads(ctx, bucketName, prefix, true) {
+		if upload.Err != nil {
+			return deleted, upload.Err
+		}
+		if err := client.RemoveIncompleteUpload(ctx, bucketName, upload.Key); err != nil {
+			return deleted, err
+		}
+	}
+	return deleted, nil
 }
 
 // DeleteAllObjects deletes every object in a bucket and returns the count of
@@ -678,7 +670,8 @@ func (s *S3Service) DeleteAllObjects(ctx context.Context, bucketName string) (in
 		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	keys := make([]string, 0)
+	keys := make([]string, 0, 1000)
+	deleted := 0
 	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
 		Recursive: true,
 	}) {
@@ -686,13 +679,32 @@ func (s *S3Service) DeleteAllObjects(ctx context.Context, bucketName string) (in
 			return 0, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, obj.Err)
 		}
 		keys = append(keys, obj.Key)
+		if len(keys) == 1000 {
+			n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
+			deleted += n
+			if err != nil {
+				return deleted, err
+			}
+			keys = keys[:0]
+		}
 	}
 
-	if len(keys) == 0 {
-		return 0, nil
+	if len(keys) > 0 {
+		n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
+		deleted += n
+		if err != nil {
+			return deleted, err
+		}
 	}
-
-	return s.DeleteMultipleObjects(ctx, bucketName, keys)
+	for upload := range client.ListIncompleteUploads(ctx, bucketName, "", true) {
+		if upload.Err != nil {
+			return deleted, upload.Err
+		}
+		if err := client.RemoveIncompleteUpload(ctx, bucketName, upload.Key); err != nil {
+			return deleted, err
+		}
+	}
+	return deleted, nil
 }
 
 // GetPresignedURL generates a pre-signed URL for temporary access to an object
@@ -733,9 +745,11 @@ type UploadResult struct {
 func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string, files []struct {
 	Key         string
 	Body        io.Reader
+	Size        int64
 	ContentType string
 }) []UploadResult {
 	results := make([]UploadResult, len(files))
+	seen := make(map[string]struct{}, len(files))
 
 	// Get bucket-specific MinIO client once for all uploads
 	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
@@ -753,13 +767,18 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 
 	// Upload each file
 	for i, file := range files {
+		if _, ok := seen[file.Key]; ok {
+			results[i] = UploadResult{Key: file.Key, Error: fmt.Errorf("duplicate upload key %q", file.Key), ContentType: file.ContentType}
+			continue
+		}
+		seen[file.Key] = struct{}{}
 		// Upload options
 		opts := minio.PutObjectOptions{
 			ContentType: file.ContentType,
 		}
 
 		// Attempt upload
-		info, err := client.PutObject(ctx, bucketName, file.Key, file.Body, -1, opts)
+		info, err := client.PutObject(ctx, bucketName, file.Key, file.Body, file.Size, opts)
 		if err != nil {
 			results[i] = UploadResult{
 				Key:         file.Key,
@@ -782,4 +801,3 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 
 	return results
 }
-

@@ -5,12 +5,12 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/state"
+	"crypto/subtle"
 
-	"crypto/sha256"
-	"encoding/hex"
+	"sync"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/gofiber/fiber/v3"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles authentication-related requests
@@ -18,6 +18,11 @@ type AuthHandler struct {
 	cfg          *config.Config
 	authService  *auth.Service
 	stateManager *state.Manager
+	webauthn     *webauthn.WebAuthn
+	challengeMu  sync.Mutex
+	mfa          map[string]pendingMFA
+	totpEnroll   map[string]pendingTOTP
+	ceremonies   map[string]pendingCeremony
 }
 
 // NewAuthHandler creates a new auth handler
@@ -26,6 +31,10 @@ func NewAuthHandler(cfg *config.Config, authService *auth.Service, stateManager 
 		cfg:          cfg,
 		authService:  authService,
 		stateManager: stateManager,
+		webauthn:     newWebAuthn(cfg),
+		mfa:          make(map[string]pendingMFA),
+		totpEnroll:   make(map[string]pendingTOTP),
+		ceremonies:   make(map[string]pendingCeremony),
 	}
 }
 
@@ -40,7 +49,7 @@ func NewAuthHandler(cfg *config.Config, authService *auth.Service, stateManager 
 func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 	response := fiber.Map{
 		"admin": fiber.Map{
-			"enabled": true, // Admin is now always enabled since it's the core local account
+			"enabled": h.cfg.Auth.Admin.Enabled || h.stateManager.GetState().Admin.Setup,
 		},
 		"oidc": fiber.Map{
 			"enabled": h.cfg.Auth.OIDC.Enabled,
@@ -48,19 +57,22 @@ func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 		"token": fiber.Map{
 			"enabled": h.cfg.Auth.Token.Enabled,
 		},
+		"passkey": fiber.Map{
+			"enabled": h.webauthn != nil,
+		},
 		"server": fiber.Map{
-			"host": h.cfg.Server.Host,
-			"port": h.cfg.Server.Port,
-			"protocol": h.cfg.Server.Protocol,
-			"root_url": h.cfg.Server.RootURL,
-			"allowed_ips": h.cfg.Server.AllowedIPs,
-			"max_body_size": h.cfg.Server.MaxBodySize,
-			"max_header_size": h.cfg.Server.MaxHeaderSize,
-			"read_buffer_size": h.cfg.Server.ReadBufferSize,
+			"host":              h.cfg.Server.Host,
+			"port":              h.cfg.Server.Port,
+			"protocol":          h.cfg.Server.Protocol,
+			"root_url":          h.cfg.Server.RootURL,
+			"allowed_ips":       h.cfg.Server.AllowedIPs,
+			"max_body_size":     h.cfg.Server.MaxBodySize,
+			"max_header_size":   h.cfg.Server.MaxHeaderSize,
+			"read_buffer_size":  h.cfg.Server.ReadBufferSize,
 			"write_buffer_size": h.cfg.Server.WriteBufferSize,
 		},
 		"logging": fiber.Map{
-			"level": h.cfg.Logging.Level,
+			"level":  h.cfg.Logging.Level,
 			"format": h.cfg.Logging.Format,
 		},
 	}
@@ -96,6 +108,9 @@ type LoginBasicRequest struct {
 //	@Failure		401			{object}	models.APIResponse								"Invalid credentials"
 //	@Router			/auth/login [post]
 func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
+	if !h.cfg.Auth.Admin.Enabled && !h.stateManager.GetState().Admin.Setup {
+		return c.Status(fiber.StatusUnauthorized).JSON(models.ErrorResponse(models.ErrCodeUnauthorized, "Admin authentication is disabled"))
+	}
 	// Parse request body
 	var req LoginBasicRequest
 	if err := c.Bind().JSON(&req); err != nil {
@@ -119,30 +134,30 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 	}
 
 	if s.Admin.Password != "" {
-		// Pre-hash the provided password with SHA-256 to match setup
-		hasher := sha256.New()
-		hasher.Write([]byte(req.Password))
-		sha256Hash := hex.EncodeToString(hasher.Sum(nil))
-
-		if err := bcrypt.CompareHashAndPassword([]byte(s.Admin.Password), []byte(sha256Hash)); err != nil {
+		if !auth.VerifyPassword(s.Admin.Password, req.Password) {
 			return c.Status(fiber.StatusUnauthorized).JSON(
 				models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
 			)
 		}
 	} else {
-		// If no password is set but setup is true, allow empty password?
-		// "лучше просто задать никнейм а пароль установить позже"
-		if req.Password != "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(
-				models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid credentials"),
-			)
+		return c.Status(fiber.StatusUnauthorized).JSON(
+			models.ErrorResponse(models.ErrCodeUnauthorized, "A password must be configured"),
+		)
+	}
+	if s.Admin.TOTPSecret != "" {
+		challenge, err := h.newMFAChallenge(s.Admin.SecurityVersion)
+		if err != nil {
+			return c.Status(fiber.StatusTooManyRequests).JSON(models.ErrorResponse(models.ErrCodeBadRequest, err.Error()))
 		}
+		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"mfa_required": true, "challenge_id": challenge})
 	}
 
 	// Create user info object
 	userInfo := &auth.UserInfo{
-		Username:   req.Username,
-		AuthMethod: "admin",
+		Username:        req.Username,
+		Email:           s.Admin.Email,
+		AuthMethod:      "admin",
+		SecurityVersion: s.Admin.SecurityVersion,
 	}
 
 	// Generate JWT session token
@@ -152,14 +167,68 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create session"),
 		)
 	}
+	h.setSessionCookie(c, sessionToken)
 
 	return c.JSON(fiber.Map{
 		"success": true,
-		"token":   sessionToken,
 		"user": fiber.Map{
 			"username": userInfo.Username,
 		},
 	})
+}
+
+// LoginToken authenticates with a configured Garage admin token. The token is
+// compared only against server-side cluster configuration and is never echoed.
+func (h *AuthHandler) LoginToken(c fiber.Ctx) error {
+	if !h.cfg.Auth.Token.Enabled {
+		return c.Status(fiber.StatusUnauthorized).JSON(models.ErrorResponse(models.ErrCodeUnauthorized, "Token authentication is disabled"))
+	}
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.Bind().JSON(&req); err != nil || req.Token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Token is required"))
+	}
+	matched := false
+	for _, cluster := range h.stateManager.GetState().Clusters {
+		if subtle.ConstantTimeCompare([]byte(req.Token), []byte(cluster.AdminToken)) == 1 {
+			matched = true
+		}
+	}
+	if !matched {
+		return c.Status(fiber.StatusUnauthorized).JSON(models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid token"))
+	}
+	userInfo := &auth.UserInfo{Username: "garage-token", AuthMethod: "token"}
+	sessionToken, err := h.authService.GenerateSessionToken(userInfo)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to create session"))
+	}
+	h.setSessionCookie(c, sessionToken)
+	return c.JSON(fiber.Map{"success": true, "user": fiber.Map{"username": userInfo.Username}})
+}
+
+func (h *AuthHandler) Logout(c fiber.Ctx) error {
+	h.setSessionCookie(c, "")
+	return c.JSON(fiber.Map{"success": true})
+}
+
+func (h *AuthHandler) setSessionCookie(c fiber.Ctx, token string) {
+	name := h.cfg.Auth.OIDC.CookieName
+	if name == "" {
+		name = "garage_session"
+	}
+	maxAge := h.cfg.Auth.OIDC.SessionMaxAge
+	if maxAge <= 0 {
+		maxAge = 86400
+	}
+	if token == "" {
+		maxAge = -1
+	}
+	sameSite := h.cfg.Auth.OIDC.CookieSameSite
+	if sameSite == "" {
+		sameSite = "lax"
+	}
+	c.Cookie(&fiber.Cookie{Name: name, Value: token, Path: "/", MaxAge: maxAge, Secure: h.cfg.IsProduction() || h.cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: sameSite})
 }
 
 // GetMe returns the current authenticated user's information
@@ -181,9 +250,10 @@ func (h *AuthHandler) GetMe(c fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"success": true,
 				"user": fiber.Map{
-					"username": userInfo.Username,
-					"email":    userInfo.Email,
-					"name":     userInfo.Name,
+					"username":    userInfo.Username,
+					"email":       userInfo.Email,
+					"name":        userInfo.Name,
+					"auth_method": userInfo.AuthMethod,
 				},
 			})
 		}

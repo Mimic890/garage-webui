@@ -17,7 +17,7 @@ type configTeamResolver struct {
 }
 
 // NewTeamResolver builds the v1 resolver: OIDC identities resolve through the
-// compiled policy; admin/token logins resolve to the synthetic admin subject
+// compiled policy; local admin/passkey and token logins resolve to the synthetic admin subject
 // (non-OIDC team mapping is deferred).
 func NewTeamResolver(policy *Policy, adminRoles []string) TeamResolver {
 	return &configTeamResolver{policy: policy, adminRoles: adminRoles}
@@ -32,7 +32,7 @@ func (r *configTeamResolver) Resolve(userInfo *auth.UserInfo) Subject {
 	// Trust only signed claims, never the transport channel: the auth method
 	// is a JWT claim stamped at login. Legacy sessions ("") resolve like OIDC
 	// so a replayed cookie can never escalate.
-	if userInfo.AuthMethod == "admin" || userInfo.AuthMethod == "token" {
+	if userInfo.AuthMethod == "admin" || userInfo.AuthMethod == "passkey" || userInfo.AuthMethod == "token" {
 		return AdminSubject(id)
 	}
 

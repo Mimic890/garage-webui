@@ -13,13 +13,6 @@ export function Layout() {
       <TopBar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 md:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-        
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         
         <main className="flex-1 overflow-y-auto min-w-0 scrollbar-thin">

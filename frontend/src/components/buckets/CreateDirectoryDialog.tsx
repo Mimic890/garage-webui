@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconTile } from '@/components/ui/icon-tile';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
 
 interface CreateDirectoryDialogProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface CreateDirectoryDialogProps {
 }
 
 export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreateDirectory }: CreateDirectoryDialogProps) {
+  const { t } = useTranslation();
   const [dirName, setDirName] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -29,7 +31,7 @@ export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreat
 
   const handleCreate = async () => {
     if (!dirName) {
-      toast.error('Please enter a directory name');
+      toast.error(t('buckets.directory_dialog.errors.name_required'));
       return;
     }
 
@@ -51,18 +53,18 @@ export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreat
         <DialogHeader>
           <IconTile icon={<FolderPlus />} tone="primary" size="md" />
           <div className="flex-1">
-            <DialogTitle>Create Directory</DialogTitle>
+            <DialogTitle>{t('buckets.directory_dialog.title')}</DialogTitle>
             <DialogDescription>
-              Create a new directory in {currentPath || 'the root'}
+              {t('buckets.directory_dialog.description', { location: currentPath || t('buckets.common.root') })}
             </DialogDescription>
           </div>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Directory Name</label>
+            <label className="text-sm font-medium">{t('buckets.directory_dialog.name.label')}</label>
             <Input
               autoFocus
-              placeholder="my-directory"
+              placeholder={t('buckets.directory_dialog.name.placeholder')}
               value={dirName}
               onChange={(e) => setDirName(e.target.value)}
               onKeyDown={(e) => {
@@ -75,10 +77,10 @@ export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreat
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('buckets.actions.cancel')}
           </Button>
           <Button onClick={handleCreate} disabled={!dirName || pending}>
-            Create
+            {t('buckets.actions.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

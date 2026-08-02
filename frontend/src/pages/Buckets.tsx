@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { AlertCircle, Plus } from 'lucide-react';
 import { useBuckets, useCreateBucket, useDeleteBucket } from '@/hooks/useApi';
 import { usePermissions } from '@/hooks/usePermissions';
 import { BucketListView } from '@/components/buckets/BucketListView';
@@ -13,16 +13,17 @@ import type { Bucket } from '@/types';
 import { useClusterStore } from '@/store/cluster-store';
 import { Navigate } from 'react-router-dom';
 import { useTranslation } from '@/lib/i18n';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export function Buckets() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Bucket | null>(null);
 
   const { hasAnyPerm } = usePermissions();
-  const { data: buckets = [], isLoading } = useBuckets();
+  const { data: buckets = [], isLoading, isError, refetch } = useBuckets();
   const createMutation = useCreateBucket();
   const deleteMutation = useDeleteBucket();
   const { clusters } = useClusterStore();
@@ -40,11 +41,22 @@ export function Buckets() {
     return <Navigate to="/" replace />;
   }
 
+  if (isError) {
+    return (
+      <div>
+        <PageHeader title={t('buckets.title')} subtitle={t('buckets.errors.load_failed')} />
+        <div className="p-6">
+          <EmptyState icon={<AlertCircle />} title={t('buckets.errors.unavailable')} description={t('buckets.errors.request_failed')} tone="destructive" action={<Button onClick={() => void refetch()}>{t('buckets.actions.retry')}</Button>} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
         title={t('buckets.title')}
-        subtitle={`${buckets.length} ${t('nav.buckets').toLowerCase()}`}
+        subtitle={t('buckets.summary.count', { count: buckets.length.toLocaleString(language) })}
         actions={
           hasAnyPerm('bucket.create') && (
             <Button onClick={() => setCreateOpen(true)}>

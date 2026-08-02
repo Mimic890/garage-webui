@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconTile } from '@/components/ui/icon-tile';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
 
 interface CreateBucketDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface CreateBucketDialogProps {
 }
 
 export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: CreateBucketDialogProps) {
+  const { t } = useTranslation();
   const [bucketName, setBucketName] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -28,7 +30,7 @@ export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: Creat
 
   const handleCreate = async () => {
     if (!bucketName || pending) {
-      toast.error('Please enter a bucket name');
+      toast.error(t('buckets.create_dialog.errors.name_required'));
       return;
     }
 
@@ -50,18 +52,18 @@ export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: Creat
         <DialogHeader>
           <IconTile icon={<Database />} tone="primary" size="md" />
           <div className="flex-1">
-            <DialogTitle>Create New Bucket</DialogTitle>
+            <DialogTitle>{t('buckets.create_dialog.title')}</DialogTitle>
             <DialogDescription>
-              Create a new storage bucket for your objects
+              {t('buckets.create_dialog.description')}
             </DialogDescription>
           </div>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Bucket Name</label>
+            <label className="text-sm font-medium">{t('buckets.create_dialog.name.label')}</label>
             <Input
               autoFocus
-              placeholder="my-bucket-name"
+              placeholder={t('buckets.create_dialog.name.placeholder')}
               value={bucketName}
               onChange={(e) => setBucketName(e.target.value)}
               onKeyDown={(e) => {
@@ -71,20 +73,20 @@ export function CreateBucketDialog({ open, onOpenChange, onCreateBucket }: Creat
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Must be unique and follow DNS naming conventions
+              {t('buckets.create_dialog.name.help')}
             </p>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('buckets.actions.cancel')}
           </Button>
           <Button
             variant="primary"
             onClick={handleCreate}
             disabled={!bucketName || pending}
           >
-            Create
+            {t('buckets.actions.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

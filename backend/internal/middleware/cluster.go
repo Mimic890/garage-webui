@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"context"
 	"strings"
+	"sync"
 
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/state"
@@ -15,14 +15,22 @@ import (
 // cluster in the state manager, and injects the AdminService and S3Service
 // into the request's context for downstream handlers to use.
 func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
+	type cachedServices struct {
+		config state.ClusterConfig
+		admin  *services.AdminServiceResult
+		s3     *services.S3Service
+	}
+	var mu sync.RWMutex
+	cache := map[string]cachedServices{}
+
 	return func(c fiber.Ctx) error {
+		path := c.Path()
+		if strings.HasPrefix(path, "/api/v1/panel") || path == "/api/v1/capabilities" || path == "/api/v1/health" {
+			return c.Next()
+		}
 		clusterID := c.Get("X-Cluster-Id")
 
 		if clusterID == "" {
-			path := c.Path()
-			if strings.HasPrefix(path, "/api/v1/panel") || path == "/api/v1/capabilities" || path == "/api/v1/health" {
-				return c.Next()
-			}
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"success": false,
 				"error": fiber.Map{
@@ -44,32 +52,29 @@ func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
 			})
 		}
 
-		// Connect to the cluster's Admin API
-		// We use debug level since we're creating this per-request.
-		// A real app might cache these services, but ponytail rule: "lazy means less code".
-		// We'll create it on the fly first. If it's slow, we add caching later.
-		adminResult, err := services.NewAdminService(&cfg, "debug")
-		if err != nil {
-			log.Error().Err(err).Str("cluster_id", clusterID).Msg("Failed to connect to cluster admin API")
-			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-				"success": false,
-				"error": fiber.Map{
-					"code":    "ERROR_502",
-					"message": "Failed to connect to cluster: " + err.Error(),
-				},
-			})
+		mu.RLock()
+		cached, ok := cache[clusterID]
+		mu.RUnlock()
+		if !ok || cached.config != cfg {
+			adminResult, err := services.NewAdminService(&cfg, "debug")
+			if err != nil {
+				log.Error().Err(err).Str("cluster_id", clusterID).Msg("Failed to connect to cluster admin API")
+				return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+					"success": false,
+					"error":   fiber.Map{"code": "ERROR_502", "message": "Failed to connect to cluster"},
+				})
+			}
+			cached = cachedServices{config: cfg, admin: adminResult, s3: services.NewS3Service(&cfg, adminResult.Service)}
+			mu.Lock()
+			cache[clusterID] = cached
+			mu.Unlock()
 		}
-		adminService := adminResult.Service
-
-		// Connect to S3 API
-		s3Service := services.NewS3Service(&cfg, adminService)
 
 		// Inject into fiber.Locals for handlers to retrieve
-		c.Locals("adminService", adminService)
-		c.Locals("s3Service", s3Service)
-
-		// If we need standard context:
-		_ = context.WithValue(c.Context(), "adminService", adminService)
+		c.Locals("adminService", cached.admin.Service)
+		c.Locals("s3Service", cached.s3)
+		c.Locals("adminCapabilities", cached.admin.Capabilities)
+		c.Locals("adminAPIVersion", cached.admin.APIVersion)
 
 		return c.Next()
 	}

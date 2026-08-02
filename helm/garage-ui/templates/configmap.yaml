@@ -13,4 +13,7 @@ data:
 {{- $_3 := unset $config.auth.oidc "client_secret" }}
 {{- $_4 := unset $config.auth "jwt_private_key" }}
 {{- $_5 := unset $config.auth "jwt_private_key_secret" }}
+{{- $_6 := unset $config.garage "existingSecret" }}
+{{- $_7 := unset $config.auth "bootstrap_token" }}
+{{- $_8 := unset $config.auth "bootstrapTokenSecret" }}
 {{- $config | toYaml | nindent 4 }}

@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { objectsApi } from '@/lib/api';
 import type { S3Object, UploadTask } from '@/types';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
 
 // How long to wait after the last keystroke before actually searching. Keeps
 // typing from firing a request (and a client-side re-filter) on every key.
 const SEARCH_DEBOUNCE_MS = 750;
 
-export function useBucketObjects(bucketName: string | null, currentPath: string = '', searchQuery: string = '', deepSearch: boolean = false) {
+export function useBucketObjects(bucketName: string | null, currentPath: string = '', searchQuery: string = '', deepSearch: boolean = false, initialToken?: string, initialLimit = 25) {
+  const { t, language } = useTranslation();
   const [objects, setObjects] = useState<S3Object[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -15,13 +17,15 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
   const [error, setError] = useState<Error | null>(null);
   const [isTruncated, setIsTruncated] = useState(false);
   const [nextContinuationToken, setNextContinuationToken] = useState<string | undefined>(undefined);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
-  const [currentContinuationToken, setCurrentContinuationToken] = useState<string | undefined>(undefined);
+  const [itemsPerPage, setItemsPerPage] = useState(initialLimit);
+  const [currentContinuationToken, setCurrentContinuationToken] = useState<string | undefined>(initialToken);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const previousPathRef = useRef<string>(currentPath);
+  const previousLimitRef = useRef(itemsPerPage);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const clearTasksTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadingRef = useRef(false);
+  const uploadRunRef = useRef(0);
   // Monotonic sequence guarding against stale responses: when a newer fetch or
   // search starts, older in-flight responses are discarded instead of clobbering
   // the current view (e.g. a slow search resolving after the query was cleared).
@@ -105,9 +109,12 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
     // Normal listing, or prefix-filtered listing (listPrefix carries the query).
     const isPathChange = previousPathRef.current !== currentPath && objects.length > 0;
+    const pageToken = isPathChange || previousLimitRef.current !== itemsPerPage
+      ? undefined
+      : currentContinuationToken;
     previousPathRef.current = currentPath;
-
-    fetchObjects(undefined, false, isPathChange);
+    previousLimitRef.current = itemsPerPage;
+    fetchObjects(pageToken, false, isPathChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bucketName, currentPath, itemsPerPage, debouncedSearch, deepSearch]);
 
@@ -120,10 +127,11 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
   const uploadFiles = useCallback(async (files: File[]) => {
     if (!bucketName) return false;
     if (uploadingRef.current) {
-      toast.error('Upload already in progress. Wait for it to finish.');
+      toast.error(t('buckets.upload.errors.already_in_progress'));
       return false;
     }
     uploadingRef.current = true;
+    const run = ++uploadRunRef.current;
 
     const hasRelativePaths = files.some((file) => !!file.webkitRelativePath);
 
@@ -153,7 +161,13 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
     setUploadTasks(tasks);
 
     try {
-      const results = await Promise.all(tasks.map(async (task) => {
+      const results: boolean[] = [];
+      // Keep browser and Garage request pressure bounded for folder uploads.
+      const workers = Math.min(4, tasks.length);
+      let next = 0;
+      await Promise.all(Array.from({ length: workers }, async () => {
+        while (next < tasks.length) {
+          const task = tasks[next++];
         try {
           setUploadTasks(prev => prev.map(t =>
             t.id === task.id ? { ...t, status: 'uploading' as const } : t
@@ -169,14 +183,15 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
           setUploadTasks(prev => prev.map(t =>
             t.id === task.id ? { ...t, status: 'completed' as const, progress: 100 } : t
           ));
-          return true;
+          results.push(true);
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+          const errorMessage = error instanceof Error ? error.message : t('buckets.upload.errors.failed');
           setUploadTasks(prev => prev.map(t =>
             t.id === task.id ? { ...t, status: 'error' as const, error: errorMessage } : t
           ));
           console.error(`Failed to upload ${task.key}:`, error);
-          return false;
+          results.push(false);
+        }
         }
       }));
 
@@ -186,28 +201,35 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
       if (errorCount === 0) {
         if (hasRelativePaths && folders.size > 0) {
           const folderNames = Array.from(folders).join(', ');
-          toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''} from ${folders.size} folder${folders.size > 1 ? 's' : ''} (${folderNames})`);
+          toast.success(t('buckets.upload.toast.files_from_folders', {
+            files: successCount.toLocaleString(language),
+            folders: folders.size.toLocaleString(language),
+            names: folderNames,
+          }));
         } else {
-          toast.success(`Successfully uploaded ${successCount} file${successCount > 1 ? 's' : ''}`);
+          toast.success(t('buckets.upload.toast.success', { count: successCount.toLocaleString(language) }));
         }
       } else if (successCount > 0) {
-        toast.warning(`Uploaded ${successCount} file${successCount > 1 ? 's' : ''}, ${errorCount} failed`);
+        toast.warning(t('buckets.upload.toast.partial', {
+          success: successCount.toLocaleString(language),
+          failed: errorCount.toLocaleString(language),
+        }));
       } else {
-        toast.error(`Failed to upload ${errorCount} file${errorCount > 1 ? 's' : ''}`);
+        toast.error(t('buckets.upload.toast.all_failed', { count: errorCount.toLocaleString(language) }));
       }
 
       if (clearTasksTimerRef.current) clearTimeout(clearTasksTimerRef.current);
       clearTasksTimerRef.current = setTimeout(() => {
-        setUploadTasks([]);
+        if (run === uploadRunRef.current) setUploadTasks([]);
         clearTasksTimerRef.current = null;
       }, 3000);
 
-      await fetchObjects(currentContinuationToken, true);
+      if (run === uploadRunRef.current) await fetchObjects(currentContinuationToken, true);
       return successCount > 0;
     } finally {
       uploadingRef.current = false;
     }
-  }, [bucketName, currentPath, currentContinuationToken, fetchObjects]);
+  }, [bucketName, currentPath, currentContinuationToken, fetchObjects, language, t]);
 
   const deleteObject = useCallback(async (key: string) => {
     if (!bucketName) return false;
@@ -216,7 +238,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
       setObjects(prev => prev.filter(obj => obj.key !== key));
 
       await objectsApi.delete(bucketName, key);
-      toast.success(`Object "${key}" deleted successfully`);
+      toast.success(t('buckets.toast.named_object_deleted', { key }));
       await fetchObjects(currentContinuationToken, true);
       return true;
     } catch (error) {
@@ -224,7 +246,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
       await fetchObjects(currentContinuationToken, true);
       return false;
     }
-  }, [bucketName, currentContinuationToken, fetchObjects]);
+  }, [bucketName, currentContinuationToken, fetchObjects, t]);
 
   // Deletes the selected object keys and recursively deletes every object under
   // each selected folder prefix.
@@ -239,10 +261,10 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
       await objectsApi.deleteMultiple(bucketName, keys, prefixes);
 
-      const fileLabel = keys.length > 0 ? `${keys.length} file${keys.length > 1 ? 's' : ''}` : '';
-      const folderLabel = prefixes.length > 0 ? `${prefixes.length} folder${prefixes.length > 1 ? 's' : ''}` : '';
-      const summary = [fileLabel, folderLabel].filter(Boolean).join(' and ');
-      toast.success(`Successfully deleted ${summary}`);
+      toast.success(t('buckets.bulk_delete.toast.success', {
+        files: keys.length.toLocaleString(language),
+        folders: prefixes.length.toLocaleString(language),
+      }));
 
       await fetchObjects(currentContinuationToken, true);
       return true;
@@ -251,7 +273,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
       await fetchObjects(currentContinuationToken, true);
       return false;
     }
-  }, [bucketName, currentContinuationToken, fetchObjects]);
+  }, [bucketName, currentContinuationToken, fetchObjects, language, t]);
 
   const createDirectory = useCallback(async (dirName: string) => {
     if (!bucketName) return false;
@@ -259,14 +281,14 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
     try {
       const dirKey = currentPath ? `${currentPath}${dirName}/` : `${dirName}/`;
       await objectsApi.createDirectory(bucketName, dirKey);
-      toast.success(`Directory "${dirName}" created successfully`);
+      toast.success(t('buckets.directory_dialog.toast.created', { name: dirName }));
       await fetchObjects(currentContinuationToken, true);
       return true;
     } catch (error) {
       console.error('Create directory error:', error);
       return false;
     }
-  }, [bucketName, currentPath, currentContinuationToken, fetchObjects]);
+  }, [bucketName, currentPath, currentContinuationToken, fetchObjects, t]);
 
   return {
     objects,

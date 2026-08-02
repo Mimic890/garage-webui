@@ -351,6 +351,23 @@ func TestValidateAndConsumeState_HappyPath(t *testing.T) {
 	}
 }
 
+func TestStateBindingRejectsDifferentBrowser(t *testing.T) {
+	svc, err := NewJWTService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, err := svc.GenerateStateTokenForBinding("browser-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.ValidateAndConsumeStateForBinding(tok, "browser-b") {
+		t.Fatal("state accepted for another browser")
+	}
+	if !svc.ValidateAndConsumeStateForBinding(tok, "browser-a") {
+		t.Fatal("state rejected for original browser")
+	}
+}
+
 func TestValidateAndConsumeState_IsSingleUse(t *testing.T) {
 	svc, err := NewJWTService()
 	if err != nil {

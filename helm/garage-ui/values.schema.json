@@ -7,9 +7,27 @@
   "properties": {
     "replicaCount": {
       "type": "integer",
-      "description": "Number of replica pods to run. Increase for high availability (recommended: 2-3 for production)",
+      "description": "Number of replica pods to run. Limited to one because state is stored on a ReadWriteOnce PVC",
       "minimum": 1,
-      "default": 1
+      "default": 1,
+      "maximum": 1
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["Recreate"] }
+      },
+      "default": { "type": "Recreate" }
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["enabled", "accessModes", "size"],
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "accessModes": { "type": "array", "items": { "type": "string" }, "default": ["ReadWriteOnce"] },
+        "size": { "type": "string", "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti|Pi|Ei)$", "default": "1Gi" },
+        "storageClassName": { "type": "string", "default": "" }
+      }
     },
     "image": {
       "type": "object",
@@ -178,6 +196,18 @@
           "description": "Authentication configuration (one or both methods can be enabled)",
           "required": ["admin", "oidc"],
           "properties": {
+            "bootstrap_token": {
+              "type": "string",
+              "description": "One-time setup token required in production",
+              "default": ""
+            },
+            "bootstrapTokenSecret": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "default": "" },
+                "key": { "type": "string", "default": "bootstrap-token" }
+              }
+            },
             "jwt_private_key": {
               "type": "string",
               "description": "Ed25519 private key for JWT signing in PEM format (EdDSA algorithm). Generate with: openssl genpkey -algorithm ED25519. If not provided, auto-generated on each restart (not recommended for production)",
@@ -222,7 +252,7 @@
                 "password": {
                   "type": "string",
                   "description": "Password for admin login (ignored if existingSecret is configured)",
-                  "default": "changeme"
+                  "default": ""
                 },
                 "existingSecret": {
                   "type": "object",
@@ -265,7 +295,7 @@
                 "client_secret": {
                   "type": "string",
                   "description": "OAuth2 client secret (ignored if existingSecret is configured)",
-                  "default": "your-client-secret"
+                  "default": ""
                 },
                 "existingSecret": {
                   "type": "object",
@@ -544,11 +574,27 @@
           "minimum": 0,
           "default": 1000
         },
+        "runAsGroup": {
+          "type": "integer",
+          "description": "Group ID to run containers as",
+          "minimum": 0,
+          "default": 1000
+        },
         "fsGroup": {
           "type": "integer",
           "description": "Group ID for filesystem access",
           "minimum": 0,
           "default": 1000
+        },
+        "seccompProfile": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["RuntimeDefault", "Localhost", "Unconfined"],
+              "default": "RuntimeDefault"
+            }
+          }
         }
       }
     },
@@ -560,6 +606,20 @@
           "type": "boolean",
           "description": "Allow privilege escalation",
           "default": false
+        },
+        "runAsNonRoot": {
+          "type": "boolean",
+          "default": true
+        },
+        "runAsUser": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1000
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1000
         },
         "capabilities": {
           "type": "object",
@@ -576,7 +636,7 @@
         "readOnlyRootFilesystem": {
           "type": "boolean",
           "description": "Mount root filesystem as read-only",
-          "default": false
+          "default": true
         }
       }
     },
@@ -608,6 +668,11 @@
         "enabled": {
           "type": "boolean",
           "description": "Enable or disable ingress",
+          "default": false
+        },
+        "allowInsecure": {
+          "type": "boolean",
+          "description": "Allow HTTP ingress without TLS. Keep false unless TLS is terminated elsewhere.",
           "default": false
         },
         "className": {
@@ -881,6 +946,20 @@
             "enum": ["Ingress", "Egress"]
           },
           "default": ["Ingress", "Egress"]
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "from": { "type": "array", "items": { "type": "object" }, "default": [] },
+            "ports": { "type": "array", "items": { "type": "object" }, "default": [] }
+          }
+        },
+        "egress": {
+          "type": "object",
+          "properties": {
+            "to": { "type": "array", "items": { "type": "object" }, "default": [] },
+            "ports": { "type": "array", "items": { "type": "object" }, "default": [] }
+          }
         }
       }
     },

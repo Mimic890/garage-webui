@@ -40,6 +40,14 @@ type accessControlBlock struct {
 }
 
 func (h *CapabilitiesHandler) GetCapabilities(c fiber.Ctx) error {
+	apiVersion := h.apiVersion
+	capabilities := h.capabilities
+	if selectedVersion, ok := c.Locals("adminAPIVersion").(string); ok {
+		apiVersion = selectedVersion
+	}
+	if selectedCapabilities, ok := c.Locals("adminCapabilities").(services.Capabilities); ok {
+		capabilities = selectedCapabilities
+	}
 	ac := accessControlBlock{Enabled: h.accessControlEnabled}
 	if h.accessControlEnabled {
 		if subj, ok := authz.SubjectFrom(c); ok {
@@ -55,8 +63,8 @@ func (h *CapabilitiesHandler) GetCapabilities(c fiber.Ctx) error {
 		}
 	}
 	return c.JSON(models.SuccessResponse(fiber.Map{
-		"garageApiVersion": h.apiVersion,
-		"features":         h.capabilities,
+		"garageApiVersion": apiVersion,
+		"features":         capabilities,
 		"access_control":   ac,
 	}))
 }

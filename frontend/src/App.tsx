@@ -23,6 +23,15 @@ import {queryClient} from '@/lib/query-client';
 import {useAuthStore} from '@/store/auth-store';
 import {ProtectedRoute} from '@/components/auth/ProtectedRoute';
 import {LoadingSpinner} from '@/components/auth/LoadingSpinner';
+import {usePermissions} from '@/hooks/usePermissions';
+import {NoAccess} from '@/pages/NoAccess';
+
+function PermissionRoute({ permission, children }: { permission: string; children: React.ReactNode }) {
+  const { loading, hasAnyPerm, hasAnyClusterAccess } = usePermissions();
+  if (loading) return <LoadingSpinner />;
+  if (permission === 'cluster.access' ? !hasAnyClusterAccess : !hasAnyPerm(permission)) return <NoAccess />;
+  return <>{children}</>;
+}
 
 function ThemedToaster() {
   const { mode } = useTheme();
@@ -73,9 +82,9 @@ function AppRoutes() {
           <Route path="website" element={<BucketWebsite />} />
           <Route path="settings" element={<BucketSettings />} />
         </Route>
-        <Route path="cluster" element={<Cluster />} />
-        <Route path="connections" element={<Connections />} />
-        <Route path="access" element={<AccessControl />} />
+         <Route path="cluster" element={<PermissionRoute permission="cluster.access"><Cluster /></PermissionRoute>} />
+        <Route path="connections" element={<PermissionRoute permission="cluster.manage"><Connections /></PermissionRoute>} />
+         <Route path="access" element={<PermissionRoute permission="key.list"><AccessControl /></PermissionRoute>} />
         <Route path="settings" element={<Settings />} />
         <Route path="user-settings" element={<UserSettings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

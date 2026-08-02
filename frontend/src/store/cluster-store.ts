@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
+import { translate } from '@/lib/i18n';
 
 export interface ClusterConfig {
   id: string;
@@ -10,18 +11,19 @@ export interface ClusterConfig {
   use_ssl: boolean;
   force_path_style: boolean;
   admin_endpoint: string;
-  admin_token: string;
+  admin_token?: string;
 }
 
 interface ClusterStore {
   clusters: ClusterConfig[];
   activeClusterId: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
 
   // Actions
   fetchClusters: () => Promise<void>;
-  addCluster: (config: Omit<ClusterConfig, 'id'>) => Promise<void>;
+  addCluster: (config: Omit<ClusterConfig, 'id'> & { admin_token: string }) => Promise<void>;
   deleteCluster: (id: string) => Promise<void>;
   setActiveCluster: (id: string | null) => void;
 }
@@ -32,6 +34,7 @@ export const useClusterStore = create<ClusterStore>()(
       clusters: [],
       activeClusterId: null,
       isLoading: false,
+      isInitialized: false,
       error: null,
 
       fetchClusters: async () => {
@@ -39,7 +42,7 @@ export const useClusterStore = create<ClusterStore>()(
           set({ isLoading: true, error: null });
           const response = await api.get<{ clusters: ClusterConfig[] }>('/v1/panel/clusters');
           const clusters = response.data.clusters || [];
-          set({ clusters, isLoading: false });
+          set({ clusters, isLoading: false, isInitialized: true });
           
           // Auto-select first cluster if none is active
           if (clusters.length > 0 && !get().activeClusterId) {
@@ -48,7 +51,7 @@ export const useClusterStore = create<ClusterStore>()(
             get().setActiveCluster(null);
           }
         } catch (err: any) {
-          set({ error: err.message || 'Failed to fetch clusters', isLoading: false });
+          set({ error: err.message || translate('clusters.errors.fetchFailed'), isLoading: false, isInitialized: true });
         }
       },
 
@@ -64,7 +67,7 @@ export const useClusterStore = create<ClusterStore>()(
             get().setActiveCluster(newCluster.id);
           }
         } catch (err: any) {
-          set({ error: err.message || 'Failed to add cluster', isLoading: false });
+          set({ error: err.message || translate('clusters.errors.addFailed'), isLoading: false });
           throw err;
         }
       },
@@ -80,12 +83,13 @@ export const useClusterStore = create<ClusterStore>()(
             get().setActiveCluster(clusters.length > 0 ? clusters[0].id : null);
           }
         } catch (err: any) {
-          set({ error: err.message || 'Failed to delete cluster', isLoading: false });
+          set({ error: err.message || translate('clusters.errors.deleteFailed'), isLoading: false });
           throw err;
         }
       },
 
       setActiveCluster: (id) => {
+        const previousId = get().activeClusterId;
         if (id) {
           localStorage.setItem('cluster-id', id);
         } else {
@@ -93,11 +97,7 @@ export const useClusterStore = create<ClusterStore>()(
         }
         set({ activeClusterId: id });
         
-        // Trigger a page reload when switching clusters to re-fetch all data
-        // Only if we're not just initializing
-        if (id && get().activeClusterId && get().activeClusterId !== id) {
-           window.location.reload();
-        }
+        if (previousId !== id) set({ error: null });
       },
     }),
     {

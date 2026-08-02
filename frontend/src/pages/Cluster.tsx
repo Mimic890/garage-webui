@@ -12,8 +12,12 @@ import { useCapabilities } from '@/hooks/useCapabilities';
 import { useClusterStore } from '@/store/cluster-store';
 import { Navigate } from 'react-router-dom';
 import { useTranslation } from '@/lib/i18n';
+import { queryKeys } from '@/lib/query-client';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 
 function UnsupportedFeatureCard({ title, description }: { title: string; description?: string }) {
+  const { t } = useTranslation();
   return (
     <Card>
       <CardHeader>
@@ -25,7 +29,7 @@ function UnsupportedFeatureCard({ title, description }: { title: string; descrip
       </CardHeader>
       <CardContent>
         <p className="text-sm text-[var(--muted-foreground)]">
-          Requires Garage v2.0+
+          {t('cluster.requires_garage_v2')}
         </p>
       </CardContent>
     </Card>
@@ -34,42 +38,44 @@ function UnsupportedFeatureCard({ title, description }: { title: string; descrip
 
 export function Cluster() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const number = new Intl.NumberFormat(language);
+  const formatLocalizedBytes = (bytes: number) => formatBytes(bytes).replace(/^[\d.]+/, (value) => number.format(Number(value)));
 
   const { data: capabilities } = useCapabilities();
   const features = capabilities?.features;
 
   const { clusters, activeClusterId } = useClusterStore();
 
-  const { data: health, isLoading: healthLoading } = useQuery({
-    queryKey: ['cluster-health'],
+  const { data: health, isLoading: healthLoading, isError: healthError, refetch: refetchHealth } = useQuery({
+    queryKey: queryKeys.cluster.health(activeClusterId),
     queryFn: () => garageApi.getClusterHealth(),
     refetchInterval: 10000,
     enabled: !!activeClusterId,
   });
 
-  const { data: status, isLoading: statusLoading } = useQuery({
-    queryKey: ['cluster-status'],
+  const { data: status, isLoading: statusLoading, isError: statusError, refetch: refetchStatus } = useQuery({
+    queryKey: queryKeys.cluster.status(activeClusterId),
     queryFn: () => garageApi.getClusterStatus(),
     refetchInterval: 15000,
     enabled: !!activeClusterId,
   });
 
-  const { data: statistics, isLoading: statisticsLoading } = useQuery({
-    queryKey: ['cluster-statistics'],
+  const { data: statistics, isLoading: statisticsLoading, isError: statisticsError, refetch: refetchStatistics } = useQuery({
+    queryKey: queryKeys.cluster.statistics(activeClusterId),
     queryFn: () => garageApi.getClusterStatistics(),
     refetchInterval: 30000,
     enabled: !!activeClusterId && !!features && features.clusterStatistics !== false,
   });
 
   const { data: nodeInfo, isLoading: nodeInfoLoading } = useQuery({
-    queryKey: ['node-info', selectedNodeId || '*'],
+    queryKey: ['cluster', activeClusterId ?? 'none', 'node-info', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeInfo(selectedNodeId || '*'),
     enabled: !!activeClusterId && !!features && features.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
   });
 
   const { data: nodeStats } = useQuery({
-    queryKey: ['node-statistics', selectedNodeId || '*'],
+    queryKey: ['cluster', activeClusterId ?? 'none', 'node-statistics', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeStatistics(selectedNodeId || '*'),
     enabled: !!activeClusterId && !!features && features.nodeStatistics !== false && !!selectedNodeId,
   });
@@ -78,21 +84,38 @@ export function Cluster() {
     return <Navigate to="/" replace />;
   }
 
+  if (healthError || statusError || statisticsError) {
+    return (
+      <div>
+        <PageHeader title={t('nav.cluster')} subtitle={t('cluster.load_error_subtitle')} />
+        <div className="p-6">
+          <EmptyState
+            icon={<AlertCircle />}
+            title={t('cluster.unavailable_title')}
+            description={t('cluster.unavailable_description')}
+            tone="destructive"
+            action={<Button onClick={() => void Promise.all([refetchHealth(), refetchStatus(), refetchStatistics()])}>{t('common.retry')}</Button>}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const isLoading = healthLoading || statusLoading || statisticsLoading;
 
   const getHealthStatus = () => {
-    if (!health) return { color: 'text-gray-500', bgColor: 'bg-gray-100', label: 'Unknown', icon: AlertCircle };
+    if (!health) return { color: 'text-gray-500', bgColor: 'bg-gray-100', label: t('cluster.health_unknown'), icon: AlertCircle };
     if (
       health.storageNodesUp === health.storageNodes &&
       health.partitionsAllOk === health.partitions &&
       health.connectedNodes === health.knownNodes
     ) {
-      return { color: 'text-green-600', bgColor: 'bg-green-100', label: 'Healthy', icon: CheckCircle2 };
+      return { color: 'text-green-600', bgColor: 'bg-green-100', label: t('cluster.health_healthy'), icon: CheckCircle2 };
     }
     if (health.storageNodesUp > 0 && health.partitionsQuorum > 0) {
-      return { color: 'text-yellow-600', bgColor: 'bg-yellow-100', label: 'Degraded', icon: AlertCircle };
+      return { color: 'text-yellow-600', bgColor: 'bg-yellow-100', label: t('cluster.health_degraded'), icon: AlertCircle };
     }
-    return { color: 'text-red-600', bgColor: 'bg-red-100', label: 'Unhealthy', icon: XCircle };
+    return { color: 'text-red-600', bgColor: 'bg-red-100', label: t('cluster.health_unhealthy'), icon: XCircle };
   };
 
   const healthStatus = getHealthStatus();
@@ -100,30 +123,33 @@ export function Cluster() {
 
   const getNodeStatus = (node: ClusterNode) => {
     if (!node.isUp) {
-      return { color: 'text-red-600', bgColor: 'bg-red-100', label: 'Down', icon: XCircle };
+      return { color: 'text-red-600', bgColor: 'bg-red-100', label: t('cluster.node_down'), icon: XCircle };
     }
     if (node.draining) {
-      return { color: 'text-yellow-600', bgColor: 'bg-yellow-100', label: 'Draining', icon: AlertCircle };
+      return { color: 'text-yellow-600', bgColor: 'bg-yellow-100', label: t('cluster.node_draining'), icon: AlertCircle };
     }
-    return { color: 'text-green-600', bgColor: 'bg-green-100', label: 'Up', icon: CheckCircle2 };
+    return { color: 'text-green-600', bgColor: 'bg-green-100', label: t('cluster.node_up'), icon: CheckCircle2 };
   };
 
   const formatUptime = (seconds?: number) => {
-    if (!seconds) return 'N/A';
+    if (!seconds) return t('common.not_available');
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return `${days}d ${hours}h ${minutes}m`;
+    return t('cluster.uptime_days_hours_minutes')
+      .replace('{{days}}', number.format(days))
+      .replace('{{hours}}', number.format(hours))
+      .replace('{{minutes}}', number.format(minutes));
   };
 
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Cluster" />
+        <PageHeader title={t('nav.cluster')} />
         <div className="p-4 sm:p-6 flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-            <p className="mt-2 text-sm text-muted-foreground">Loading cluster information...</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t('cluster.loading_information')}</p>
           </div>
         </div>
       </div>
@@ -132,64 +158,64 @@ export function Cluster() {
 
   return (
     <div>
-      <PageHeader title={t('nav.status')} subtitle="Node layout, partitions, and health" />
+      <PageHeader title={t('nav.status')} subtitle={t('cluster.page_subtitle')} />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Cluster Health Overview */}
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cluster Status</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('cluster.status_title')}</CardTitle>
               <HealthIcon className={`h-4 w-4 ${healthStatus.color}`} />
             </CardHeader>
             <CardContent>
               <div className={`text-2xl font-bold ${healthStatus.color}`}>{healthStatus.label}</div>
               <p className="text-xs text-muted-foreground mt-2">
-                Layout v{status?.layoutVersion || 0}
+                {t('cluster.layout_version').replace('{{version}}', number.format(status?.layoutVersion || 0))}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Connected Nodes</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('cluster.connected_nodes_title')}</CardTitle>
               <Network className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {health?.connectedNodes || 0}/{health?.knownNodes || 0}
+                {number.format(health?.connectedNodes || 0)}/{number.format(health?.knownNodes || 0)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Nodes online
+                {t('cluster.nodes_online')}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Storage Nodes</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('cluster.storage_nodes_title')}</CardTitle>
               <Server className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {health?.storageNodesUp || 0}/{health?.storageNodes || 0}
+                {number.format(health?.storageNodesUp || 0)}/{number.format(health?.storageNodes || 0)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Healthy storage nodes
+                {t('cluster.healthy_storage_nodes')}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Partitions</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('cluster.partitions_title')}</CardTitle>
               <Database className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {health?.partitionsAllOk || 0}/{health?.partitions || 0}
+                {number.format(health?.partitionsAllOk || 0)}/{number.format(health?.partitions || 0)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Healthy partitions
+                {t('cluster.healthy_partitions')}
               </p>
             </CardContent>
           </Card>
@@ -198,18 +224,18 @@ export function Cluster() {
         {/* Tabs for different views */}
         <Tabs defaultValue="nodes" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="nodes">Nodes</TabsTrigger>
-            <TabsTrigger value="statistics">Statistics</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="nodes">{t('cluster.nodes_tab')}</TabsTrigger>
+            <TabsTrigger value="statistics">{t('cluster.statistics_tab')}</TabsTrigger>
+            <TabsTrigger value="details">{t('cluster.details_tab')}</TabsTrigger>
           </TabsList>
 
           {/* Nodes Tab */}
           <TabsContent value="nodes" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Cluster Nodes</CardTitle>
+                <CardTitle>{t('cluster.nodes_title')}</CardTitle>
                 <CardDescription>
-                  Overview of all nodes in the Garage cluster
+                  {t('cluster.nodes_description')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -250,7 +276,7 @@ export function Cluster() {
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                                   <div>
-                                    <div className="text-xs text-muted-foreground">Status</div>
+                                     <div className="text-xs text-muted-foreground">{t('cluster.node_status_label')}</div>
                                     <Badge variant={node.isUp ? 'primary' : 'danger'} className="mt-1">
                                       {nodeStatus.label}
                                     </Badge>
@@ -258,21 +284,21 @@ export function Cluster() {
 
                                   {node.addr && (
                                     <div>
-                                      <div className="text-xs text-muted-foreground">Address</div>
+                                       <div className="text-xs text-muted-foreground">{t('cluster.node_address_label')}</div>
                                       <div className="text-sm font-mono">{node.addr}</div>
                                     </div>
                                   )}
 
                                   {node.garageVersion && (
                                     <div>
-                                      <div className="text-xs text-muted-foreground">Version</div>
+                                       <div className="text-xs text-muted-foreground">{t('cluster.node_version_label')}</div>
                                       <div className="text-sm">{node.garageVersion}</div>
                                     </div>
                                   )}
 
                                   {node.role && (
                                     <div>
-                                      <div className="text-xs text-muted-foreground">Zone</div>
+                                       <div className="text-xs text-muted-foreground">{t('cluster.node_zone_label')}</div>
                                       <div className="text-sm">{node.role.zone}</div>
                                     </div>
                                   )}
@@ -281,7 +307,7 @@ export function Cluster() {
                                 {node.role?.capacity && (
                                   <div className="pt-2">
                                     <div className="text-xs text-muted-foreground mb-1">
-                                      Capacity: {formatBytes(node.role.capacity)}
+                                       {t('cluster.node_capacity').replace('{{capacity}}', formatLocalizedBytes(node.role.capacity))}
                                     </div>
                                   </div>
                                 )}
@@ -291,7 +317,9 @@ export function Cluster() {
                                     {node.dataPartition && (
                                       <div>
                                         <div className="text-xs text-muted-foreground mb-1">
-                                          Data Partition: {formatBytes(node.dataPartition.total - node.dataPartition.available)} / {formatBytes(node.dataPartition.total)}
+                                           {t('cluster.data_partition_usage')
+                                             .replace('{{used}}', formatLocalizedBytes(node.dataPartition.total - node.dataPartition.available))
+                                             .replace('{{total}}', formatLocalizedBytes(node.dataPartition.total))}
                                         </div>
                                         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                                           <div
@@ -307,7 +335,9 @@ export function Cluster() {
                                     {node.metadataPartition && (
                                       <div>
                                         <div className="text-xs text-muted-foreground mb-1">
-                                          Metadata Partition: {formatBytes(node.metadataPartition.total - node.metadataPartition.available)} / {formatBytes(node.metadataPartition.total)}
+                                           {t('cluster.metadata_partition_usage')
+                                             .replace('{{used}}', formatLocalizedBytes(node.metadataPartition.total - node.metadataPartition.available))
+                                             .replace('{{total}}', formatLocalizedBytes(node.metadataPartition.total))}
                                         </div>
                                         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                                           <div
@@ -325,7 +355,9 @@ export function Cluster() {
                                 {!node.isUp && node.lastSeenSecsAgo !== undefined && (
                                   <div className="text-xs text-muted-foreground pt-2">
                                     <Clock className="inline h-3 w-3 mr-1" />
-                                    Last seen: {node.lastSeenSecsAgo === null ? 'Never' : formatUptime(node.lastSeenSecsAgo) + ' ago'}
+                                     {node.lastSeenSecsAgo === null
+                                       ? t('cluster.last_seen_never')
+                                       : t('cluster.last_seen_ago').replace('{{duration}}', formatUptime(node.lastSeenSecsAgo))}
                                   </div>
                                 )}
                               </div>
@@ -337,7 +369,7 @@ export function Cluster() {
                   ) : (
                     <div className="text-center text-muted-foreground py-8">
                       <Server className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No nodes found in the cluster</p>
+                      <p>{t('cluster.no_nodes')}</p>
                     </div>
                   )}
                 </div>
@@ -348,13 +380,13 @@ export function Cluster() {
           {/* Statistics Tab */}
           <TabsContent value="statistics" className="space-y-4">
             {features?.clusterStatistics === false ? (
-              <UnsupportedFeatureCard title="Cluster Statistics" description="Global cluster metrics and statistics" />
+              <UnsupportedFeatureCard title={t('cluster.statistics_title')} description={t('cluster.statistics_global_description')} />
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Cluster Statistics</CardTitle>
+                  <CardTitle>{t('cluster.statistics_title')}</CardTitle>
                   <CardDescription>
-                    Detailed statistics and metrics from the Garage cluster
+                    {t('cluster.statistics_description')}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -369,7 +401,7 @@ export function Cluster() {
                   ) : (
                     <div className="text-center text-muted-foreground py-8">
                       <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No statistics available</p>
+                      <p>{t('cluster.no_statistics')}</p>
                     </div>
                   )}
                 </CardContent>
@@ -382,20 +414,20 @@ export function Cluster() {
             {selectedNodeId ? (
               <>
                 {features?.nodeInfo === false ? (
-                  <UnsupportedFeatureCard title="Node Details" description="Per-node information and configuration" />
+                  <UnsupportedFeatureCard title={t('cluster.node_details_title')} description={t('cluster.node_details_description')} />
                 ) : (
                   <Card>
                     <CardHeader>
-                      <CardTitle>Node Information</CardTitle>
+                      <CardTitle>{t('cluster.node_information_title')}</CardTitle>
                       <CardDescription>
-                        Detailed information for node: {selectedNodeId.substring(0, 16)}...
+                        {t('cluster.node_information_description').replace('{{nodeId}}', `${selectedNodeId.substring(0, 16)}...`)}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {nodeInfoLoading ? (
                         <div className="text-center py-8">
                           <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-                          <p className="mt-2 text-sm text-muted-foreground">Loading node info...</p>
+                          <p className="mt-2 text-sm text-muted-foreground">{t('cluster.loading_node_information')}</p>
                         </div>
                       ) : nodeInfo ? (
                         <div className="space-y-4">
@@ -405,35 +437,35 @@ export function Cluster() {
                               <div className="flex items-center gap-2 mb-3">
                                 <Info className="h-4 w-4 text-primary" />
                                 <h4 className="font-medium">
-                                  Node: {nodeId.substring(0, 16)}...
+                                   {t('cluster.node_heading').replace('{{nodeId}}', `${nodeId.substring(0, 16)}...`)}
                                 </h4>
                               </div>
 
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="rounded-lg border p-3">
-                                  <div className="text-xs text-muted-foreground mb-1">Node ID</div>
+                                   <div className="text-xs text-muted-foreground mb-1">{t('cluster.node_id_label')}</div>
                                   <div className="font-mono text-sm break-all">{(info as LocalNodeInfo).nodeId}</div>
                                 </div>
 
                                 <div className="rounded-lg border p-3">
-                                  <div className="text-xs text-muted-foreground mb-1">Garage Version</div>
+                                   <div className="text-xs text-muted-foreground mb-1">{t('cluster.garage_version_label')}</div>
                                   <div className="text-sm">{(info as LocalNodeInfo).garageVersion}</div>
                                 </div>
 
                                 <div className="rounded-lg border p-3">
-                                  <div className="text-xs text-muted-foreground mb-1">Rust Version</div>
+                                   <div className="text-xs text-muted-foreground mb-1">{t('cluster.rust_version_label')}</div>
                                   <div className="text-sm">{(info as LocalNodeInfo).rustVersion}</div>
                                 </div>
 
                                 <div className="rounded-lg border p-3">
-                                  <div className="text-xs text-muted-foreground mb-1">Database Engine</div>
+                                   <div className="text-xs text-muted-foreground mb-1">{t('cluster.database_engine_label')}</div>
                                   <div className="text-sm">{(info as LocalNodeInfo).dbEngine}</div>
                                 </div>
                               </div>
 
                               {(info as LocalNodeInfo).garageFeatures && (info as LocalNodeInfo).garageFeatures!.length > 0 && (
                                 <div className="rounded-lg border p-3">
-                                  <div className="text-xs text-muted-foreground mb-2">Garage Features</div>
+                                   <div className="text-xs text-muted-foreground mb-2">{t('cluster.garage_features_label')}</div>
                                   <div className="flex flex-wrap gap-2">
                                     {(info as LocalNodeInfo).garageFeatures!.map((feature) => (
                                       <Badge key={feature} variant="neutral">
@@ -451,7 +483,7 @@ export function Cluster() {
                             <div key={nodeId} className="rounded-lg border border-red-200 bg-red-50 p-3">
                               <div className="flex items-center gap-2 text-red-600 mb-1">
                                 <XCircle className="h-4 w-4" />
-                                <div className="font-medium">Error for node {nodeId.substring(0, 16)}...</div>
+                                 <div className="font-medium">{t('cluster.node_error').replace('{{nodeId}}', `${nodeId.substring(0, 16)}...`)}</div>
                               </div>
                               <div className="text-sm text-red-800">{error}</div>
                             </div>
@@ -460,7 +492,7 @@ export function Cluster() {
                       ) : (
                         <div className="text-center text-muted-foreground py-8">
                           <Info className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No node information available</p>
+                           <p>{t('cluster.no_node_information')}</p>
                         </div>
                       )}
                     </CardContent>
@@ -468,13 +500,13 @@ export function Cluster() {
                 )}
 
                 {features?.nodeStatistics === false ? (
-                  <UnsupportedFeatureCard title="Node Statistics" description="Per-node performance metrics" />
+                   <UnsupportedFeatureCard title={t('cluster.node_statistics_title')} description={t('cluster.node_statistics_description')} />
                 ) : nodeStats ? (
                   <Card>
                     <CardHeader>
-                      <CardTitle>Node Statistics</CardTitle>
+                       <CardTitle>{t('cluster.node_statistics_title')}</CardTitle>
                       <CardDescription>
-                        Performance metrics for the selected node
+                         {t('cluster.selected_node_performance_description')}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -485,7 +517,7 @@ export function Cluster() {
                             <div className="flex items-center gap-2 mb-3">
                               <Cpu className="h-4 w-4 text-primary" />
                               <h4 className="font-medium">
-                                Statistics for: {nodeId.substring(0, 16)}...
+                                 {t('cluster.statistics_for_node').replace('{{nodeId}}', `${nodeId.substring(0, 16)}...`)}
                               </h4>
                             </div>
 
@@ -502,7 +534,7 @@ export function Cluster() {
                           <div key={nodeId} className="rounded-lg border border-red-200 bg-red-50 p-3">
                             <div className="flex items-center gap-2 text-red-600 mb-1">
                               <XCircle className="h-4 w-4" />
-                              <div className="font-medium">Error for node {nodeId.substring(0, 16)}...</div>
+                               <div className="font-medium">{t('cluster.node_error').replace('{{nodeId}}', `${nodeId.substring(0, 16)}...`)}</div>
                             </div>
                             <div className="text-sm text-red-800">{error}</div>
                           </div>
@@ -517,9 +549,9 @@ export function Cluster() {
                 <CardContent className="pt-6">
                   <div className="text-center text-muted-foreground py-12">
                     <Server className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium mb-2">Select a Node</p>
+                     <p className="text-lg font-medium mb-2">{t('cluster.select_node_title')}</p>
                     <p className="text-sm">
-                      Click on a node in the Nodes tab to view detailed information and statistics
+                       {t('cluster.select_node_description')}
                     </p>
                   </div>
                 </CardContent>
@@ -531,5 +563,3 @@ export function Cluster() {
     </div>
   );
 }
-
-

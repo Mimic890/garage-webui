@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
+	"Noooste/garage-ui/internal/state"
 	logpkg "Noooste/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -42,6 +44,42 @@ func newAuthTestApp(t *testing.T, buf *bytes.Buffer, authCfg *config.AuthConfig,
 	return app
 }
 
+func TestAuthMiddlewareSecurityVersionOnlyInvalidatesLocalSessions(t *testing.T) {
+	cfg := newAdminCfg()
+	svc := newAuthSvc(t, cfg)
+	manager, err := state.NewManager(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SetupAdmin(state.AdminAccount{Nickname: "admin", Password: "hash", Setup: true}); err != nil {
+		t.Fatal(err)
+	}
+	version := manager.GetState().Admin.SecurityVersion
+	local, _ := svc.GenerateSessionToken(&auth.UserInfo{Username: "admin", AuthMethod: "admin", SecurityVersion: version})
+	oidc, _ := svc.GenerateSessionToken(&auth.UserInfo{Username: "alice", AuthMethod: "oidc"})
+	if err := manager.MutateAdmin(func(a *state.AdminAccount) error { a.SecurityVersion++; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Use(AuthMiddleware(cfg, svc, manager))
+	app.Get("/", func(c fiber.Ctx) error { return c.SendStatus(200) })
+	for name, tc := range map[string]struct {
+		token string
+		want  int
+	}{
+		"stale local": {local, 401}, "oidc": {oidc, 200},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("Authorization", "Bearer "+tc.token)
+			resp, err := app.Test(req)
+			if err != nil || resp.StatusCode != tc.want {
+				t.Fatalf("status=%d err=%v want=%d", resp.StatusCode, err, tc.want)
+			}
+		})
+	}
+}
+
 // newAuthSvc returns an *auth.Service with the given auth config, JWT
 // service initialized, OIDC disabled unless the caller wires it.
 func newAuthSvc(t *testing.T, authCfg *config.AuthConfig) *auth.Service {
@@ -66,11 +104,7 @@ func findLine(t *testing.T, buf *bytes.Buffer, msg string) map[string]any {
 	return nil
 }
 
-func TestAuthMiddleware_BothDisabled_StillRequiresCredentials(t *testing.T) {
-	// After the multi-cluster refactor, authentication is always required for
-	// protected routes: admin accounts live in state, not only in config flags.
-	// Disabling cfg.Admin/OIDC only turns off those identity sources; unauthenticated
-	// requests still get 401.
+func TestAuthMiddleware_BothDisabled_AllowsAnonymousMode(t *testing.T) {
 	authCfg := &config.AuthConfig{
 		Admin: config.AdminAuthConfig{Enabled: false},
 		OIDC:  config.OIDCConfig{Enabled: false},
@@ -85,12 +119,8 @@ func TestAuthMiddleware_BothDisabled_StillRequiresCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
-	if resp.StatusCode != 401 {
-		t.Fatalf("status = %d, want 401", resp.StatusCode)
-	}
-	warn := findLine(t, &buf, "authentication_failed")
-	if warn["auth_method"] != "none" {
-		t.Errorf("auth_method = %v, want none", warn["auth_method"])
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 }
 

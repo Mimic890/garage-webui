@@ -319,6 +319,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			)
 		}
 		result = r
+		services.InvalidateBucketCredsCache(bucketName)
 	}
 
 	if deny.Read || deny.Write || deny.Owner {
@@ -328,11 +329,19 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			Permissions: deny,
 		})
 		if err != nil {
+			if result != nil {
+				return c.Status(fiber.StatusMultiStatus).JSON(models.APIResponse{
+					Success: false,
+					Data:    result,
+					Error:   &models.APIError{Code: models.ErrCodeInternalError, Message: "Permissions partially updated; refresh before retrying"},
+				})
+			}
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeInternalError, "Failed to revoke permissions: "+err.Error()),
 			)
 		}
 		result = r
+		services.InvalidateBucketCredsCache(bucketName)
 	}
 
 	if result == nil {

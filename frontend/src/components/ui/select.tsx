@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {cn} from '@/lib/utils';
 import {ChevronDown, Check} from 'lucide-react';
+import { useTranslation } from '@/lib/i18n';
 
 export interface SelectOption {
   value: string;
@@ -32,15 +33,17 @@ const useSelectContext = () => {
 };
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
-  ({ className, children, value, onChange, disabled, placeholder = 'Select an option...', ...props }, _ref) => {
+  ({ className, children, value, onChange, disabled, placeholder, ...props }, _ref) => {
+    const { t } = useTranslation();
+    const resolvedPlaceholder = placeholder ?? t('common.select.placeholder');
     const [open, setOpen] = React.useState(false);
     const [internalValue, setInternalValue] = React.useState(value);
     const containerRef = React.useRef<HTMLDivElement>(null);
-    const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const listboxId = React.useId();
 
     const displayValue = React.useMemo(() => {
       const currentValue = value ?? internalValue;
-      if (!currentValue) return placeholder;
+       if (!currentValue) return resolvedPlaceholder;
 
       // Extract label from children
       const options = React.Children.toArray(children);
@@ -56,7 +59,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       }
 
       return currentValue;
-    }, [value, internalValue, children, placeholder]);
+    }, [value, internalValue, children, resolvedPlaceholder]);
 
     React.useEffect(() => {
       setInternalValue(value);
@@ -88,7 +91,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       <SelectContext.Provider value={{ value: value ?? internalValue, onChange: handleChange, open, setOpen }}>
         <div ref={containerRef} className="relative">
           <button
-            ref={buttonRef}
+            ref={_ref}
             type="button"
             className={cn(
               'w-full h-10 px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground',
@@ -99,6 +102,9 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
               className
             )}
             onClick={() => !disabled && setOpen(!open)}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-controls={open ? listboxId : undefined}
             disabled={disabled}
             {...props}
           >
@@ -108,6 +114,9 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
 
           {open && (
             <div
+              role="listbox"
+              id={listboxId}
+              aria-label={resolvedPlaceholder}
               className="absolute z-50 w-full mt-1 text-popover-foreground rounded-md border border-border shadow-lg max-h-60 overflow-auto"
               style={{ backgroundColor: 'var(--popover)' }}
             >
@@ -135,6 +144,9 @@ const SelectOption = React.forwardRef<HTMLDivElement, SelectOptionProps>(
 
     return (
       <div
+        role="option"
+        aria-selected={isSelected}
+        tabIndex={disabled ? -1 : 0}
         ref={ref}
         className={cn(
           'relative flex items-center w-full px-3 py-2 text-sm cursor-pointer select-none bg-transparent',
@@ -150,6 +162,12 @@ const SelectOption = React.forwardRef<HTMLDivElement, SelectOptionProps>(
             onChange?.(optionValue);
           }
         }}
+        onKeyDown={(event) => {
+          if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            onChange?.(optionValue);
+          }
+        }}
         {...props}
       >
         <span className="flex-1">{children}</span>
@@ -161,4 +179,3 @@ const SelectOption = React.forwardRef<HTMLDivElement, SelectOptionProps>(
 SelectOption.displayName = 'SelectOption';
 
 export { Select, SelectOption };
-

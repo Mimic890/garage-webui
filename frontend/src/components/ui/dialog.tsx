@@ -2,6 +2,7 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n';
 
 type DialogSize = 'standard' | 'form' | 'destructive';
 
@@ -9,6 +10,8 @@ interface DialogContextValue {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   size: DialogSize;
+  titleId: string;
+  descriptionId: string;
 }
 
 const DialogContext = React.createContext<DialogContextValue | undefined>(undefined);
@@ -26,11 +29,14 @@ interface DialogProps {
   children: React.ReactNode;
 }
 
-const Dialog: React.FC<DialogProps> = ({ open = false, onOpenChange, size = 'standard', children }) => (
-  <DialogContext.Provider value={{ open, onOpenChange: onOpenChange || (() => {}), size }}>
-    {children}
-  </DialogContext.Provider>
-);
+const Dialog: React.FC<DialogProps> = ({ open = false, onOpenChange, size = 'standard', children }) => {
+  const id = React.useId();
+  return (
+    <DialogContext.Provider value={{ open, onOpenChange: onOpenChange || (() => {}), size, titleId: `${id}-title`, descriptionId: `${id}-description` }}>
+      {children}
+    </DialogContext.Provider>
+  );
+};
 
 const DialogTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
   ({ onClick, ...props }, ref) => {
@@ -64,7 +70,8 @@ const DialogOverlay: React.FC = () => {
 
 const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
-    const { open, onOpenChange, size } = useDialog();
+    const { t } = useTranslation();
+    const { open, onOpenChange, size, titleId, descriptionId } = useDialog();
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
@@ -116,6 +123,8 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
           ref={containerRef}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
           className={cn(
             'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2',
             widthClass[size],
@@ -124,7 +133,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
           <div
             ref={ref}
             className={cn(
-              'relative overflow-hidden rounded-xl border border-[var(--border)]',
+              'relative max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-[var(--border)]',
               'bg-[var(--card)] text-[var(--card-foreground)]',
               'shadow-[0_20px_40px_rgba(0,0,0,0.3)]',
               className,
@@ -135,7 +144,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              aria-label="Close"
+              aria-label={t('common.dialog.close')}
               className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
             >
               <X className="h-4 w-4" />
@@ -177,24 +186,32 @@ const DialogFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ classNam
 DialogFooter.displayName = 'DialogFooter';
 
 const DialogTitleText = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
+  ({ className, ...props }, ref) => {
+    const { titleId } = useDialog();
+    return (
     <h2
       ref={ref}
+      id={titleId}
       className={cn('text-[20px] font-semibold tracking-[-0.015em] leading-tight', className)}
       {...props}
     />
-  )
+    );
+  }
 );
 DialogTitleText.displayName = 'DialogTitle';
 
 const DialogDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => (
+  ({ className, ...props }, ref) => {
+    const { descriptionId } = useDialog();
+    return (
     <p
       ref={ref}
+      id={descriptionId}
       className={cn('mt-1 text-[13.5px] leading-[1.45] text-[var(--muted-foreground)]', className)}
       {...props}
     />
-  )
+    );
+  }
 );
 DialogDescription.displayName = 'DialogDescription';
 

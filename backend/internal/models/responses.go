@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // DashboardMetrics represents aggregated metrics for the dashboard
 type DashboardMetrics struct {
@@ -181,6 +184,12 @@ func SuccessResponse(data interface{}) APIResponse {
 
 // ErrorResponse creates an error API response
 func ErrorResponse(code, message string) APIResponse {
+	switch code {
+	case ErrCodeInternalError, ErrCodeUploadFailed, ErrCodeDeleteFailed, ErrCodeListFailed, ErrCodeObjectNotFound:
+		if public, _, ok := strings.Cut(message, ":"); ok {
+			message = public
+		}
+	}
 	return APIResponse{
 		Success: false,
 		Data:    nil,
@@ -193,15 +202,15 @@ func ErrorResponse(code, message string) APIResponse {
 
 // Common error codes
 const (
-	ErrCodeBadRequest    = "BAD_REQUEST"
-	ErrCodeUnauthorized  = "UNAUTHORIZED"
-	ErrCodeForbidden     = "FORBIDDEN"
-	ErrCodeNotFound      = "NOT_FOUND"
-	ErrCodeInternalError = "INTERNAL_ERROR"
-	ErrCodeUnsupported   = "UNSUPPORTED"
-	ErrCodeBucketNotFound    = "BUCKET_NOT_FOUND"
-	ErrCodeObjectNotFound    = "OBJECT_NOT_FOUND"
-	ErrCodeUploadFailed      = "UPLOAD_FAILED"
-	ErrCodeDeleteFailed      = "DELETE_FAILED"
-	ErrCodeListFailed        = "LIST_FAILED"
+	ErrCodeBadRequest     = "BAD_REQUEST"
+	ErrCodeUnauthorized   = "UNAUTHORIZED"
+	ErrCodeForbidden      = "FORBIDDEN"
+	ErrCodeNotFound       = "NOT_FOUND"
+	ErrCodeInternalError  = "INTERNAL_ERROR"
+	ErrCodeUnsupported    = "UNSUPPORTED"
+	ErrCodeBucketNotFound = "BUCKET_NOT_FOUND"
+	ErrCodeObjectNotFound = "OBJECT_NOT_FOUND"
+	ErrCodeUploadFailed   = "UPLOAD_FAILED"
+	ErrCodeDeleteFailed   = "DELETE_FAILED"
+	ErrCodeListFailed     = "LIST_FAILED"
 )

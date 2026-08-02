@@ -10,14 +10,14 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, config, isSetup } = useAuthStore();
-  const { fetchClusters } = useClusterStore();
+  const { fetchClusters, isInitialized, isLoading: clustersLoading } = useClusterStore();
   const location = useLocation();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && isSetup) {
       fetchClusters();
     }
-  }, [isAuthenticated, fetchClusters]);
+  }, [isAuthenticated, isSetup, fetchClusters]);
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -25,6 +25,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isSetup) {
     return <Navigate to="/setup" state={{ from: location }} replace />;
+  }
+
+  if (isAuthenticated && (!isInitialized || clustersLoading)) {
+    return <LoadingSpinner />;
   }
 
   // If no auth is enabled, always allow access

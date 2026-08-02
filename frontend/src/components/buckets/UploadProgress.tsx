@@ -1,12 +1,14 @@
 import { CheckCircle, Upload, AlertCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { UploadTask } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 
 interface UploadProgressProps {
   tasks: UploadTask[];
 }
 
 export function UploadProgress({ tasks }: UploadProgressProps) {
+  const { t, language } = useTranslation();
   if (tasks.length === 0) return null;
 
   const completedCount = tasks.filter(t => t.status === 'completed').length;
@@ -17,7 +19,7 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
 
   // Find currently uploading file
   const currentFile = tasks.find(t => t.status === 'uploading');
-  const currentFileName = currentFile?.key.split('/').pop() || currentFile?.key || 'Processing...';
+  const currentFileName = currentFile?.key.split('/').pop() || currentFile?.key || t('buckets.upload.processing');
 
   // File-based progress plus contribution from current upload
   const baseProgress = (processedCount / totalCount) * 100;
@@ -50,10 +52,13 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-sm">
-                  {allDone ? 'Upload Complete' : 'Uploading Files'}
+                   {allDone ? t('buckets.upload.complete') : t('buckets.upload.uploading_files')}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {processedCount} of {totalCount} files
+                   {t('buckets.upload.progress_count', {
+                     processed: processedCount.toLocaleString(language),
+                     total: totalCount.toLocaleString(language),
+                   })}
                 </div>
               </div>
             </div>
@@ -61,7 +66,7 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
               <div className={`text-2xl font-bold tabular-nums ${
                 allDone ? 'text-green-600 dark:text-green-500' : 'text-primary'
               }`}>
-                {Math.round(overallProgress)}%
+                 {(overallProgress / 100).toLocaleString(language, { style: 'percent', maximumFractionDigits: 0 })}
               </div>
             </div>
           </div>
@@ -104,7 +109,7 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
             <div className="flex items-center gap-2 text-xs bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-400 rounded-md px-3 py-2 border border-red-200 dark:border-red-900/50">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
               <span>
-                {errorCount} file{errorCount > 1 ? 's' : ''} failed to upload
+                 {t('buckets.upload.failed_count', { count: errorCount.toLocaleString(language) })}
               </span>
             </div>
           )}
@@ -113,7 +118,7 @@ export function UploadProgress({ tasks }: UploadProgressProps) {
           {allDone && errorCount === 0 && (
             <div className="flex items-center gap-2 text-xs bg-green-500/10 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-md px-3 py-2 border border-green-200 dark:border-green-900/50">
               <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>All files uploaded successfully</span>
+               <span>{t('buckets.upload.success')}</span>
             </div>
           )}
         </div>

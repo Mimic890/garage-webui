@@ -17,20 +17,20 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    items: [{ title: 'Dashboard', href: '/', icon: LayoutDashboard }],
+    items: [{ title: 'nav.dashboard', href: '/', icon: LayoutDashboard }],
   },
   {
-    label: 'Storage',
+    label: 'nav.storage',
     items: [
-      { title: 'Buckets', href: '/buckets', icon: Database, visible: (p, hasClusters) => hasClusters && p.hasAnyPerm('bucket.list') },
+      { title: 'nav.buckets', href: '/buckets', icon: Database, visible: (p, hasClusters) => hasClusters && p.hasAnyPerm('bucket.list') },
     ],
   },
   {
-    label: 'Cluster',
+    label: 'nav.cluster',
     items: [
-      { title: 'Connections', href: '/connections', icon: Plug, visible: () => true },
-      { title: 'Cluster Status', href: '/cluster', icon: Server, visible: (p, hasClusters) => hasClusters && p.hasAnyClusterAccess },
-      { title: 'Access Control', href: '/access', icon: Key, visible: (p, hasClusters) => hasClusters && p.hasClusterPerm('key.list') },
+      { title: 'nav.connections', href: '/connections', icon: Plug, visible: () => true },
+      { title: 'nav.status', href: '/cluster', icon: Server, visible: (p, hasClusters) => hasClusters && p.hasAnyClusterAccess },
+      { title: 'nav.access', href: '/access', icon: Key, visible: (p, hasClusters) => hasClusters && p.hasClusterPerm('key.list') },
     ],
   },
 ];
@@ -58,7 +58,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-full w-64 flex-col border-r border-[var(--border)] bg-[var(--surface-sunken)] transition-transform duration-300 ease-in-out md:translate-x-0 shrink-0',
+        'flex h-full w-full flex-col bg-[var(--background)] transition-transform duration-300 ease-in-out md:w-64 md:border-r md:border-[var(--border)] md:bg-[var(--surface-sunken)] md:translate-x-0 shrink-0',
         'fixed md:static z-50 top-14 bottom-0',
         isOpen ? 'translate-x-0' : '-translate-x-full',
       )}
@@ -71,7 +71,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <div key={gi}>
               {group.label && (
                 <div className="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-                  {t(`nav.${group.label.toLowerCase()}`)}
+                  {t(group.label)}
                 </div>
               )}
               <ul className="space-y-0.5">
@@ -91,7 +91,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         )}
                       >
                         <Icon className="h-4 w-4" />
-                        {t(item.title === 'Connections' ? 'nav.connections' : item.title === 'Cluster Status' ? 'nav.status' : item.title === 'Access Control' ? 'nav.access' : `nav.${item.title.toLowerCase()}`)}
+                        {t(item.title)}
                       </Link>
                     </li>
                   );

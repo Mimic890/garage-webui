@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -27,7 +25,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/crypto/bcrypt"
 )
 
 //	@title			Garage UI API
@@ -118,15 +115,12 @@ func main() {
 		adminPass := os.Getenv("GARAGE_UI_AUTH_ADMIN_PASSWORD")
 		if adminUser != "" && adminPass != "" {
 			logger.Info().Msg("Auto-provisioning admin account from environment variables")
-			hasher := sha256.New()
-			hasher.Write([]byte(adminPass))
-			sha256Hash := hex.EncodeToString(hasher.Sum(nil))
-			hash, err := bcrypt.GenerateFromPassword([]byte(sha256Hash), bcrypt.DefaultCost)
+			hash, err := auth.HashPassword(adminPass)
 			if err != nil {
 				logger.Fatal().Err(err).Msg("Failed to hash auto-provisioned admin password")
 			}
 			s.Admin.Nickname = adminUser
-			s.Admin.Password = string(hash)
+			s.Admin.Password = hash
 			s.Admin.Setup = true
 			if err := stateManager.UpdateAdmin(s.Admin); err != nil {
 				logger.Fatal().Err(err).Msg("Failed to save auto-provisioned admin account")
@@ -154,13 +148,14 @@ func main() {
 				AdminEndpoint: garageAdminEndpoint,
 				AdminToken:    adminToken,
 			}
+			if err := state.ValidateClusterEndpoints(cluster.Endpoint, cluster.AdminEndpoint); err != nil {
+				logger.Fatal().Err(err).Msg("Refusing unsafe auto-provisioned cluster endpoint")
+			}
 			if err := stateManager.AddCluster(cluster); err != nil {
 				logger.Fatal().Err(err).Msg("Failed to save auto-provisioned cluster")
 			}
 		}
 	}
-
-
 
 	// Determine enabled auth methods for logging
 	authMethods := []string{}
@@ -205,15 +200,18 @@ func main() {
 	// Set default values for buffer sizes if not configured
 	maxBodySize := cfg.Server.MaxBodySize
 	if maxBodySize == 0 {
-		maxBodySize = 300 * 1024 * 1024 // 300MB default
+		maxBodySize = 64 * 1024 * 1024
 	}
 	maxHeaderSize := cfg.Server.MaxHeaderSize
 	if maxHeaderSize == 0 {
-		maxHeaderSize = 1 * 1024 * 1024 // 1MB default
+		maxHeaderSize = 32 * 1024
 	}
 	readBufferSize := cfg.Server.ReadBufferSize
 	if readBufferSize == 0 {
 		readBufferSize = 4096 // 4KB default
+	}
+	if readBufferSize < maxHeaderSize {
+		readBufferSize = maxHeaderSize
 	}
 	writeBufferSize := cfg.Server.WriteBufferSize
 	if writeBufferSize == 0 {
@@ -233,6 +231,9 @@ func main() {
 		BodyLimit:       int(maxBodySize),
 		ReadBufferSize:  readBufferSize,
 		WriteBufferSize: writeBufferSize,
+		ReadTimeout:     30 * time.Second,
+		WriteTimeout:    30 * time.Second,
+		IdleTimeout:     60 * time.Second,
 		ErrorHandler:    customErrorHandler,
 	})
 

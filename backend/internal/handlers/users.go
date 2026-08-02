@@ -281,6 +281,11 @@ func (h *UserHandler) GetUserSecretKey(c fiber.Ctx) error {
 	}
 
 	// Return only the secret key
+	if keyInfo.SecretAccessKey == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Secret key is unavailable"),
+		)
+	}
 	return c.JSON(models.SuccessResponse(map[string]string{
 		"secretKey": *keyInfo.SecretAccessKey,
 	}))

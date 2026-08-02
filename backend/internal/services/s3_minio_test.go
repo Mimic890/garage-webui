@@ -80,7 +80,7 @@ func newS3TestService(t *testing.T, s3Handler http.Handler) *S3Service {
 func uniqueBucket2(t *testing.T) string {
 	t.Helper()
 	name := "b-" + strings.ReplaceAll(t.Name(), "/", "-")
-	t.Cleanup(func() { utils.GlobalCache.Delete("key:" + name) })
+	t.Cleanup(func() { utils.GlobalCache.Clear() })
 	return name
 }
 
@@ -93,7 +93,6 @@ func errS3Handler(status int, code string) (http.Handler, *int) {
 		s3ErrorXML(w, status, code, code)
 	}), &count
 }
-
 
 func TestS3_ListObjects_ServerError(t *testing.T) {
 	h, _ := errS3Handler(http.StatusForbidden, "AccessDenied")
@@ -118,7 +117,7 @@ func TestS3_UploadObject_ServerError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_, err := s3.UploadObject(ctx, "b-TestS3_UploadObject_ServerError", "k", bytes.NewReader([]byte("hi")), "text/plain")
+	_, err := s3.UploadObject(ctx, "b-TestS3_UploadObject_ServerError", "k", bytes.NewReader([]byte("hi")), 2, "text/plain")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -566,8 +565,10 @@ func TestS3_ListObjects_StatObjectFailureLeavesContentTypeEmpty(t *testing.T) {
 	}
 	xml := listBucketResultXML("b", false, "", contents, nil)
 
+	statCalled := false
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
+			statCalled = true
 			// StatObject fails — return 403.
 			w.WriteHeader(http.StatusForbidden)
 			return
@@ -591,6 +592,9 @@ func TestS3_ListObjects_StatObjectFailureLeavesContentTypeEmpty(t *testing.T) {
 	if got.Objects[0].ContentType != "" {
 		t.Errorf("ContentType = %q, want empty on StatObject failure", got.Objects[0].ContentType)
 	}
+	if statCalled {
+		t.Error("listing must not issue per-object StatObject requests")
+	}
 }
 
 func TestS3_UploadMultipleObjects_PerFileFailuresRecorded(t *testing.T) {
@@ -603,10 +607,11 @@ func TestS3_UploadMultipleObjects_PerFileFailuresRecorded(t *testing.T) {
 	results := s3.UploadMultipleObjects(ctx, "b-TestS3_UploadMultipleObjects_PerFileFailuresRecorded", []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}{
-		{Key: "a", Body: bytes.NewReader([]byte("hello")), ContentType: "text/plain"},
-		{Key: "b", Body: bytes.NewReader([]byte("world")), ContentType: "text/plain"},
+		{Key: "a", Body: bytes.NewReader([]byte("hello")), Size: 5, ContentType: "text/plain"},
+		{Key: "b", Body: bytes.NewReader([]byte("world")), Size: 5, ContentType: "text/plain"},
 	})
 
 	if len(results) != 2 {
@@ -651,6 +656,31 @@ func TestGetObjectRange_SendsRangeHeaderAndStreamsBody(t *testing.T) {
 	}
 	if gotRange != "bytes=2-6" {
 		t.Errorf("Range header = %q, want %q", gotRange, "bytes=2-6")
+	}
+}
+
+func TestGetObjectRangeIfMatch_SendsETagPrecondition(t *testing.T) {
+	bucket := uniqueBucket2(t)
+	var gotMatch string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMatch = r.Header.Get("If-Match")
+		w.Header().Set("Content-Range", "bytes 0-0/1")
+		w.Header().Set("Content-Length", "1")
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	})
+	s3 := newS3TestService(t, handler)
+	body, err := s3.GetObjectRangeIfMatch(context.Background(), bucket, "file.bin", 0, 0, "etag-1")
+	if err != nil {
+		t.Fatalf("GetObjectRangeIfMatch: %v", err)
+	}
+	defer body.Close()
+	if _, err := io.ReadAll(body); err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if gotMatch != `"etag-1"` {
+		t.Errorf("If-Match = %q, want quoted etag", gotMatch)
 	}
 }
 

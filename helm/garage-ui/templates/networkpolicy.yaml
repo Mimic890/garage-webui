@@ -12,16 +12,26 @@ spec:
       {{- include "garage-ui.selectorLabels" . | nindent 6 }}
   policyTypes:
     {{- toYaml .Values.networkPolicy.policyTypes | nindent 4 }}
+  {{- if has "Ingress" .Values.networkPolicy.policyTypes }}
+  {{- if .Values.networkPolicy.ingress.from }}
   ingress:
-  - from: []
-    ports:
-    - protocol: TCP
-      port: 8080
+    - from:
+        {{- toYaml .Values.networkPolicy.ingress.from | nindent 8 }}
+      ports:
+        {{- toYaml .Values.networkPolicy.ingress.ports | nindent 8 }}
+  {{- else }}
+  ingress: []
+  {{- end }}
+  {{- end }}
+  {{- if has "Egress" .Values.networkPolicy.policyTypes }}
+  {{- if .Values.networkPolicy.egress.to }}
   egress:
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
+    - to:
+        {{- toYaml .Values.networkPolicy.egress.to | nindent 8 }}
+      ports:
+        {{- toYaml .Values.networkPolicy.egress.ports | nindent 8 }}
+  {{- else }}
+  egress: []
+  {{- end }}
+  {{- end }}
 {{- end }}

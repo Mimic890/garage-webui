@@ -69,9 +69,9 @@ func TestAdminMock_ConfiguredFnsAreInvoked(t *testing.T) {
 		ListKeysFn: func(ctx context.Context) ([]models.ListKeysResponseItem, error) {
 			return []models.ListKeysResponseItem{{ID: "k1"}}, nil
 		},
-		DeleteKeyFn:  func(ctx context.Context, id string) error { return nil },
+		DeleteKeyFn:   func(ctx context.Context, id string) error { return nil },
 		HealthCheckFn: func(ctx context.Context) error { return nil },
-		GetMetricsFn: func(ctx context.Context) (string, error) { return "metric 1", nil },
+		GetMetricsFn:  func(ctx context.Context) (string, error) { return "metric 1", nil },
 	}
 	if got, err := m.ListKeys(ctx); err != nil || len(got) != 1 {
 		t.Errorf("ListKeys = (%v, %v), want one item", got, err)
@@ -94,7 +94,7 @@ func TestS3Mock_UnconfiguredMethodsReturnSentinel(t *testing.T) {
 	if _, err := m.ListObjects(ctx, "b", "", 0, ""); err == nil {
 		t.Error("ListObjects: want error")
 	}
-	if _, err := m.UploadObject(ctx, "b", "k", strings.NewReader(""), ""); err == nil {
+	if _, err := m.UploadObject(ctx, "b", "k", strings.NewReader(""), 0, ""); err == nil {
 		t.Error("UploadObject: want error")
 	}
 	if _, err := m.CreateDirectoryMarker(ctx, "b", "k/"); err == nil {
@@ -123,6 +123,7 @@ func TestS3Mock_UnconfiguredMethodsReturnSentinel(t *testing.T) {
 	results := m.UploadMultipleObjects(ctx, "b", []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}{
 		{Key: "a"}, {Key: "b"},
@@ -146,7 +147,7 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 		ListObjectsFn: func(_ context.Context, _, _ string, _ int, _ string) (*models.ObjectListResponse, error) {
 			return &models.ObjectListResponse{Count: 1}, nil
 		},
-		UploadObjectFn: func(_ context.Context, _, _ string, _ io.Reader, _ string) (*models.ObjectUploadResponse, error) {
+		UploadObjectFn: func(_ context.Context, _, _ string, _ io.Reader, _ int64, _ string) (*models.ObjectUploadResponse, error) {
 			return &models.ObjectUploadResponse{}, nil
 		},
 		CreateDirectoryMarkerFn: func(_ context.Context, _, _ string) (*models.ObjectUploadResponse, error) {
@@ -167,6 +168,7 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 		UploadMultipleObjectsFn: func(_ context.Context, _ string, files []struct {
 			Key         string
 			Body        io.Reader
+			Size        int64
 			ContentType string
 		}) []services.UploadResult {
 			out := make([]services.UploadResult, len(files))
@@ -180,7 +182,7 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 	if r, err := m.ListObjects(ctx, "b", "", 0, ""); err != nil || r.Count != 1 {
 		t.Errorf("ListObjects = (%+v, %v)", r, err)
 	}
-	if _, err := m.UploadObject(ctx, "b", "k", strings.NewReader(""), ""); err != nil {
+	if _, err := m.UploadObject(ctx, "b", "k", strings.NewReader(""), 0, ""); err != nil {
 		t.Errorf("UploadObject: %v", err)
 	}
 	if _, err := m.CreateDirectoryMarker(ctx, "b", "k/"); err != nil {
@@ -207,6 +209,7 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 	results := m.UploadMultipleObjects(ctx, "b", []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}{{Key: "a"}})
 	if len(results) != 1 || !results[0].Success {

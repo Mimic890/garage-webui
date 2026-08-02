@@ -49,7 +49,7 @@ type AdminService interface {
 type S3Storage interface {
 	ListObjects(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error)
 	SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error)
-	UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
+	UploadObject(ctx context.Context, bucketName, key string, body io.Reader, size int64, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarker(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
 	GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
 	GetObjectRange(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error)
@@ -63,6 +63,7 @@ type S3Storage interface {
 	UploadMultipleObjects(ctx context.Context, bucketName string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []UploadResult
 }

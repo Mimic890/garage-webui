@@ -8,8 +8,10 @@ import { Select, SelectOption } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/i18n';
 
 export function BucketPermissions() {
+  const { t } = useTranslation();
   const { bucketName = '' } = useParams<{ bucketName: string }>();
   const { data: availableKeys = [] } = useAccessKeys();
   const grant = useGrantBucketPermission();
@@ -33,11 +35,10 @@ export function BucketPermissions() {
     setOwner(existing?.owner ?? false);
   }, [selectedKey, availableKeys, bucketName]);
 
-  const canSubmit = !!selectedKey && (read || write || owner) && !grant.isPending;
+  const canSubmit = !!selectedKey && !grant.isPending;
 
   const onGrant = async () => {
-    if (!selectedKey) { toast.error('Please select an access key'); return; }
-    if (!read && !write && !owner) { toast.error('Please select at least one permission'); return; }
+    if (!selectedKey) { toast.error(t('bucket_permissions.select_access_key_error')); return; }
     try {
       await grant.mutateAsync({
         bucketName,
@@ -64,13 +65,13 @@ export function BucketPermissions() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <ShieldCheck className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">Grant access</h2>
+          <h2 className="text-[15px] font-semibold">{t('bucket_permissions.grant_access_title')}</h2>
         </header>
         <div className="space-y-5 px-5 py-5">
           <div className="space-y-1.5">
-            <label className="text-[13.5px] font-medium">Access key</label>
+            <label className="text-[13.5px] font-medium">{t('bucket_permissions.access_key_label')}</label>
             <Select value={selectedKey} onChange={(v) => setSelectedKey(v)}>
-              <SelectOption value="">-- Select an access key --</SelectOption>
+              <SelectOption value="">{t('bucket_permissions.select_access_key_placeholder')}</SelectOption>
               {availableKeys.map((k) => (
                 <SelectOption key={k.accessKeyId} value={k.accessKeyId}>
                   {k.name} ({k.accessKeyId})
@@ -78,40 +79,40 @@ export function BucketPermissions() {
               ))}
             </Select>
             <p className="text-[12.5px] text-[var(--muted-foreground)]">
-              Choose which access key should have permissions on this bucket. Current permissions pre-fill below.
+              {t('bucket_permissions.access_key_help')}
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <div className="text-[13.5px] font-medium">Permissions</div>
+            <div className="text-[13.5px] font-medium">{t('bucket_permissions.permissions_label')}</div>
             <div className="space-y-3 rounded-lg border border-[var(--border)] p-4">
               <PermRow
                 id="perm-read"
                 checked={read}
                 onChange={setRead}
-                title="Read"
-                description="Allows reading objects from the bucket (GetObject, HeadObject, ListObjects)"
+                title={t('bucket_permissions.read_label')}
+                description={t('bucket_permissions.read_description')}
               />
               <PermRow
                 id="perm-write"
                 checked={write}
                 onChange={setWrite}
-                title="Write"
-                description="Allows writing and deleting objects in the bucket (PutObject, DeleteObject)"
+                title={t('bucket_permissions.write_label')}
+                description={t('bucket_permissions.write_description')}
               />
               <PermRow
                 id="perm-owner"
                 checked={owner}
                 onChange={setOwner}
-                title="Owner"
-                description="Allows managing bucket settings and policies (DeleteBucket, PutBucketPolicy)"
+                title={t('bucket_permissions.owner_label')}
+                description={t('bucket_permissions.owner_description')}
               />
             </div>
           </div>
 
           <div className="pt-1">
             <Button onClick={onGrant} disabled={!canSubmit}>
-              {grant.isPending ? 'Granting…' : 'Grant access'}
+              {grant.isPending ? t('bucket_permissions.granting_button') : t('bucket_permissions.grant_access_button')}
             </Button>
           </div>
         </div>
@@ -120,15 +121,15 @@ export function BucketPermissions() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <KeyRound className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">Granted</h2>
+          <h2 className="text-[15px] font-semibold">{t('bucket_permissions.granted_title')}</h2>
         </header>
         {granted.length === 0 ? (
           <div className="p-5">
             <EmptyState
               icon={<KeyRound />}
               tone="neutral"
-              title="No access granted"
-              description="Grant at least one access key to make this bucket usable."
+              title={t('bucket_permissions.no_access_title')}
+              description={t('bucket_permissions.no_access_description')}
             />
           </div>
         ) : (
@@ -142,9 +143,9 @@ export function BucketPermissions() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  {perm!.read && <Badge variant="success">Read</Badge>}
-                  {perm!.write && <Badge variant="warning">Write</Badge>}
-                  {perm!.owner && <Badge variant="primary">Owner</Badge>}
+                  {perm!.read && <Badge variant="success">{t('bucket_permissions.read_label')}</Badge>}
+                  {perm!.write && <Badge variant="warning">{t('bucket_permissions.write_label')}</Badge>}
+                  {perm!.owner && <Badge variant="primary">{t('bucket_permissions.owner_label')}</Badge>}
                 </div>
               </li>
             ))}

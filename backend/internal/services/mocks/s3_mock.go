@@ -25,7 +25,7 @@ var _ services.S3Storage = (*S3Mock)(nil)
 type S3Mock struct {
 	ListObjectsFn           func(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error)
 	SearchObjectsFn         func(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error)
-	UploadObjectFn          func(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
+	UploadObjectFn          func(ctx context.Context, bucketName, key string, body io.Reader, size int64, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarkerFn func(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
 	GetObjectFn             func(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
 	GetObjectRangeFn        func(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error)
@@ -39,6 +39,7 @@ type S3Mock struct {
 	UploadMultipleObjectsFn func(ctx context.Context, bucketName string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []services.UploadResult
 
@@ -67,12 +68,12 @@ func (m *S3Mock) SearchObjects(ctx context.Context, bucketName, prefix, search s
 	return m.SearchObjectsFn(ctx, bucketName, prefix, search)
 }
 
-func (m *S3Mock) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error) {
+func (m *S3Mock) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, size int64, contentType string) (*models.ObjectUploadResponse, error) {
 	m.record("UploadObject", bucketName, key, contentType)
 	if m.UploadObjectFn == nil {
 		return nil, s3NotConfigured("UploadObject")
 	}
-	return m.UploadObjectFn(ctx, bucketName, key, body, contentType)
+	return m.UploadObjectFn(ctx, bucketName, key, body, size, contentType)
 }
 
 func (m *S3Mock) CreateDirectoryMarker(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error) {
@@ -158,6 +159,7 @@ func (m *S3Mock) DeleteAllObjects(ctx context.Context, bucketName string) (int, 
 func (m *S3Mock) UploadMultipleObjects(ctx context.Context, bucketName string, files []struct {
 	Key         string
 	Body        io.Reader
+	Size        int64
 	ContentType string
 }) []services.UploadResult {
 	m.record("UploadMultipleObjects", bucketName, len(files))
