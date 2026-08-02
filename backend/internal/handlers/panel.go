@@ -4,24 +4,18 @@ import (
 	"Mimic890/garage-ui/internal/auth"
 	"Mimic890/garage-ui/internal/models"
 	"Mimic890/garage-ui/internal/state"
-	"crypto/subtle"
-	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
 type PanelHandler struct {
-	stateManager   *state.Manager
-	bootstrapToken string
-	production     bool
+	stateManager *state.Manager
 }
 
-func NewPanelHandler(stateManager *state.Manager, bootstrapToken string, production bool) *PanelHandler {
+func NewPanelHandler(stateManager *state.Manager) *PanelHandler {
 	return &PanelHandler{
-		stateManager:   stateManager,
-		bootstrapToken: bootstrapToken,
-		production:     production,
+		stateManager: stateManager,
 	}
 }
 
@@ -34,9 +28,8 @@ func (h *PanelHandler) GetSetupStatus(c fiber.Ctx) error {
 }
 
 type SetupRequest struct {
-	Nickname       string `json:"nickname" validate:"required"`
-	Password       string `json:"password" validate:"required,min=12"`
-	BootstrapToken string `json:"bootstrap_token"`
+	Nickname string `json:"nickname" validate:"required"`
+	Password string `json:"password" validate:"required,min=12"`
 }
 
 // SetupPanel performs initial admin account setup
@@ -44,17 +37,6 @@ func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
 	var req SetupRequest
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
-	}
-
-	if h.production {
-		token := strings.TrimSpace(c.Get("X-Bootstrap-Token"))
-		if token == "" {
-			token = strings.TrimSpace(req.BootstrapToken)
-		}
-		bootstrapToken := strings.TrimSpace(h.bootstrapToken)
-		if bootstrapToken == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(bootstrapToken)) != 1 {
-			return c.Status(fiber.StatusForbidden).JSON(models.ErrorResponse(models.ErrCodeForbidden, "Bootstrap token required"))
-		}
 	}
 
 	if req.Nickname == "" {

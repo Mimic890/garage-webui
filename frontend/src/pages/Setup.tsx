@@ -17,7 +17,6 @@ export function Setup() {
   const { t } = useTranslation();
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
-  const [bootstrapToken, setBootstrapToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSetup = async (e: React.FormEvent) => {
@@ -30,7 +29,7 @@ export function Setup() {
 
     setIsLoading(true);
     try {
-      await authApi.setupPanel({ nickname, password }, bootstrapToken.trim());
+      await authApi.setupPanel({ nickname, password });
       toast.success(t('setup.success.completed'));
       window.location.href = '/login';
     } catch (error) {
@@ -87,19 +86,6 @@ export function Setup() {
                 <p className="text-xs text-muted-foreground">
                   {t('setup.form.passwordHelp')}
                 </p>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="bootstrap-token" className="text-sm font-medium">{t('setup.form.bootstrapTokenLabel')}</label>
-                <Input
-                  id="bootstrap-token"
-                  type="password"
-                  value={bootstrapToken}
-                  onChange={(e) => setBootstrapToken(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="off"
-                />
-                <p className="text-xs text-muted-foreground">{t('setup.form.bootstrapTokenHelp')}</p>
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading || !nickname.trim() || password.length < 12}>

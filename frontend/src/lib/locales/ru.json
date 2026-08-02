@@ -539,8 +539,6 @@
   "settings.user.openAction": "Открыть настройки пользователя",
   "setup.errors.failed": "Не удалось настроить панель",
   "setup.errors.nicknameRequired": "Укажите имя",
-  "setup.form.bootstrapTokenHelp": "Если требуется, введите начальный токен, выведенный сервером.",
-  "setup.form.bootstrapTokenLabel": "Начальный токен",
   "setup.form.description": "Создайте первую локальную учётную запись администратора.",
   "setup.form.nicknameLabel": "Имя (обязательно)",
   "setup.form.nicknamePlaceholder": "admin",
