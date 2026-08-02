@@ -5,6 +5,8 @@ import (
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/state"
 	"crypto/subtle"
+	"strings"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
@@ -39,8 +41,9 @@ type SetupRequest struct {
 // SetupPanel performs initial admin account setup
 func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
 	if h.production {
-		token := c.Get("X-Bootstrap-Token")
-		if h.bootstrapToken == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(h.bootstrapToken)) != 1 {
+		token := strings.TrimSpace(c.Get("X-Bootstrap-Token"))
+		bootstrapToken := strings.TrimSpace(h.bootstrapToken)
+		if bootstrapToken == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(bootstrapToken)) != 1 {
 			return c.Status(fiber.StatusForbidden).JSON(models.ErrorResponse(models.ErrCodeForbidden, "Bootstrap token required"))
 		}
 	}

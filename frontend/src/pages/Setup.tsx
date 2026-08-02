@@ -30,11 +30,12 @@ export function Setup() {
 
     setIsLoading(true);
     try {
-      await authApi.setupPanel({ nickname, password }, bootstrapToken);
+      await authApi.setupPanel({ nickname, password }, bootstrapToken.trim());
       toast.success(t('setup.success.completed'));
       window.location.href = '/login';
-    } catch {
-      toast.error(t('setup.errors.failed'));
+    } catch (error) {
+      const message = (error as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message;
+      toast.error(message || t('setup.errors.failed'));
     } finally {
       setIsLoading(false);
     }

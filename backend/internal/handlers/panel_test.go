@@ -25,7 +25,7 @@ func TestSetupPanelRequiresProductionBootstrapToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/setup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Bootstrap-Token", "bootstrap-secret")
+	req.Header.Set("X-Bootstrap-Token", " bootstrap-secret\n")
 	resp, err = app.Test(req)
 	if err != nil {
 		t.Fatalf("request with token: %v", err)
