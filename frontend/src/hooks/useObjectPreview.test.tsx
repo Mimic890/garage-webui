@@ -39,7 +39,7 @@ describe('useObjectPreview', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.kind).toBe('image');
     expect(result.current.objectUrl).toBe('blob:mock-url');
-    expect(mockedGet).toHaveBeenCalledWith('b', 'pic.png');
+    expect(mockedGet).toHaveBeenCalledWith('b', 'pic.png', expect.any(AbortSignal));
   });
 
   it('decodes text content', async () => {
@@ -149,7 +149,7 @@ describe('useObjectPreview', () => {
     vi.spyOn(blob, 'text').mockReturnValue(new Promise<string>((res) => { resolveText = res; }));
     mockedGet.mockResolvedValue(blob);
     const { result, unmount } = renderHook(() => useObjectPreview('b', 'a.txt', 5, 'text/plain'), { wrapper: createWrapper() });
-    await waitFor(() => expect(result.current.objectUrl).toBe('blob:mock-url'));
+    await waitFor(() => expect(mockedGet).toHaveBeenCalled());
 
     // Unmount before the decode resolves, then resolve it. The cancelled
     // guard must swallow the late result rather than set state.

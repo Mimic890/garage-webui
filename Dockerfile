@@ -5,13 +5,13 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 
 RUN --mount=type=cache,target=/root/.npm \
-    npm install
+    npm ci
 
 COPY frontend/ .
 
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.0-alpine3.23 AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine3.23 AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -20,7 +20,7 @@ WORKDIR /app
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go install github.com/swaggo/swag/cmd/swag@latest
+    go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 COPY backend/go.mod backend/go.sum ./
 
@@ -42,8 +42,7 @@ FROM alpine:3.23.3
 
 WORKDIR /app
 
-# su-exec: drop root after fixing volume ownership in the entrypoint
-RUN apk --no-cache add ca-certificates wget su-exec
+RUN apk --no-cache add ca-certificates wget
 
 RUN addgroup -g 1000 garageui && \
     adduser -D -u 1000 -G garageui garageui && \
@@ -55,9 +54,8 @@ COPY --from=frontend-builder --chown=garageui:garageui /app/frontend/dist ./fron
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 
-# Start as root so the entrypoint can chown mounted volumes, then it drops
-# to garageui (uid 1000) before exec'ing the app. If the orchestrator forces
-# runAsNonRoot, entrypoint skips chown and relies on fsGroup / pre-fixed perms.
+USER garageui:garageui
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

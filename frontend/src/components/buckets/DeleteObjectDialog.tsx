@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconTile } from '@/components/ui/icon-tile';
 import type { S3Object } from '@/types';
+import { useTranslation } from '@/lib/i18n';
 
 interface DeleteObjectDialogProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface DeleteObjectDialogProps {
 }
 
 export function DeleteObjectDialog({ open, onOpenChange, object, onDeleteObject }: DeleteObjectDialogProps) {
+  const { t } = useTranslation();
   const [pending, setPending] = useState(false);
 
   const handleDelete = async () => {
@@ -42,18 +44,18 @@ export function DeleteObjectDialog({ open, onOpenChange, object, onDeleteObject 
         <DialogHeader>
           <IconTile icon={<Trash2 />} tone="destructive" size="md" />
           <div className="flex-1">
-            <DialogTitle>Delete Object</DialogTitle>
+            <DialogTitle>{t('buckets.delete_object_dialog.title')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{object?.key}"? This action cannot be undone.
+              {t('buckets.delete_object_dialog.description', { key: object?.key ?? '' })}
             </DialogDescription>
           </div>
         </DialogHeader>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('buckets.actions.cancel')}
           </Button>
           <Button variant="destructive" onClick={handleDelete} disabled={pending}>
-            Delete
+            {t('buckets.actions.delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

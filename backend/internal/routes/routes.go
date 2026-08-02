@@ -8,12 +8,16 @@ import (
 	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/state"
 	"Noooste/garage-ui/pkg/logger"
+	cryptorand "crypto/rand"
+	"encoding/base64"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"golang.org/x/oauth2"
 	// Swagger imports
 	//_ "Noooste/garage-ui/docs"
 )
@@ -59,6 +63,9 @@ func SetupRoutes(
 	clusterMW := so.clusterMW
 
 	// Apply CORS middleware globally
+	app.Use(middleware.SecurityHeaders())
+	app.Use(middleware.RequestTimeout(30 * time.Second))
+	app.Use(middleware.CSRFOrigin(cfg.Server.RootURL, cfg.Auth.OIDC.CookieName))
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
 
 	// Apply IP Whitelist middleware globally
@@ -73,7 +80,7 @@ func SetupRoutes(
 
 	// Create auth and panel handlers
 	authHandler := handlers.NewAuthHandler(cfg, authService, stateManager)
-	panelHandler := handlers.NewPanelHandler(stateManager)
+	panelHandler := handlers.NewPanelHandler(stateManager, cfg.Auth.BootstrapToken, cfg.IsProduction())
 
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
@@ -94,7 +101,7 @@ func SetupRoutes(
 	api := app.Group("/api/v1")
 
 	// Apply authentication middleware to all API routes
-	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
+	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService, stateManager))
 
 	// Apply cluster middleware to inject cluster services based on X-Cluster-Id
 	api.Use(clusterMW)
@@ -108,11 +115,16 @@ func SetupRoutes(
 	panel := api.Group("/panel")
 	{
 		panel.Get("/setup", panelHandler.GetSetupStatus)
-		panel.Post("/setup", panelHandler.SetupPanel)
+		panel.Post("/setup", middleware.RateLimit(5, time.Minute), panelHandler.SetupPanel)
 		// Clusters need auth. If there's an admin account, require login for /clusters
-		panel.Get("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.GetClusters)
-		panel.Post("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.AddCluster)
-		panel.Delete("/clusters/:id", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.ScopeNone, authz.PermClusterStatus), panelHandler.DeleteCluster)
+		panel.Get("/clusters", func(c fiber.Ctx) error {
+			if !stateManager.GetState().Admin.Setup {
+				return c.JSON(fiber.Map{"success": true, "clusters": []state.ClusterConfig{}})
+			}
+			return c.Next()
+		}, middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.GetClusters)
+		panel.Post("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.AddCluster)
+		panel.Delete("/clusters/:id", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.DeleteCluster)
 	}
 
 	// Bucket routes
@@ -136,6 +148,22 @@ func SetupRoutes(
 		objects.Post("/delete-multiple", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.DeleteMultipleObjects) // Delete multiple objects
 		objects.Post("/empty", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.EmptyBucket)                     // Delete all objects in bucket
 	}
+
+	// Object keys are query parameters so valid S3 keys cannot collide with
+	// action suffixes or wildcard path decoding.
+	objectByKey := api.Group("/buckets/:bucket/object")
+	withObjectKey := func(handler fiber.Handler) fiber.Handler {
+		return func(c fiber.Ctx) error {
+			c.Locals("objectKey", c.Query("key"))
+			return handler(c)
+		}
+	}
+	objectByKey.Get("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), withObjectKey(objectHandler.GetObject))
+	objectByKey.Head("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), withObjectKey(objectHandler.GetObjectMetadata))
+	objectByKey.Delete("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), withObjectKey(objectHandler.DeleteObject))
+	objectByKey.Get("/metadata", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), withObjectKey(objectHandler.GetObjectMetadata))
+	objectByKey.Get("/presign", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), withObjectKey(objectHandler.GetPresignedURL))
+	objectByKey.Get("/preview-url", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), withObjectKey(objectHandler.GetPreviewURL))
 
 	// Directory routes (zero-byte directory markers)
 	api.Post("/buckets/:bucket/directories", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.CreateDirectory)
@@ -182,9 +210,9 @@ func SetupRoutes(
 	// api, the api group's .Use() middlewares (AuthMiddleware, ResolveSubject)
 	// cascade onto them by path prefix, so ResolveSubject is not repeated here
 	// (TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade locks that in).
-	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
-	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
-	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
+	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
+	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
+	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), clusterMW, az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
 
 	// Access Control (Users/Keys) routes
 	users := api.Group("/users")
@@ -216,10 +244,25 @@ func SetupRoutes(
 	}
 
 	// Admin auth login endpoint
-	app.Post("/auth/login", authHandler.LoginAdmin)
+	app.Post("/auth/login", middleware.RateLimit(10, time.Minute), authHandler.LoginAdmin)
+	app.Post("/auth/login/mfa", middleware.RateLimit(10, time.Minute), authHandler.LoginMFA)
+	app.Post("/auth/login-token", middleware.RateLimit(10, time.Minute), authHandler.LoginToken)
+	app.Post("/auth/passkeys/login/begin", middleware.RateLimit(20, time.Minute), authHandler.BeginPasskeyLogin)
+	app.Post("/auth/passkeys/login/finish", middleware.RateLimit(20, time.Minute), authHandler.FinishPasskeyLogin)
+	app.Post("/auth/logout", authHandler.Logout)
 
 	// Auth "me" endpoint
-	app.Get("/auth/me", middleware.AuthMiddleware(&cfg.Auth, authService), authHandler.GetMe)
+	app.Get("/auth/me", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), authHandler.GetMe)
+	localAuth := middleware.AuthMiddleware(&cfg.Auth, authService, stateManager)
+	app.Get("/auth/account", localAuth, middleware.LocalAccountOnly, authHandler.GetAccount)
+	app.Patch("/auth/account", localAuth, middleware.LocalAccountOnly, authHandler.UpdateAccount)
+	app.Post("/auth/totp/begin", localAuth, middleware.LocalAccountOnly, authHandler.BeginTOTP)
+	app.Post("/auth/totp/finish", localAuth, middleware.LocalAccountOnly, authHandler.FinishTOTP)
+	app.Delete("/auth/totp", localAuth, middleware.LocalAccountOnly, authHandler.DeleteTOTP)
+	app.Post("/auth/recovery-codes", localAuth, middleware.LocalAccountOnly, authHandler.RegenerateRecoveryCodes)
+	app.Post("/auth/passkeys/register/begin", localAuth, middleware.LocalAccountOnly, authHandler.BeginPasskeyRegistration)
+	app.Post("/auth/passkeys/register/finish", localAuth, middleware.LocalAccountOnly, authHandler.FinishPasskeyRegistration)
+	app.Delete("/auth/passkeys/:id", localAuth, middleware.LocalAccountOnly, authHandler.DeletePasskey)
 
 	// OIDC authentication routes (only if OIDC is enabled)
 	if cfg.Auth.OIDC.Enabled {
@@ -227,19 +270,26 @@ func SetupRoutes(
 		{
 			// Login endpoint - redirects to OIDC provider
 			oidcRoutes.Get("/login", func(c fiber.Ctx) error {
-				state, err := authService.GenerateStateToken()
+				verifier := oauth2.GenerateVerifier()
+				nonceBytes := make([]byte, 32)
+				if _, err := cryptorand.Read(nonceBytes); err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate OIDC nonce"})
+				}
+				nonce := base64.RawURLEncoding.EncodeToString(nonceBytes)
+				browserState, err := authService.GenerateOIDCState(c.IP(), verifier, nonce)
 				if err != nil {
 					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 						"error": "Failed to generate state token",
 					})
 				}
 
-				authURL, err := authService.GetAuthorizationURL(state)
+				authURL, err := authService.GetAuthorizationURLWithPKCE(browserState, verifier, nonce)
 				if err != nil {
 					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 						"error": "Failed to generate login URL",
 					})
 				}
+				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: browserState, Path: "/auth/oidc", MaxAge: 600, Secure: cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
 				return c.Redirect().To(authURL)
 			})
 
@@ -247,11 +297,13 @@ func SetupRoutes(
 			oidcRoutes.Get("/callback", func(c fiber.Ctx) error {
 				// Get and validate state token
 				state := c.Query("state")
-				if !authService.ValidateAndConsumeState(state) {
+				verifier, nonce, validState := authService.ConsumeStateForBinding(state, c.IP())
+				if !validState || (verifier != "" && (c.Cookies("oidc_state") == "" || c.Cookies("oidc_state") != state)) {
 					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 						"error": "Invalid or expired state token",
 					})
 				}
+				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: "", Path: "/auth/oidc", MaxAge: -1, Secure: cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
 
 				// Get authorization code from query
 				code := c.Query("code")
@@ -263,17 +315,18 @@ func SetupRoutes(
 
 				// Exchange code for tokens
 				ctx := c.Context()
-				token, err := authService.ExchangeCode(ctx, code)
+				var token *oauth2.Token
+				var err error
+				if verifier == "" {
+					token, err = authService.ExchangeCode(ctx, code)
+				} else {
+					token, err = authService.ExchangeCodeWithVerifier(ctx, code, verifier)
+				}
 				if err != nil {
 					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 						"error": "Failed to exchange authorization code",
 					})
 				}
-
-				logger.Debug().
-					Str("access_token", token.AccessToken).
-					Interface("token", token).
-					Msg("Exchanged authorization code for token")
 
 				// Extract ID token from OAuth2 token
 				rawIDToken, ok := token.Extra("id_token").(string)
@@ -284,7 +337,12 @@ func SetupRoutes(
 				}
 
 				// Verify ID token and get user info
-				userInfo, err := authService.VerifyIDToken(ctx, rawIDToken)
+				var userInfo *auth.UserInfo
+				if nonce == "" {
+					userInfo, err = authService.VerifyIDToken(ctx, rawIDToken)
+				} else {
+					userInfo, err = authService.VerifyIDTokenWithNonce(ctx, rawIDToken, nonce)
+				}
 				if err != nil {
 					return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 						"error": "Invalid ID token",
@@ -345,6 +403,7 @@ func SetupRoutes(
 				c.Cookie(&fiber.Cookie{
 					Name:     cfg.Auth.OIDC.CookieName,
 					Value:    sessionToken,
+					Path:     "/",
 					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
 					Secure:   cfg.Auth.OIDC.CookieSecure,
 					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,
@@ -361,6 +420,7 @@ func SetupRoutes(
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.CookieName,
 					Value:  "",
+					Path:   "/",
 					MaxAge: -1,
 				})
 

@@ -57,8 +57,8 @@ func TestVocabularyContainsRatifiedPermissions(t *testing.T) {
 	if _, ok := Vocabulary["admin_token.list"]; ok {
 		t.Error("admin_token.* must not be in the v1 vocabulary")
 	}
-	if len(Vocabulary) != 40 {
-		t.Errorf("vocabulary size = %d, want 40", len(Vocabulary))
+	if len(Vocabulary) != 41 {
+		t.Errorf("vocabulary size = %d, want 41", len(Vocabulary))
 	}
 }
 

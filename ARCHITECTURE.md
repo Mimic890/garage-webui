@@ -4,7 +4,7 @@
 
 Web UI for [Garage](https://garagehq.deuxfleurs.fr/), an S3-compatible distributed object storage system. Manages buckets, objects, access keys, and cluster state via Garage's Admin API (v1/v2) and S3 API. Intended for closed corporate VPN deployments.
 
-- **Backend:** Go 1.25, Fiber v3 (HTTP), minio-go/v7 (S3 data plane), azuretls-client (Admin API), viper (config), zerolog (logging), golang-jwt + coreos/go-oidc (auth).
+- **Backend:** Go 1.26.5, Fiber v3 (HTTP), minio-go/v7 (S3 data plane), azuretls-client (Admin API), viper (config), zerolog (logging), golang-jwt + coreos/go-oidc (auth).
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, TanStack React Query, Zustand, React Router v7, axios, recharts, sonner, react-dropzone, highlight.js.
 - **Data store:** Garage itself (S3). No SQL database. Auth state persisted in localStorage via Zustand.
 - **Deployment:** Multi-stage Dockerfile (Node build → Go build → Alpine runtime); Helm chart in `helm/`.

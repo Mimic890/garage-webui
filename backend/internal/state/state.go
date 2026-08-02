@@ -1,17 +1,40 @@
 package state
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"time"
+
+	"github.com/go-webauthn/webauthn/webauthn"
 )
 
+const CurrentSecurityVersion = 1
+
+type PasskeyCredential struct {
+	Credential webauthn.Credential `json:"credential"`
+	Name       string              `json:"name"`
+	CreatedAt  time.Time           `json:"created_at"`
+	LastUsedAt time.Time           `json:"last_used_at,omitempty"`
+}
+
 type AdminAccount struct {
-	Nickname string `json:"nickname"`
-	Password string `json:"password"` // bcrypt hash, empty if no password set yet
-	Setup    bool   `json:"setup"`
+	Nickname             string              `json:"nickname"`
+	Password             string              `json:"password"` // SHA-256 then bcrypt, empty if no password set yet
+	Setup                bool                `json:"setup"`
+	Email                string              `json:"email,omitempty"`
+	SecurityVersion      int                 `json:"security_version,omitempty"`
+	WebAuthnUserHandle   []byte              `json:"webauthn_user_handle,omitempty"`
+	TOTPSecret           string              `json:"totp_secret,omitempty"`
+	TOTPLastAcceptedStep int64               `json:"totp_last_accepted_timestep,omitempty"`
+	RecoveryCodeHashes   []string            `json:"recovery_code_hashes,omitempty"`
+	Passkeys             []PasskeyCredential `json:"passkeys,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -61,12 +84,27 @@ func NewManager(path string) (*Manager, error) {
 	if err := json.Unmarshal(data, &m.state); err != nil {
 		return nil, fmt.Errorf("parse state file %q: %w", path, err)
 	}
+	if m.state.Admin.Setup && (m.state.Admin.SecurityVersion < CurrentSecurityVersion || len(m.state.Admin.WebAuthnUserHandle) != 64) {
+		if err := ensureAdminSecurity(&m.state.Admin); err != nil {
+			return nil, err
+		}
+		if err := m.Save(); err != nil {
+			return nil, fmt.Errorf("migrate admin security state: %w", err)
+		}
+	}
 
 	return m, nil
 }
 
 func (m *Manager) Save() error {
-	data, err := json.MarshalIndent(m.state, "", "  ")
+	m.mu.RLock()
+	s := m.state
+	m.mu.RUnlock()
+	return m.save(s)
+}
+
+func (m *Manager) save(s State) error {
+	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -94,8 +132,30 @@ func (m *Manager) Save() error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp state file: %w", err)
 	}
+	if f, err := os.OpenFile(tmpName, os.O_WRONLY, 0600); err == nil {
+		if err := f.Sync(); err != nil {
+			_ = f.Close()
+			return fmt.Errorf("sync temp state file: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close synced state file: %w", err)
+		}
+	} else {
+		return fmt.Errorf("reopen temp state file: %w", err)
+	}
 	if err := os.Rename(tmpName, m.path); err != nil {
 		return fmt.Errorf("replace state file %q: %w", m.path, err)
+	}
+	if dirHandle, err := os.Open(dir); err == nil {
+		if err := dirHandle.Sync(); err != nil {
+			_ = dirHandle.Close()
+			return fmt.Errorf("sync state directory: %w", err)
+		}
+		if err := dirHandle.Close(); err != nil {
+			return fmt.Errorf("close state directory: %w", err)
+		}
+	} else {
+		return fmt.Errorf("open state directory: %w", err)
 	}
 	cleanup = false
 	return nil
@@ -104,21 +164,85 @@ func (m *Manager) Save() error {
 func (m *Manager) GetState() State {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.state
+	return cloneState(m.state)
+}
+
+func cloneState(s State) State {
+	data, _ := json.Marshal(s)
+	var clone State
+	_ = json.Unmarshal(data, &clone)
+	return clone
+}
+
+func ensureAdminSecurity(admin *AdminAccount) error {
+	if !admin.Setup {
+		return nil
+	}
+	if admin.SecurityVersion < CurrentSecurityVersion {
+		admin.SecurityVersion = CurrentSecurityVersion
+	}
+	if len(admin.WebAuthnUserHandle) != 64 {
+		admin.WebAuthnUserHandle = make([]byte, 64)
+		if _, err := rand.Read(admin.WebAuthnUserHandle); err != nil {
+			return fmt.Errorf("generate WebAuthn user handle: %w", err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) UpdateAdmin(admin AdminAccount) error {
+	return m.MutateAdmin(func(current *AdminAccount) error { *current = admin; return nil })
+}
+
+// MutateAdmin applies and persists one account change while holding the lock.
+// The callback receives a deep copy and failed saves never become visible.
+func (m *Manager) MutateAdmin(fn func(*AdminAccount) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.state.Admin = admin
-	return m.Save()
+	candidate := cloneState(m.state)
+	if err := fn(&candidate.Admin); err != nil {
+		return err
+	}
+	if err := ensureAdminSecurity(&candidate.Admin); err != nil {
+		return err
+	}
+	if err := m.save(candidate); err != nil {
+		return err
+	}
+	m.state = candidate
+	return nil
+}
+
+// SetupAdmin atomically claims first-time setup and persists it before making
+// the new account visible to other requests.
+func (m *Manager) SetupAdmin(admin AdminAccount) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.state.Admin.Setup {
+		return false, nil
+	}
+	if err := ensureAdminSecurity(&admin); err != nil {
+		return false, err
+	}
+	candidate := m.state
+	candidate.Admin = admin
+	if err := m.save(candidate); err != nil {
+		return false, err
+	}
+	m.state = candidate
+	return true, nil
 }
 
 func (m *Manager) AddCluster(c ClusterConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.state.Clusters = append(m.state.Clusters, c)
-	return m.Save()
+	candidate := m.state
+	candidate.Clusters = append(append([]ClusterConfig(nil), m.state.Clusters...), c)
+	if err := m.save(candidate); err != nil {
+		return err
+	}
+	m.state = candidate
+	return nil
 }
 
 func (m *Manager) RemoveCluster(id string) error {
@@ -131,8 +255,13 @@ func (m *Manager) RemoveCluster(id string) error {
 			newClusters = append(newClusters, c)
 		}
 	}
-	m.state.Clusters = newClusters
-	return m.Save()
+	candidate := m.state
+	candidate.Clusters = newClusters
+	if err := m.save(candidate); err != nil {
+		return err
+	}
+	m.state = candidate
+	return nil
 }
 
 func (m *Manager) UpdateCluster(c ClusterConfig) error {
@@ -141,8 +270,41 @@ func (m *Manager) UpdateCluster(c ClusterConfig) error {
 
 	for i, existing := range m.state.Clusters {
 		if existing.ID == c.ID {
-			m.state.Clusters[i] = c
-			return m.Save()
+			candidate := m.state
+			candidate.Clusters = append([]ClusterConfig(nil), m.state.Clusters...)
+			candidate.Clusters[i] = c
+			if err := m.save(candidate); err != nil {
+				return err
+			}
+			m.state = candidate
+			return nil
+		}
+	}
+	return nil
+}
+
+// ValidateClusterEndpoints rejects control-plane targets that could reach
+// local or cloud metadata services. DNS is resolved before persistence so a
+// hostname cannot bypass the IP checks.
+func ValidateClusterEndpoints(endpoints ...string) error {
+	for _, raw := range endpoints {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.User != nil || u.Hostname() == "" || u.Path == "" && u.RawQuery != "" {
+			return fmt.Errorf("invalid cluster endpoint")
+		}
+		if u.Port() != "" {
+			if p, err := strconv.Atoi(u.Port()); err != nil || p <= 0 || p > 65535 {
+				return fmt.Errorf("invalid cluster endpoint")
+			}
+		}
+		ips, err := net.LookupIP(u.Hostname())
+		if err != nil || len(ips) == 0 {
+			return fmt.Errorf("cluster endpoint host could not be resolved")
+		}
+		for _, ip := range ips {
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() || ip.String() == "169.254.169.254" {
+				return fmt.Errorf("cluster endpoint targets a local or metadata address")
+			}
 		}
 	}
 	return nil

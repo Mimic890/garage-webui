@@ -31,24 +31,26 @@ export function TopBar({ onMenuClick }: TopBarProps) {
 
   return (
     <div
-      className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface-sunken)] px-4 backdrop-blur"
+      className="sticky top-0 z-30 flex h-14 w-full shrink-0 items-center border-b border-[var(--border)] bg-[var(--surface-sunken)] backdrop-blur"
     >
-      <div className="flex items-center gap-2 pr-4 border-r border-[var(--border)] mr-2 md:mr-4">
+      <div className="flex items-center h-full px-3 md:px-4 md:w-64 md:shrink-0 md:border-r md:border-[var(--border)]">
         {onMenuClick && (
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden h-8 w-8 mr-1"
+            className="md:hidden h-8 w-8"
             onClick={onMenuClick}
-            aria-label="Toggle navigation"
+            aria-label={t('layout.topBar.toggleNavigation')}
           >
             <Menu className="h-4 w-4" />
           </Button>
         )}
-        <img src="/garage.png" alt="" className="h-7 w-7" />
-        <span className="text-[16px] font-semibold tracking-tight hidden sm:inline-block">Garage UI</span>
+        <div className="hidden md:flex items-center gap-2.5">
+          <img src="/garage.png" alt="" className="h-6 w-6 object-contain" />
+          <span className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">Garage UI</span>
+        </div>
       </div>
-      <div className="min-w-0 flex-1 pl-1 md:pl-0 flex items-center">
+      <div className="min-w-0 flex-1 px-3 flex items-center">
         <ClusterSwitcher />
       </div>
       <div className="flex items-center gap-1">
@@ -78,14 +80,14 @@ export function TopBar({ onMenuClick }: TopBarProps) {
                   onClick={() => { setMenuOpen(false); navigate('/user-settings'); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--accent)]"
                 >
-                  <Settings className="h-3.5 w-3.5" /> {t('settings.user') || 'User Settings'}
+                   <Settings className="h-3.5 w-3.5" /> {t('settings.user')}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMenuOpen(false); logout(); }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--accent)] text-red-500"
                 >
-                  <LogOut className="h-3.5 w-3.5" /> Logout
+                  <LogOut className="h-3.5 w-3.5" /> {t('auth.logoutAction')}
                 </button>
               </div>
             )}

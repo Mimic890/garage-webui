@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme, type Palette } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n';
 
 export interface PaletteConfig {
   id: Palette;
@@ -99,13 +100,14 @@ function PaletteRectangle({
   colors: { text: string; bg: string; primary: string; secondary: string; accent: string };
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={`flex h-4 w-12 overflow-hidden rounded border border-border/80 shadow-xs ${className}`}>
-      <div className="flex-1 h-full" style={{ backgroundColor: colors.bg }} title="Background" />
-      <div className="flex-1 h-full" style={{ backgroundColor: colors.text }} title="Text" />
-      <div className="flex-1 h-full" style={{ backgroundColor: colors.primary }} title="Primary" />
-      <div className="flex-1 h-full" style={{ backgroundColor: colors.secondary }} title="Secondary" />
-      <div className="flex-1 h-full" style={{ backgroundColor: colors.accent }} title="Accent" />
+      <div className="flex-1 h-full" style={{ backgroundColor: colors.bg }} title={t('theme.swatch.background')} />
+      <div className="flex-1 h-full" style={{ backgroundColor: colors.text }} title={t('theme.swatch.text')} />
+      <div className="flex-1 h-full" style={{ backgroundColor: colors.primary }} title={t('theme.swatch.primary')} />
+      <div className="flex-1 h-full" style={{ backgroundColor: colors.secondary }} title={t('theme.swatch.secondary')} />
+      <div className="flex-1 h-full" style={{ backgroundColor: colors.accent }} title={t('theme.swatch.accent')} />
     </div>
   );
 }
@@ -124,6 +126,7 @@ function groupPalettes(palettes: PaletteConfig[]) {
 }
 
 export function ThemeToggle() {
+  const { t } = useTranslation();
   const { palette, mode, setPalette, setMode } = useTheme();
 
   const currentPaletteConfig = PALETTES.find((p) => p.id === palette) || PALETTES[0];
@@ -136,18 +139,18 @@ export function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger
         className="flex items-center gap-2 px-2.5 py-1.5 h-8 rounded-lg border border-border bg-card hover:bg-muted/80 transition-all shadow-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        title="Change theme palette"
+        title={t('theme.changePaletteTitle')}
       >
         <PaletteRectangle colors={activeColors} />
         <ChevronDown className="h-3.5 w-3.5 opacity-60 transition-transform duration-200" />
-        <span className="sr-only">Toggle theme</span>
+        <span className="sr-only">{t('theme.toggleAriaLabel')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60 p-1.5 space-y-0.5 max-h-[min(80vh,32rem)] overflow-y-auto">
         {groups.map((group) => (
           <div key={group.name}>
             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground tracking-wider uppercase flex items-center gap-1.5">
               {group.name === 'Brand' ? <Sparkles className="w-3.5 h-3.5 text-primary" /> : null}
-              {group.name}
+              {t(`theme.groups.${group.name.toLowerCase()}`)}
             </div>
             {group.items.map((p) => {
               const isSelected = palette === p.id;
@@ -166,7 +169,7 @@ export function ThemeToggle() {
                     <span
                       className={`text-sm truncate ${isSelected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
                     >
-                      {p.name}
+                      {t(`theme.palettes.${p.id}`)}
                     </span>
                   </div>
                   <PaletteRectangle colors={pColors} />
@@ -179,11 +182,11 @@ export function ThemeToggle() {
         <div className="my-1.5 border-t border-border" />
 
         <div className="px-2 py-1 text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-          Theme Mode
+          {t('theme.mode.title')}
         </div>
         {isCatppuccin ? (
           <p className="px-2.5 pb-1.5 text-[11px] text-muted-foreground leading-snug">
-            On Catppuccin, Light → Latte and Dark → Mocha. Pick Frappé / Macchiato from the list.
+            {t('theme.mode.catppuccinHelp')}
           </p>
         ) : null}
         <div className="grid grid-cols-2 gap-1 p-1 bg-muted/50 rounded-lg border border-border/50">
@@ -198,7 +201,7 @@ export function ThemeToggle() {
             )}
           >
             <Sun className="w-3.5 h-3.5" />
-            Light
+             {t('theme.mode.light')}
           </button>
           <button
             type="button"
@@ -211,7 +214,7 @@ export function ThemeToggle() {
             )}
           >
             <Moon className="w-3.5 h-3.5" />
-            Dark
+             {t('theme.mode.dark')}
           </button>
         </div>
       </DropdownMenuContent>

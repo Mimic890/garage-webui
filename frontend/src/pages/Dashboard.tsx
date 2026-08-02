@@ -14,21 +14,21 @@ import type { ClusterHealth } from '@/types';
 import { useTranslation } from '@/lib/i18n';
 
 type StatTone = 'primary' | 'destructive' | 'neutral';
-type HealthLabel = 'Healthy' | 'Degraded' | 'Unhealthy' | 'Unknown';
+type HealthLabel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
 function deriveHealth(health: ClusterHealth | null): { label: HealthLabel; tone: StatTone } {
-  if (!health) return { label: 'Unknown', tone: 'neutral' };
+  if (!health) return { label: 'unknown', tone: 'neutral' };
   if (
     health.storageNodesUp === health.storageNodes &&
     health.partitionsAllOk === health.partitions &&
     health.connectedNodes === health.knownNodes
-  ) return { label: 'Healthy', tone: 'primary' };
-  if (health.storageNodesUp > 0 && health.partitionsQuorum > 0) return { label: 'Degraded', tone: 'primary' };
-  return { label: 'Unhealthy', tone: 'destructive' };
+  ) return { label: 'healthy', tone: 'primary' };
+  if (health.storageNodesUp > 0 && health.partitionsQuorum > 0) return { label: 'degraded', tone: 'primary' };
+  return { label: 'unhealthy', tone: 'destructive' };
 }
 
 export function Dashboard() {
-  const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading } = useDashboardData();
+  const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading, isError } = useDashboardData();
   const metrics = metricsQuery.data;
   const buckets = bucketsQuery.data ?? [];
   const clusterHealth = healthQuery.data ?? null;
@@ -52,12 +52,14 @@ export function Dashboard() {
 
   const { clusters } = useClusterStore();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const number = new Intl.NumberFormat(language);
+  const formatLocalizedBytes = (bytes: number) => formatBytes(bytes).replace(/^[\d.]+/, (value) => number.format(Number(value)));
 
   if (clusters.length === 0) {
     return (
       <div>
-        <PageHeader title={t('nav.dashboard')} subtitle="Welcome to Garage Admin Panel" />
+        <PageHeader title={t('nav.dashboard')} subtitle={t('dashboard.welcome_subtitle')} />
         <div className="px-6 py-12 flex items-center justify-center">
           <EmptyState
             icon={<Server />}
@@ -75,13 +77,32 @@ export function Dashboard() {
     );
   }
 
+  if (isError) {
+    return (
+      <div>
+        <PageHeader title={t('nav.dashboard')} subtitle={t('dashboard.unavailable_subtitle')} />
+        <div className="px-6 py-12">
+          <EmptyState
+            icon={<AlertCircle />}
+            title={t('dashboard.load_error_title')}
+            description={t('dashboard.load_error_description')}
+            tone="destructive"
+            action={<Button onClick={() => void Promise.all([metricsQuery.refetch(), bucketsQuery.refetch(), healthQuery.refetch()])}>{t('common.retry')}</Button>}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
         title={t('nav.dashboard')}
         subtitle={
           clusterHealth
-            ? `${clusterHealth.connectedNodes}/${clusterHealth.knownNodes} ${t('dashboard.nodes_connected')}`
+            ? t('dashboard.nodes_connected_count')
+              .replace('{{connected}}', number.format(clusterHealth.connectedNodes))
+              .replace('{{total}}', number.format(clusterHealth.knownNodes))
             : t('dashboard.loading')
         }
       />
@@ -99,32 +120,35 @@ export function Dashboard() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label={t('dashboard.total_storage')}
-              value={metrics ? formatBytes(metrics.totalSize) : '—'}
-              sub={`across ${metrics?.bucketCount ?? 0} bucket${metrics?.bucketCount === 1 ? '' : 's'}`}
+              value={metrics ? formatLocalizedBytes(metrics.totalSize) : '—'}
+              sub={t(metrics?.bucketCount === 1 ? 'dashboard.storage_across_one_bucket' : 'dashboard.storage_across_buckets')
+                .replace('{{count}}', number.format(metrics?.bucketCount ?? 0))}
               icon={<HardDrive />}
             />
             <StatCard
               label={t('dashboard.objects')}
-              value={(metrics?.objectCount ?? 0).toLocaleString()}
+              value={number.format(metrics?.objectCount ?? 0)}
               sub={t('dashboard.files_folders')}
               icon={<FolderOpen />}
             />
             <StatCard
               label={t('nav.buckets')}
-              value={(metrics?.bucketCount ?? 0).toLocaleString()}
+              value={number.format(metrics?.bucketCount ?? 0)}
               sub={t('dashboard.active_buckets')}
               icon={<Database />}
             />
             <StatCard
               label={t('nav.cluster')}
-              value={health.label}
+              value={t(`dashboard.health_${health.label}`)}
               valueTone={health.tone}
               sub={
                 clusterHealth
-                  ? `${clusterHealth.storageNodesUp}/${clusterHealth.storageNodes} ${t('dashboard.storage_nodes').toLowerCase()}`
+                   ? t('dashboard.storage_nodes_count')
+                     .replace('{{healthy}}', number.format(clusterHealth.storageNodesUp))
+                     .replace('{{total}}', number.format(clusterHealth.storageNodes))
                   : '—'
               }
-              icon={health.label === 'Unhealthy' ? <AlertCircle /> : <Zap />}
+              icon={health.label === 'unhealthy' ? <AlertCircle /> : <Zap />}
               iconTone={health.tone}
             />
           </div>
@@ -133,19 +157,19 @@ export function Dashboard() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <StatCard
               label={t('dashboard.storage_nodes')}
-              value={clusterHealth ? `${clusterHealth.storageNodesUp}/${clusterHealth.storageNodes}` : '—'}
+               value={clusterHealth ? `${number.format(clusterHealth.storageNodesUp)}/${number.format(clusterHealth.storageNodes)}` : '—'}
               sub={t('dashboard.healthy')}
               icon={<Server />}
             />
             <StatCard
               label={t('dashboard.partitions')}
-              value={clusterHealth ? `${clusterHealth.partitionsAllOk}/${clusterHealth.partitions}` : '—'}
+               value={clusterHealth ? `${number.format(clusterHealth.partitionsAllOk)}/${number.format(clusterHealth.partitions)}` : '—'}
               sub={t('dashboard.healthy')}
               icon={<Zap />}
             />
             <StatCard
               label={t('dashboard.connected_nodes')}
-              value={clusterHealth ? `${clusterHealth.connectedNodes}/${clusterHealth.knownNodes}` : '—'}
+               value={clusterHealth ? `${number.format(clusterHealth.connectedNodes)}/${number.format(clusterHealth.knownNodes)}` : '—'}
               sub={t('dashboard.cluster_membership')}
               icon={<Server />}
             />
@@ -177,9 +201,10 @@ export function Dashboard() {
                             {bucket.bucketName}
                           </span>
                           <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
-                            <span>{(bucket.objectCount ?? 0).toLocaleString()} {t('dashboard.objects').toLowerCase()}</span>
-                            <span className="font-medium text-[var(--foreground)]">{formatBytes(bucket.size)}</span>
-                            <span className="w-10 text-right">{(bucket.percentage ?? 0).toFixed(1)}%</span>
+                            <span>{t(bucket.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count')
+                              .replace('{{count}}', number.format(bucket.objectCount ?? 0))}</span>
+                            <span className="font-medium text-[var(--foreground)]">{formatLocalizedBytes(bucket.size)}</span>
+                            <span className="w-10 text-right">{new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 1 }).format((bucket.percentage ?? 0) / 100)}</span>
                           </div>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
@@ -218,13 +243,13 @@ export function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-medium">{bucket.name}</p>
                       <p className="truncate text-[12.5px] text-[var(--muted-foreground)]">
-                        {t('dashboard.created')} {new Date(bucket.creationDate).toLocaleDateString()}
+                        {t('dashboard.created_date').replace('{{date}}', new Intl.DateTimeFormat(language).format(new Date(bucket.creationDate)))}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[14px] font-medium">{bucket.objectCount?.toLocaleString() ?? '—'} {t('dashboard.objects').toLowerCase()}</p>
+                      <p className="text-[14px] font-medium">{bucket.objectCount == null ? '—' : t(bucket.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count').replace('{{count}}', number.format(bucket.objectCount))}</p>
                       <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                        {bucket.size ? formatBytes(bucket.size) : '—'}
+                        {bucket.size ? formatLocalizedBytes(bucket.size) : '—'}
                       </p>
                     </div>
                   </li>

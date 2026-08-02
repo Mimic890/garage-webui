@@ -13,6 +13,7 @@ import { ArrowLeft, ChevronRight, Copy, Download, File, Loader2, Trash2 } from '
 import { toast } from 'sonner';
 import { downloadObject, formatBytes } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n';
 
 function CardSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -35,9 +36,9 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 }
 
 export function ObjectDetailsView() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { bucketName, '*': encodedObjectKey } = useParams();
-  const objectKey = encodedObjectKey ? decodeURIComponent(encodedObjectKey) : undefined;
+  const { bucketName, '*': objectKey } = useParams();
 
   const { data: buckets = [] } = useBuckets();
   const bucket = buckets.find((b) => b.name === bucketName);
@@ -53,7 +54,7 @@ export function ObjectDetailsView() {
 
   useEffect(() => {
     if (!bucketName || !objectKey) {
-      setError('Bucket name and object key are required');
+      setError('buckets.object_details.errors.identifiers_required');
       setIsLoading(false);
       return;
     }
@@ -66,9 +67,9 @@ export function ObjectDetailsView() {
         const data = await objectsApi.getMetadata(bucketName, objectKey, { signal: ctrl.signal });
         if (cancelled) return;
         setMetadata(data);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load object metadata');
+        setError('buckets.object_details.errors.metadata_failed');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -82,7 +83,7 @@ export function ObjectDetailsView() {
   const backHref = `/buckets/${bucketName}/objects${parentPath ? `?prefix=${encodeURIComponent(parentPath + '/')}` : ''}`;
   const pathSegments = parentPath ? parentPath.split('/').filter(Boolean) : [];
 
-  const copy = async (text: string, label = 'Copied') => {
+  const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -108,7 +109,7 @@ export function ObjectDetailsView() {
     try {
       setDeleting(true);
       await objectsApi.delete(bucketName, objectKey);
-      toast.success('Object deleted');
+      toast.success(t('buckets.toast.object_deleted'));
       navigate(backHref);
     } catch {
       // error toast handled by axios interceptor
@@ -121,7 +122,7 @@ export function ObjectDetailsView() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center gap-2 text-[var(--muted-foreground)]">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading object details…
+        <Loader2 className="h-4 w-4 animate-spin" /> {t('buckets.object_details.loading')}
       </div>
     );
   }
@@ -130,10 +131,10 @@ export function ObjectDetailsView() {
     return (
       <div className="px-7 py-6">
         <Button variant="secondary" onClick={() => navigate(backHref)} className="mb-4">
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> {t('buckets.actions.back')}
         </Button>
         <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-soft)] px-5 py-4 text-[13.5px] text-[var(--destructive)]">
-          {error || 'Object not found'}
+          {error ? t(error) : t('buckets.object_details.errors.not_found')}
         </div>
       </div>
     );
@@ -148,7 +149,7 @@ export function ObjectDetailsView() {
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Objects
+          {t('buckets.tabs.objects')}
         </Link>
         {pathSegments.map((seg, i) => (
           <span key={i} className="inline-flex items-center gap-1">
@@ -168,8 +169,8 @@ export function ObjectDetailsView() {
             <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em]">{fileName}</h1>
             <button
               type="button"
-              onClick={() => copy(metadata.key, 'Object key copied')}
-              title="Copy key"
+              onClick={() => copy(metadata.key, t('buckets.toast.object_key_copied'))}
+              title={t('buckets.actions.copy_key')}
               className="group mt-1 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[13px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
               <span className="truncate">{metadata.key}</span>
@@ -184,27 +185,27 @@ export function ObjectDetailsView() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="secondary" onClick={handleDownload}>
-            <Download className="h-4 w-4" /> Download
+            <Download className="h-4 w-4" /> {t('buckets.actions.download')}
           </Button>
           {canDelete && (
             <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="h-4 w-4" /> Delete
+              <Trash2 className="h-4 w-4" /> {t('buckets.actions.delete')}
             </Button>
           )}
         </div>
       </section>
 
       {/* Details */}
-      <CardSection title="Details">
+      <CardSection title={t('buckets.object_details.sections.details')}>
         <dl className="divide-y divide-[var(--border)]">
-          <DetailRow label="Size">{formatBytes(metadata.size)}</DetailRow>
-          <DetailRow label="Content type">{metadata.contentType || 'application/octet-stream'}</DetailRow>
-          <DetailRow label="Storage class">{metadata.storageClass || 'Standard'}</DetailRow>
-          <DetailRow label="Last modified">{formatDate(metadata.lastModified)}</DetailRow>
-          <DetailRow label="ETag">
+          <DetailRow label={t('buckets.fields.size')}>{formatBytes(metadata.size)}</DetailRow>
+          <DetailRow label={t('buckets.fields.content_type')}>{metadata.contentType || 'application/octet-stream'}</DetailRow>
+          <DetailRow label={t('buckets.fields.storage_class')}>{metadata.storageClass || t('buckets.storage_class.standard')}</DetailRow>
+          <DetailRow label={t('buckets.fields.last_modified')}>{formatDate(metadata.lastModified)}</DetailRow>
+          <DetailRow label={t('buckets.fields.etag')}>
             <button
               type="button"
-              onClick={() => copy(metadata.etag, 'ETag copied')}
+              onClick={() => copy(metadata.etag, t('buckets.toast.etag_copied'))}
               className="inline-flex max-w-full items-center gap-1.5 truncate rounded-md bg-[var(--surface-sunken)] px-2 py-0.5 font-mono text-[12.5px] hover:bg-[var(--accent)]"
             >
               <span className="truncate">{metadata.etag}</span>
@@ -212,7 +213,7 @@ export function ObjectDetailsView() {
             </button>
           </DetailRow>
           {metadata.versionId && (
-            <DetailRow label="Version ID">
+            <DetailRow label={t('buckets.fields.version_id')}>
               <span className="font-mono text-[12.5px]">{metadata.versionId}</span>
             </DetailRow>
           )}
@@ -221,7 +222,7 @@ export function ObjectDetailsView() {
 
       {/* Custom metadata */}
       {metadata.metadata && Object.keys(metadata.metadata).length > 0 && (
-        <CardSection title="Custom metadata">
+        <CardSection title={t('buckets.object_details.sections.custom_metadata')}>
           <dl className="divide-y divide-[var(--border)]">
             {Object.entries(metadata.metadata).map(([key, value]) => (
               <DetailRow key={key} label={key}>
@@ -233,7 +234,7 @@ export function ObjectDetailsView() {
       )}
 
       {/* Preview */}
-      <CardSection title="Preview">
+      <CardSection title={t('buckets.object_details.sections.preview')}>
         {canRead && bucketName && objectKey ? (
           <ObjectPreview
             bucket={bucketName}
@@ -244,7 +245,7 @@ export function ObjectDetailsView() {
           />
         ) : (
           <div className="px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
-            No preview available for this object.
+            {t('buckets.preview.unavailable')}
           </div>
         )}
       </CardSection>
@@ -252,9 +253,9 @@ export function ObjectDetailsView() {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={`Delete "${fileName}"?`}
-        description="Applications referencing this object will no longer be able to read it."
-        confirmLabel="Delete object"
+        title={t('buckets.object_details.delete.title', { name: fileName })}
+        description={t('buckets.object_details.delete.description')}
+        confirmLabel={t('buckets.actions.delete_object')}
         loading={deleting}
         onConfirm={handleDelete}
       />

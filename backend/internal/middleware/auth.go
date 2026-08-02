@@ -7,6 +7,7 @@ import (
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/state"
 	logpkg "Noooste/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -17,10 +18,19 @@ import (
 // middleware) with user_id and auth_method so downstream service log lines
 // carry user identity. On failure it emits a warn log with the auth_method
 // tried and a reason — never the token value.
-func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Handler {
+func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service, stateManagers ...*state.Manager) fiber.Handler {
+	var stateManager *state.Manager
+	if len(stateManagers) > 0 {
+		stateManager = stateManagers[0]
+	}
 	return func(c fiber.Ctx) error {
 		// Allow unauthenticated access to the setup endpoint
 		if strings.HasPrefix(c.Path(), "/api/v1/panel/setup") {
+			return c.Next()
+		}
+		localAdminEnabled := cfg.Admin.Enabled || stateManager != nil && stateManager.GetState().Admin.Setup
+		if !localAdminEnabled && !cfg.OIDC.Enabled && !cfg.Token.Enabled {
+			c.Locals("userInfo", &auth.UserInfo{Username: "guest", AuthMethod: "anonymous"})
 			return c.Next()
 		}
 		// Preview tokens authenticate object GETs from media elements, which
@@ -55,7 +65,7 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Han
 			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 				token := authHeader[7:]
 				userInfo, err := authService.ValidateSessionToken(token)
-				if err == nil {
+				if err == nil && validSecurityVersion(userInfo, stateManager) {
 					c.Locals("userInfo", userInfo)
 					c.Locals("username", userInfo.Username)
 					if userInfo.Email != "" {
@@ -67,18 +77,26 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Han
 			}
 		}
 
-		// Try OIDC auth if enabled.
-		if cfg.OIDC.Enabled {
-			sessionCookie := c.Cookies(cfg.OIDC.CookieName)
-			if sessionCookie != "" {
-				userInfo, err := authService.ValidateSessionToken(sessionCookie)
-				if err == nil {
-					c.Locals("userInfo", userInfo)
-					c.Locals("username", userInfo.Username)
-					c.Locals("email", userInfo.Email)
-					enrichRequestLogger(c, userInfo.Username, "oidc")
-					return c.Next()
+		// All login methods use the same HttpOnly session cookie.
+		cookieName := cfg.OIDC.CookieName
+		if cookieName == "" {
+			cookieName = "garage_session"
+		}
+		if sessionCookie := c.Cookies(cookieName); sessionCookie != "" {
+			userInfo, err := authService.ValidateSessionToken(sessionCookie)
+			if err == nil && validSecurityVersion(userInfo, stateManager) {
+				c.Locals("userInfo", userInfo)
+				c.Locals("username", userInfo.Username)
+				c.Locals("email", userInfo.Email)
+				authMethod := userInfo.AuthMethod
+				if authMethod == "" {
+					authMethod = "admin"
+					if cfg.OIDC.Enabled {
+						authMethod = "oidc"
+					}
 				}
+				enrichRequestLogger(c, userInfo.Username, authMethod)
+				return c.Next()
 			}
 		}
 
@@ -92,6 +110,22 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Han
 			models.ErrorResponse(models.ErrCodeUnauthorized, "Authentication required"),
 		)
 	}
+}
+
+func validSecurityVersion(user *auth.UserInfo, manager *state.Manager) bool {
+	if user.AuthMethod != "admin" && user.AuthMethod != "passkey" {
+		return true
+	}
+	return manager != nil && user.SecurityVersion == manager.GetState().Admin.SecurityVersion
+}
+
+// LocalAccountOnly prevents OIDC and token sessions from managing the local account.
+func LocalAccountOnly(c fiber.Ctx) error {
+	user, ok := c.Locals("userInfo").(*auth.UserInfo)
+	if !ok || user.AuthMethod != "admin" && user.AuthMethod != "passkey" {
+		return c.Status(fiber.StatusForbidden).JSON(models.ErrorResponse(models.ErrCodeForbidden, "Local account authentication required"))
+	}
+	return c.Next()
 }
 
 // enrichRequestLogger rebinds the per-request logger in c.Context() with
@@ -146,6 +180,9 @@ func previewRouteParts(c fiber.Ctx) (bucket, rawKey string) {
 	}
 	bucket = rest[:slash]
 	rest = rest[slash+1:]
+	if rest == "object" {
+		return bucket, c.Query("key")
+	}
 	const objectsPrefix = "objects/"
 	if !strings.HasPrefix(rest, objectsPrefix) {
 		return "", ""
@@ -158,6 +195,9 @@ func previewRouteParts(c fiber.Ctx) (bucket, rawKey string) {
 // preview token only ever grants the plain byte download.
 func previewObjectKey(c fiber.Ctx) string {
 	_, raw := previewRouteParts(c)
+	if strings.HasSuffix(c.Path(), "/object") {
+		return raw
+	}
 	// A raw trailing slash is the one case where c.Path() (used here) and the
 	// served c.Params("*") diverge: Fiber trims the trailing slash from the
 	// bound wildcard, so validating against the un-trimmed key could authorize

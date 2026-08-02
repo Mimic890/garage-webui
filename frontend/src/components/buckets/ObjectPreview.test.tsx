@@ -43,7 +43,7 @@ describe('ObjectPreview', () => {
   it('renders an image from the object url', () => {
     mockedHook.mockReturnValue(state({ kind: 'image', status: 'ready', objectUrl: 'blob:img' }));
     renderPreview();
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:img');
+    expect(screen.getByRole('img', { name: 'k.json' })).toHaveAttribute('src', 'blob:img');
   });
 
   it('renders video with the media url', () => {
@@ -77,27 +77,27 @@ describe('ObjectPreview', () => {
   it('shows the too-large notice with a download action', () => {
     mockedHook.mockReturnValue(state({ kind: 'text', status: 'too-large' }));
     renderPreview();
-    expect(screen.getByText(/too large to preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/larger than/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
   });
 
   it('shows the unsupported notice', () => {
     mockedHook.mockReturnValue(state({ kind: 'none', status: 'unsupported' }));
     renderPreview();
-    expect(screen.getByText(/no preview available/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview unavailable/i)).toBeInTheDocument();
   });
 
   it('shows the binary notice', () => {
     mockedHook.mockReturnValue(state({ kind: 'text', status: 'binary' }));
     renderPreview();
-    expect(screen.getByText(/doesn't appear to be text/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be previewed as text/i)).toBeInTheDocument();
   });
 
   it('shows the error state with retry wired to the hook', () => {
     const retry = vi.fn();
     mockedHook.mockReturnValue(state({ kind: 'image', status: 'error', retry }));
     renderPreview();
-    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(retry).toHaveBeenCalled();
   });
 
@@ -160,6 +160,6 @@ describe('ObjectPreview', () => {
   it('falls back to the generic notice for an unhandled preview kind', () => {
     mockedHook.mockReturnValue(state({ kind: 'none', status: 'ready' }));
     renderPreview();
-    expect(screen.getByText(/no preview available/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview unavailable/i)).toBeInTheDocument();
   });
 });

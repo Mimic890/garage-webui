@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useObjectPreview } from '@/hooks/useObjectPreview';
 import { getHighlightLanguage, TEXT_HIGHLIGHT_MAX_BYTES } from '@/lib/preview-utils';
 import { formatBytes } from '@/lib/file-utils';
+import { useTranslation } from '@/lib/i18n';
 
 function Notice({
   message,
@@ -14,6 +15,7 @@ function Notice({
   onDownload?: () => void;
   onRetry?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center gap-3 px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
       <p>{message}</p>
@@ -21,12 +23,12 @@ function Notice({
         <div className="flex gap-2">
           {onRetry && (
             <Button variant="secondary" onClick={onRetry}>
-              <RefreshCw className="h-4 w-4" /> Retry
+              <RefreshCw className="h-4 w-4" /> {t('buckets.actions.retry')}
             </Button>
           )}
           {onDownload && (
             <Button variant="secondary" onClick={onDownload}>
-              <Download className="h-4 w-4" /> Download
+              <Download className="h-4 w-4" /> {t('buckets.actions.download')}
             </Button>
           )}
         </div>
@@ -39,6 +41,7 @@ function CodeBlock({ text, objectKey }: { text: string; objectKey: string }) {
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
+    setHtml(null);
     // Highlighting is progressive enhancement. Large files and any import or
     // highlight failure fall back to the plain text already on screen.
     if (text.length > TEXT_HIGHLIGHT_MAX_BYTES) return;
@@ -73,6 +76,7 @@ export function ObjectPreview({
   contentType?: string;
   onDownload: () => void;
 }) {
+  const { t } = useTranslation();
   const preview = useObjectPreview(bucket, objectKey, size, contentType);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const resumeAtRef = useRef(0);
@@ -91,22 +95,22 @@ export function ObjectPreview({
 
   switch (preview.status) {
     case 'unsupported':
-      return <Notice message="No preview available for this object." onDownload={onDownload} />;
+      return <Notice message={t('buckets.preview.unavailable')} onDownload={onDownload} />;
     case 'too-large':
       return (
         <Notice
-          message={`File is too large to preview (${formatBytes(size)}), download it instead.`}
+          message={t('buckets.preview.too_large', { size: formatBytes(size) })}
           onDownload={onDownload}
         />
       );
     case 'binary':
-      return <Notice message="This file doesn't appear to be text." onDownload={onDownload} />;
+      return <Notice message={t('buckets.preview.not_text')} onDownload={onDownload} />;
     case 'error':
-      return <Notice message="Could not load the preview." onRetry={preview.retry} onDownload={onDownload} />;
+      return <Notice message={t('buckets.preview.load_failed')} onRetry={preview.retry} onDownload={onDownload} />;
     case 'loading':
       return (
         <div className="flex items-center justify-center gap-2 px-5 py-10 text-[13px] text-[var(--muted-foreground)]">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading preview…
+          <Loader2 className="h-4 w-4 animate-spin" /> {t('buckets.preview.loading')}
         </div>
       );
   }
@@ -154,6 +158,6 @@ export function ObjectPreview({
     case 'text':
       return <CodeBlock text={preview.text!} objectKey={objectKey} />;
     default:
-      return <Notice message="No preview available for this object." onDownload={onDownload} />;
+      return <Notice message={t('buckets.preview.unavailable')} onDownload={onDownload} />;
   }
 }

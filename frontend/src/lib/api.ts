@@ -16,13 +16,16 @@ import type {
   S3Object,
   StorageMetrics,
 } from '@/types';
-import type { AuthUser } from '@/types/auth';
-
-// Helper function to encode object keys for URLs
-// Encodes the entire key including slashes to ensure proper handling of special characters
-const encodeObjectKey = (key: string): string => {
-  return encodeURIComponent(key);
-};
+import type {
+  Account,
+  AuthConfig,
+  AuthUser,
+  PasskeyCeremony,
+  SensitiveAccountInput,
+  TotpEnrollment,
+} from '@/types/auth';
+import type { CreationOptionsJSON, RequestOptionsJSON } from '@/lib/webauthn';
+import { translate } from '@/lib/i18n';
 
 const api = axios.create({
   baseURL: '/api',
@@ -39,6 +42,12 @@ const authApiClient = axios.create({
   },
 });
 
+function authPayload<T>(payload: T | { data: T }): T {
+  return payload && typeof payload === 'object' && 'data' in payload
+    ? (payload as { data: T }).data
+    : payload as T;
+}
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth-token');
   if (token) {
@@ -52,7 +61,7 @@ api.interceptors.request.use((config) => {
       const parsed = JSON.parse(storageData);
       clusterId = parsed.state?.activeClusterId;
     }
-  } catch (e) {
+  } catch {
     // Ignore parsing errors
   }
   
@@ -80,12 +89,12 @@ api.interceptors.response.use(
     // If response has success=false in data, treat it as an error
     if (response.data && response.data.success === false && response.data.error) {
       const error = response.data.error;
-      const errorMessage = error.message || 'An error occurred';
+      const errorMessage = translate('api.errors.generic');
       const errorCode = error.code || 'UNKNOWN_ERROR';
 
       // Display toast with error details
       toast.error(errorMessage, {
-        description: `Error Code: ${errorCode}`,
+        description: translate('api.errors.code', { code: errorCode }),
       });
 
       // Reject the promise so it's treated as an error
@@ -118,27 +127,27 @@ api.interceptors.response.use(
       const data = error.response.data;
 
       if (data && data.error) {
-        const errorMessage = data.error.message || 'An error occurred';
+        const errorMessage = translate('api.errors.generic');
         const errorCode = data.error.code || 'UNKNOWN_ERROR';
 
         toast.error(errorMessage, {
-          description: `Error Code: ${errorCode}`,
+          description: translate('api.errors.code', { code: errorCode }),
         });
       } else {
         // Generic HTTP error
-        toast.error(`Request failed: ${error.response.status}`, {
-          description: error.response.statusText || 'Unknown error',
+        toast.error(translate('api.errors.requestFailed', { status: error.response.status }), {
+          description: translate('api.errors.unknown'),
         });
       }
     } else if (error.request) {
       // Request made but no response received
-      toast.error('Network Error', {
-        description: 'Unable to reach the server. Please check your connection.',
+      toast.error(translate('api.errors.networkTitle'), {
+        description: translate('api.errors.networkDescription'),
       });
     } else {
       // Something else happened
-      toast.error('Error', {
-        description: error.message || 'An unexpected error occurred',
+      toast.error(translate('api.errors.title'), {
+        description: translate('api.errors.unexpected'),
       });
     }
 
@@ -149,34 +158,41 @@ api.interceptors.response.use(
 // Auth API
 export const authApi = {
   getConfig: async () => {
-    const response = await authApiClient.get<{
-      admin: { enabled: boolean };
-      oidc: { enabled: boolean; provider?: string };
-      token: { enabled: boolean };
-    }>('/config');
+    const response = await authApiClient.get<AuthConfig>('/config');
     return response;
   },
 
   getSetupStatus: async () => {
-    const response = await api.get<{ setup: boolean; admin: { nickname: string } }>('/v1/panel/setup');
+    const response = await api.get<{ setup: boolean }>('/v1/panel/setup');
     return response;
   },
 
-  setupPanel: async (data: any) => {
-    const response = await api.post<{ success: boolean }>('/v1/panel/setup', data);
+  setupPanel: async (data: { nickname: string; password: string }, bootstrapToken?: string) => {
+    const response = await api.post<{ success: boolean }>('/v1/panel/setup', data, {
+      headers: bootstrapToken ? { 'X-Bootstrap-Token': bootstrapToken } : undefined,
+    });
     return response;
   },
 
   loginAdmin: async (username: string, password: string) => {
-    const response = await authApiClient.post<{ success: boolean; token: string; user: AuthUser }>('/login', {
+    const response = await authApiClient.post<{
+      success?: boolean;
+      user?: AuthUser;
+      mfa_required?: boolean;
+      challenge_id?: string;
+    }>('/login', {
       username,
       password,
     });
     return response;
   },
 
+  loginMfa: async (challenge_id: string, code: string) => {
+    return authApiClient.post<{ success: boolean; user: AuthUser }>('/login/mfa', { challenge_id, code });
+  },
+
   loginToken: async (token: string) => {
-    const response = await authApiClient.post<{ success: boolean; token: string; user: AuthUser }>('/login-token', {
+    const response = await authApiClient.post<{ success: boolean; user: AuthUser }>('/login-token', {
       token,
     });
     return response;
@@ -187,9 +203,57 @@ export const authApi = {
     return response;
   },
 
+  getAccount: async () => {
+    const response = await authApiClient.get<Account | { data: Account }>('/account');
+    return authPayload(response.data);
+  },
+
+  updateAccount: async (input: SensitiveAccountInput & { email?: string; new_password?: string }) => {
+    const response = await authApiClient.patch<Account | { data: Account }>('/account', input);
+    return authPayload(response.data);
+  },
+
+  beginTotp: async (current_password: string) => {
+    const response = await authApiClient.post<TotpEnrollment | { data: TotpEnrollment }>('/totp/begin', { current_password });
+    const enrollment = authPayload(response.data);
+    return { ...enrollment, qr_code_data_url: enrollment.qr_code_data_url || enrollment.qr_png_data_url || '' };
+  },
+
+  finishTotp: async (enrollment_id: string, code: string) => {
+    const response = await authApiClient.post<{ recovery_codes: string[] } | { data: { recovery_codes: string[] } }>('/totp/finish', { enrollment_id, code });
+    return authPayload(response.data);
+  },
+
+  disableTotp: (input: SensitiveAccountInput) => authApiClient.delete('/totp', { data: input }),
+
+  regenerateRecoveryCodes: async (input: SensitiveAccountInput) => {
+    const response = await authApiClient.post<{ recovery_codes: string[] } | { data: { recovery_codes: string[] } }>('/recovery-codes', input);
+    return authPayload(response.data);
+  },
+
+  beginPasskeyRegistration: async (input: SensitiveAccountInput & { name: string }) => {
+    const response = await authApiClient.post<PasskeyCeremony<CreationOptionsJSON> | { data: PasskeyCeremony<CreationOptionsJSON> }>('/passkeys/register/begin', input);
+    return authPayload(response.data);
+  },
+
+  finishPasskeyRegistration: (ceremony_id: string, credential: unknown) =>
+    authApiClient.post('/passkeys/register/finish', { ceremony_id, credential }),
+
+  removePasskey: (id: string, input: SensitiveAccountInput) =>
+    authApiClient.delete(`/passkeys/${encodeURIComponent(id)}`, { data: input }),
+
+  beginPasskeyLogin: async () => {
+    const response = await authApiClient.post<PasskeyCeremony<RequestOptionsJSON> | { data: PasskeyCeremony<RequestOptionsJSON> }>('/passkeys/login/begin');
+    return authPayload(response.data);
+  },
+
+  finishPasskeyLogin: async (ceremony_id: string, credential: unknown) => {
+    const response = await authApiClient.post<{ success: boolean; user: AuthUser }>('/passkeys/login/finish', { ceremony_id, credential });
+    return response.data;
+  },
+
   logoutAdmin: async () => {
-    // For admin, just clear local storage (no server logout needed)
-    return Promise.resolve();
+    return authApiClient.post('/logout');
   },
 
   logoutOIDC: async () => {
@@ -350,15 +414,17 @@ export const objectsApi = {
     };
   },
 
-  get: async (bucket: string, key: string): Promise<Blob> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`, {
-      responseType: 'blob'
+  get: async (bucket: string, key: string, signal?: AbortSignal): Promise<Blob> => {
+    const response = await api.get(`/v1/buckets/${bucket}/object`, {
+      responseType: 'blob',
+      signal,
+      params: { key },
     });
     return response.data;
   },
 
   getMetadata: async (bucket: string, key: string, options?: { signal?: AbortSignal }): Promise<ObjectMetadata> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/metadata`, options);
+    const response = await api.get(`/v1/buckets/${bucket}/object/metadata`, { ...options, params: { key } });
     const data = response.data.data;
     return {
       key: data.key,
@@ -403,7 +469,7 @@ export const objectsApi = {
   },
 
   delete: async (bucket: string, key: string): Promise<void> => {
-    await api.delete(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`);
+    await api.delete(`/v1/buckets/${bucket}/object`, { params: { key } });
   },
 
   // Deletes the given object keys and/or recursively deletes every object under
@@ -414,14 +480,14 @@ export const objectsApi = {
   },
 
   getPresignedUrl: async (bucket: string, key: string, expiresIn: number = 3600): Promise<string> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/presign`, {
-      params: { expires_in: expiresIn }
+    const response = await api.get(`/v1/buckets/${bucket}/object/presign`, {
+      params: { key, expires_in: expiresIn }
     });
     return response.data.data.url;
   },
 
-  getPreviewUrl: async (bucket: string, key: string): Promise<{ url: string; expiresAt: string }> => {
-    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/preview-url`);
+  getPreviewUrl: async (bucket: string, key: string, signal?: AbortSignal): Promise<{ url: string; expiresAt: string }> => {
+    const response = await api.get(`/v1/buckets/${bucket}/object/preview-url`, { signal, params: { key } });
     const data = response.data.data;
     return { url: data.url, expiresAt: data.expires_at };
   },

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Noooste/azuretls-client"
@@ -68,12 +69,12 @@ func decodeResponse(resp *azuretls.Response, target interface{}) error {
 	defer resp.RawBody.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.RawBody, 64<<10))
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	if target != nil {
-		if err := json.NewDecoder(resp.RawBody).Decode(target); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.RawBody, 1<<20)).Decode(target); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}
@@ -113,7 +114,7 @@ func (s *GarageV2AdminService) CreateKey(ctx context.Context, req models.CreateK
 
 // GetKeyInfo returns information about a specific access key
 func (s *GarageV2AdminService) GetKeyInfo(ctx context.Context, keyID string, showSecret bool) (*models.GarageKeyInfo, error) {
-	path := fmt.Sprintf("/v2/GetKeyInfo?id=%s", keyID)
+	path := fmt.Sprintf("/v2/GetKeyInfo?id=%s", url.QueryEscape(keyID))
 	if showSecret {
 		path += "&showSecretKey=true"
 	}
@@ -133,7 +134,7 @@ func (s *GarageV2AdminService) GetKeyInfo(ctx context.Context, keyID string, sho
 
 // UpdateKey updates information about an access key
 func (s *GarageV2AdminService) UpdateKey(ctx context.Context, keyID string, req models.UpdateKeyRequest) (*models.GarageKeyInfo, error) {
-	path := fmt.Sprintf("/v2/UpdateKey?id=%s", keyID)
+	path := fmt.Sprintf("/v2/UpdateKey?id=%s", url.QueryEscape(keyID))
 
 	resp, err := s.doRequest(ctx, http.MethodPost, path, req)
 	if err != nil {
@@ -150,7 +151,7 @@ func (s *GarageV2AdminService) UpdateKey(ctx context.Context, keyID string, req 
 
 // DeleteKey deletes an access key from the cluster
 func (s *GarageV2AdminService) DeleteKey(ctx context.Context, keyID string) error {
-	path := fmt.Sprintf("/v2/DeleteKey?id=%s", keyID)
+	path := fmt.Sprintf("/v2/DeleteKey?id=%s", url.QueryEscape(keyID))
 
 	resp, err := s.doRequest(ctx, http.MethodPost, path, nil)
 	if err != nil {
@@ -163,7 +164,6 @@ func (s *GarageV2AdminService) DeleteKey(ctx context.Context, keyID string) erro
 
 	return nil
 }
-
 
 // ListBuckets returns all buckets in the cluster.
 func (s *GarageV2AdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
@@ -212,7 +212,7 @@ func (s *GarageV2AdminService) GetBucketInfo(ctx context.Context, bucketID strin
 	log.Debug().Msg("getting bucket info")
 	start := time.Now()
 
-	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v2/GetBucketInfo?id=%s", bucketID), nil)
+	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v2/GetBucketInfo?id=%s", url.QueryEscape(bucketID)), nil)
 	if err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage get_bucket_info request failed")
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -239,7 +239,7 @@ func (s *GarageV2AdminService) GetBucketInfoByAlias(ctx context.Context, globalA
 	log.Debug().Msg("getting bucket info by alias")
 	start := time.Now()
 
-	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v2/GetBucketInfo?globalAlias=%s", globalAlias), nil)
+	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v2/GetBucketInfo?globalAlias=%s", url.QueryEscape(globalAlias)), nil)
 	if err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage get_bucket_info_by_alias request failed")
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -303,7 +303,7 @@ func (s *GarageV2AdminService) UpdateBucket(ctx context.Context, bucketID string
 	log.Info().Msg("updating bucket")
 	start := time.Now()
 
-	resp, err := s.doRequest(ctx, http.MethodPost, fmt.Sprintf("/v2/UpdateBucket?id=%s", bucketID), req)
+	resp, err := s.doRequest(ctx, http.MethodPost, fmt.Sprintf("/v2/UpdateBucket?id=%s", url.QueryEscape(bucketID)), req)
 	if err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage update_bucket request failed")
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -330,7 +330,7 @@ func (s *GarageV2AdminService) DeleteBucket(ctx context.Context, bucketID string
 	log.Info().Msg("deleting bucket")
 	start := time.Now()
 
-	resp, err := s.doRequest(ctx, http.MethodPost, fmt.Sprintf("/v2/DeleteBucket?id=%s", bucketID), nil)
+	resp, err := s.doRequest(ctx, http.MethodPost, fmt.Sprintf("/v2/DeleteBucket?id=%s", url.QueryEscape(bucketID)), nil)
 	if err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage delete_bucket request failed")
 		return fmt.Errorf("request failed: %w", err)
@@ -344,8 +344,6 @@ func (s *GarageV2AdminService) DeleteBucket(ctx context.Context, bucketID string
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket deleted")
 	return nil
 }
-
-
 
 // AllowBucketKey grants permissions for a key on a bucket.
 func (s *GarageV2AdminService) AllowBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
@@ -440,7 +438,7 @@ func (s *GarageV2AdminService) GetClusterStatistics(ctx context.Context) (*model
 
 // GetNodeInfo returns information about a specific node
 func (s *GarageV2AdminService) GetNodeInfo(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
-	path := fmt.Sprintf("/v2/GetNodeInfo?node=%s", nodeID)
+	path := fmt.Sprintf("/v2/GetNodeInfo?node=%s", url.QueryEscape(nodeID))
 
 	resp, err := s.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -457,7 +455,7 @@ func (s *GarageV2AdminService) GetNodeInfo(ctx context.Context, nodeID string) (
 
 // GetNodeStatistics returns statistics for a specific node
 func (s *GarageV2AdminService) GetNodeStatistics(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
-	path := fmt.Sprintf("/v2/GetNodeStatistics?node=%s", nodeID)
+	path := fmt.Sprintf("/v2/GetNodeStatistics?node=%s", url.QueryEscape(nodeID))
 
 	resp, err := s.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -500,11 +498,11 @@ func (s *GarageV2AdminService) GetMetrics(ctx context.Context) (string, error) {
 	defer resp.RawBody.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.RawBody, 64<<10))
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	bodyBytes, err := io.ReadAll(resp.RawBody)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.RawBody, 4<<20))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}

@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,9 +80,7 @@ func uniqueBucket(t *testing.T) string {
 	t.Helper()
 	name := "test-bucket-" + t.Name()
 	t.Cleanup(func() {
-		for _, op := range []Operation{OpRead, OpWrite, OpRead | OpWrite} {
-			utils.GlobalCache.Delete(fmt.Sprintf("key:%s:%d", name, op))
-		}
+		utils.GlobalCache.Clear()
 	})
 	return name
 }
@@ -469,4 +466,3 @@ func TestGetBucketCredentials_AdminErrorPropagates(t *testing.T) {
 		t.Errorf("expected wrapped 'failed to get bucket info' error, got %v", err)
 	}
 }
-

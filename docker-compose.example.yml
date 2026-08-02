@@ -3,6 +3,10 @@ services:
     image: ghcr.io/mimic890/garage-webui:latest
     container_name: garage-ui
     restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -12,14 +16,26 @@ services:
       # Minimal environment variables, just for server basics
       - GARAGE_UI_SERVER_HOST=0.0.0.0
       - GARAGE_UI_SERVER_PORT=8080
+      # Localhost-only example. Use production plus HTTPS behind a reverse proxy.
+      - GARAGE_UI_SERVER_ENVIRONMENT=development
+      - GARAGE_UI_SERVER_ROOT_URL=http://localhost:8080
       - GARAGE_UI_DATA_DIR=/app/data
       - GARAGE_UI_LOGGING_LEVEL=info # Options: trace, debug, info, warn, error
+      - GARAGE_UI_AUTH_BOOTSTRAP_TOKEN=${GARAGE_UI_AUTH_BOOTSTRAP_TOKEN:?set a strong one-time bootstrap token}
+      # Optional first-run Garage cluster bootstrap. Keep the token out of git;
+      # use an env file or Docker secret in real deployments.
+      # - GARAGE_UI_GARAGE_ENDPOINT=http://garage:3900
+      # - GARAGE_UI_GARAGE_ADMIN_ENDPOINT=http://garage:3903
+      # - GARAGE_UI_GARAGE_REGION=garage
+      # - GARAGE_UI_GARAGE_ADMIN_TOKEN=${GARAGE_UI_GARAGE_ADMIN_TOKEN:?set Garage admin token}
+      # Optional first-run local admin bootstrap.
+      # - GARAGE_UI_AUTH_ADMIN_USERNAME=${GARAGE_UI_AUTH_ADMIN_USERNAME:?set admin username}
+      # - GARAGE_UI_AUTH_ADMIN_PASSWORD=${GARAGE_UI_AUTH_ADMIN_PASSWORD:?set admin password}
       # - GARAGE_UI_LOGGING_FORMAT=text # Options: text, json
       # - GARAGE_UI_SERVER_PROTOCOL=http
-      # - GARAGE_UI_SERVER_ROOT_URL=http://localhost:8080
       # - GARAGE_UI_SERVER_ALLOWED_IPS=127.0.0.1,192.168.1.0/24
-      # - GARAGE_UI_SERVER_MAX_BODY_SIZE=314572800 # 300MB
-      # - GARAGE_UI_SERVER_MAX_HEADER_SIZE=1048576 # 1MB
+      # - GARAGE_UI_SERVER_MAX_BODY_SIZE=67108864 # 64MB
+      # - GARAGE_UI_SERVER_MAX_HEADER_SIZE=32768 # 32KB
       # - GARAGE_UI_SERVER_READ_BUFFER_SIZE=4096 # 4KB
       # - GARAGE_UI_SERVER_WRITE_BUFFER_SIZE=4096 # 4KB
 

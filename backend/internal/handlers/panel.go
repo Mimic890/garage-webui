@@ -1,22 +1,25 @@
 package handlers
 
 import (
+	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/state"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/subtle"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type PanelHandler struct {
-	stateManager *state.Manager
+	stateManager   *state.Manager
+	bootstrapToken string
+	production     bool
 }
 
-func NewPanelHandler(stateManager *state.Manager) *PanelHandler {
+func NewPanelHandler(stateManager *state.Manager, bootstrapToken string, production bool) *PanelHandler {
 	return &PanelHandler{
-		stateManager: stateManager,
+		stateManager:   stateManager,
+		bootstrapToken: bootstrapToken,
+		production:     production,
 	}
 }
 
@@ -25,24 +28,22 @@ func (h *PanelHandler) GetSetupStatus(c fiber.Ctx) error {
 	s := h.stateManager.GetState()
 	return c.JSON(fiber.Map{
 		"setup": s.Admin.Setup,
-		"admin": fiber.Map{
-			"nickname": s.Admin.Nickname,
-		},
 	})
 }
 
 type SetupRequest struct {
 	Nickname string `json:"nickname" validate:"required"`
-	Password string `json:"password"`
+	Password string `json:"password" validate:"required,min=12"`
 }
 
 // SetupPanel performs initial admin account setup
 func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
-	s := h.stateManager.GetState()
-	if s.Admin.Setup {
-		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Panel is already set up"))
+	if h.production {
+		token := c.Get("X-Bootstrap-Token")
+		if h.bootstrapToken == "" || token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(h.bootstrapToken)) != 1 {
+			return c.Status(fiber.StatusForbidden).JSON(models.ErrorResponse(models.ErrCodeForbidden, "Bootstrap token required"))
+		}
 	}
-
 	var req SetupRequest
 	if err := c.Bind().JSON(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
@@ -53,17 +54,15 @@ func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
 	}
 
 	var hashedPassword string
-	if req.Password != "" {
-		// Pre-hash with SHA-256 to bypass bcrypt's 72-byte limit
-		hasher := sha256.New()
-		hasher.Write([]byte(req.Password))
-		sha256Hash := hex.EncodeToString(hasher.Sum(nil))
-
-		hash, err := bcrypt.GenerateFromPassword([]byte(sha256Hash), bcrypt.DefaultCost)
+	if len(req.Password) < 12 {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Password must be at least 12 characters"))
+	}
+	{
+		hash, err := auth.HashPassword(req.Password)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to hash password"))
 		}
-		hashedPassword = string(hash)
+		hashedPassword = hash
 	}
 
 	admin := state.AdminAccount{
@@ -72,8 +71,12 @@ func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
 		Setup:    true,
 	}
 
-	if err := h.stateManager.UpdateAdmin(admin); err != nil {
+	claimed, err := h.stateManager.SetupAdmin(admin)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to save state"))
+	}
+	if !claimed {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Panel is already set up"))
 	}
 
 	return c.JSON(fiber.Map{"success": true})
@@ -82,7 +85,11 @@ func (h *PanelHandler) SetupPanel(c fiber.Ctx) error {
 // GetClusters lists all clusters
 func (h *PanelHandler) GetClusters(c fiber.Ctx) error {
 	s := h.stateManager.GetState()
-	return c.JSON(fiber.Map{"success": true, "clusters": s.Clusters})
+	clusters := make([]fiber.Map, 0, len(s.Clusters))
+	for _, cluster := range s.Clusters {
+		clusters = append(clusters, fiber.Map{"id": cluster.ID, "name": cluster.Name, "endpoint": cluster.Endpoint, "region": cluster.Region, "use_ssl": cluster.UseSSL, "force_path_style": cluster.ForcePathStyle, "admin_endpoint": cluster.AdminEndpoint})
+	}
+	return c.JSON(fiber.Map{"success": true, "clusters": clusters})
 }
 
 // AddCluster adds a new Garage cluster
@@ -95,6 +102,9 @@ func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
 	if req.Name == "" || req.Endpoint == "" || req.AdminEndpoint == "" || req.AdminToken == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
 	}
+	if err := state.ValidateClusterEndpoints(req.Endpoint, req.AdminEndpoint); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, err.Error()))
+	}
 
 	req.ID = uuid.New().String()
 
@@ -102,7 +112,7 @@ func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to add cluster"))
 	}
 
-	return c.JSON(fiber.Map{"success": true, "cluster": req})
+	return c.JSON(fiber.Map{"success": true, "cluster": fiber.Map{"id": req.ID, "name": req.Name, "endpoint": req.Endpoint, "region": req.Region, "use_ssl": req.UseSSL, "force_path_style": req.ForcePathStyle, "admin_endpoint": req.AdminEndpoint}})
 }
 
 // DeleteCluster removes a Garage cluster

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"path"
@@ -74,11 +75,15 @@ type PreviewTokenMinter interface {
 
 // previewTokenTTL is long enough that seeking mid-playback keeps working.
 // The frontend mints a fresh URL when a token expires.
-const previewTokenTTL = time.Hour
+const previewTokenTTL = 15 * time.Minute
 
 // ObjectHandler handles object-related HTTP requests.
 type ObjectHandler struct {
 	previewTokens PreviewTokenMinter
+}
+
+type conditionalRangeGetter interface {
+	GetObjectRangeIfMatch(ctx context.Context, bucketName, key string, start, end int64, etag string) (io.ReadCloser, error)
 }
 
 // NewObjectHandler creates a new object handler.
@@ -211,7 +216,7 @@ func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 	contentType := file.Header.Get("Content-Type")
 
 	// Upload to Garage
-	uploadResult, err := getS3Service(c).UploadObject(ctx, bucketName, key, fileHandle, contentType)
+	uploadResult, err := getS3Service(c).UploadObject(ctx, bucketName, key, fileHandle, file.Size, contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to upload object: "+err.Error()),
@@ -365,7 +370,13 @@ func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader
 		return h.serveFullObject(c, bucketName, key)
 	}
 
-	body, err := getS3Service(c).GetObjectRange(ctx, bucketName, key, rng.start, rng.end)
+	storage := getS3Service(c)
+	var body io.ReadCloser
+	if conditional, ok := storage.(conditionalRangeGetter); ok {
+		body, err = conditional.GetObjectRangeIfMatch(ctx, bucketName, key, rng.start, rng.end, info.ETag)
+	} else {
+		body, err = storage.GetObjectRange(ctx, bucketName, key, rng.start, rng.end)
+	}
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
@@ -425,21 +436,7 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 		)
 	}
 
-	// Check if object exists
-	exists, err := getS3Service(c).ObjectExists(ctx, bucketName, key)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check object existence: "+err.Error()),
-		)
-	}
-
-	if !exists {
-		return c.Status(fiber.StatusNotFound).JSON(
-			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found"),
-		)
-	}
-
-	// Delete the object
+	// S3 delete is idempotent; checking first creates a read-before-delete race.
 	if err := getS3Service(c).DeleteObject(ctx, bucketName, key); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete object: "+err.Error()),
@@ -614,7 +611,7 @@ func (h *ObjectHandler) GetPreviewURL(c fiber.Ctx) error {
 	}
 
 	previewURL := "/api/v1/buckets/" + url.PathEscape(bucketName) +
-		"/objects/" + url.PathEscape(key) + "?pt=" + url.QueryEscape(token)
+		"/object?key=" + url.QueryEscape(key) + "&pt=" + url.QueryEscape(token)
 
 	return c.JSON(models.SuccessResponse(models.PreviewURLResponse{
 		URL:       previewURL,
@@ -690,23 +687,19 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 	// Delete the individually selected objects in a single batch call.
 	if len(req.Keys) > 0 {
 		n, err := getS3Service(c).DeleteMultipleObjects(ctx, bucketName, req.Keys)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(
-				models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete objects: "+err.Error()),
-			)
-		}
 		deleted += n
+		if err != nil {
+			return c.Status(deleteFailureStatus(deleted)).JSON(partialDeleteResponse(bucketName, deleted, req.Keys, prefixes))
+		}
 	}
 
 	// Recursively delete every object under each selected folder prefix.
 	for _, prefix := range prefixes {
 		n, err := getS3Service(c).DeleteObjectsByPrefix(ctx, bucketName, prefix)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(
-				models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete folder "+prefix+": "+err.Error()),
-			)
-		}
 		deleted += n
+		if err != nil {
+			return c.Status(deleteFailureStatus(deleted)).JSON(partialDeleteResponse(bucketName, deleted, req.Keys, prefixes))
+		}
 	}
 
 	response := models.ObjectDeleteMultipleResponse{
@@ -717,6 +710,21 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 	}
 
 	return c.JSON(models.SuccessResponse(response))
+}
+
+func deleteFailureStatus(deleted int) int {
+	if deleted > 0 {
+		return fiber.StatusMultiStatus
+	}
+	return fiber.StatusInternalServerError
+}
+
+func partialDeleteResponse(bucket string, deleted int, keys, prefixes []string) models.APIResponse {
+	return models.APIResponse{
+		Success: false,
+		Data:    models.ObjectDeleteMultipleResponse{Bucket: bucket, Deleted: deleted, Keys: keys, Prefixes: prefixes},
+		Error:   &models.APIError{Code: models.ErrCodeDeleteFailed, Message: "Delete partially completed; refresh before retrying"},
+	}
 }
 
 // UploadMultipleObjects uploads multiple objects to a bucket
@@ -763,11 +771,13 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	uploadFiles := make([]struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}, len(files))
 
 	// Open all files and prepare for upload
 	opened := make([]io.Closer, 0, len(files))
+	keys := make(map[string]struct{}, len(files))
 	for i, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
@@ -782,6 +792,13 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 
 		// Use filename as the key
 		key := fileHeader.Filename
+		if _, exists := keys[key]; exists {
+			for _, f := range opened {
+				_ = f.Close()
+			}
+			return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "duplicate upload key: "+key))
+		}
+		keys[key] = struct{}{}
 		contentType := fileHeader.Header.Get("Content-Type")
 		if contentType == "" {
 			contentType = "application/octet-stream"
@@ -790,10 +807,12 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 		uploadFiles[i] = struct {
 			Key         string
 			Body        io.Reader
+			Size        int64
 			ContentType string
 		}{
 			Key:         key,
 			Body:        file,
+			Size:        fileHeader.Size,
 			ContentType: contentType,
 		}
 	}
@@ -825,7 +844,7 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 			failureCount++
 			failedFiles = append(failedFiles, models.ObjectUploadFailedResult{
 				Key:         result.Key,
-				Error:       result.Error.Error(),
+				Error:       uploadErrorText(result.Error),
 				ContentType: result.ContentType,
 			})
 		}
@@ -848,11 +867,14 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 		statusCode = fiber.StatusInternalServerError
 	}
 
-	if statusCode == fiber.StatusInternalServerError {
-		return c.Status(statusCode).JSON(models.ErrorResponse("UPLOAD_FAILED", "All files failed to upload"))
-	}
-
 	return c.Status(statusCode).JSON(models.SuccessResponse(response))
+}
+
+func uploadErrorText(err error) string {
+	if err == nil {
+		return "upload failed"
+	}
+	return err.Error()
 }
 
 // EmptyBucket deletes all objects in a bucket

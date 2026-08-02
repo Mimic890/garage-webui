@@ -14,6 +14,18 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// RequireClusterAdmin protects control-plane configuration even when the
+// optional access-control policy is disabled.
+func RequireClusterAdmin(authService *auth.Service) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		user, ok := c.Locals("userInfo").(*auth.UserInfo)
+		if !ok || user == nil || (user.AuthMethod != "admin" && user.AuthMethod != "passkey" && user.AuthMethod != "token" && !authService.IsAdmin(user)) {
+			return forbidden(c, PermClusterManage)
+		}
+		return c.Next()
+	}
+}
+
 // SubjectLocalsKey is the fiber.Ctx.Locals key carrying the resolved Subject.
 const SubjectLocalsKey = "authzSubject"
 
@@ -157,9 +169,9 @@ func logDecision(c fiber.Ctx, subject, action, resource string, allow bool, reas
 // health is unauthenticated, capabilities is the frontend's fail-closed
 // source and returns only the caller's own permissions.
 var coverageExemptPaths = map[string]struct{}{
-	"/api/v1/health":        {},
-	"/api/v1/capabilities":  {},
-	"/api/v1/panel/setup":   {},
+	"/api/v1/health":       {},
+	"/api/v1/capabilities": {},
+	"/api/v1/panel/setup":  {},
 }
 
 // VerifyRouteCoverage walks the app's route table and errors if any /api/v1

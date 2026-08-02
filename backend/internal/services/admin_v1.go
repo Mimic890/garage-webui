@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Noooste/azuretls-client"
@@ -79,7 +80,7 @@ func (s *GarageV1AdminService) CreateKey(ctx context.Context, req models.CreateK
 }
 
 func (s *GarageV1AdminService) GetKeyInfo(ctx context.Context, keyID string, showSecret bool) (*models.GarageKeyInfo, error) {
-	path := fmt.Sprintf("/v1/key?id=%s", keyID)
+	path := fmt.Sprintf("/v1/key?id=%s", url.QueryEscape(keyID))
 	if showSecret {
 		path += "&showSecretKey=true"
 	}
@@ -95,7 +96,7 @@ func (s *GarageV1AdminService) GetKeyInfo(ctx context.Context, keyID string, sho
 }
 
 func (s *GarageV1AdminService) UpdateKey(ctx context.Context, keyID string, req models.UpdateKeyRequest) (*models.GarageKeyInfo, error) {
-	path := fmt.Sprintf("/v1/key?id=%s", keyID)
+	path := fmt.Sprintf("/v1/key?id=%s", url.QueryEscape(keyID))
 	resp, err := s.doRequest(ctx, http.MethodPost, path, req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -108,7 +109,7 @@ func (s *GarageV1AdminService) UpdateKey(ctx context.Context, keyID string, req 
 }
 
 func (s *GarageV1AdminService) DeleteKey(ctx context.Context, keyID string) error {
-	path := fmt.Sprintf("/v1/key?id=%s", keyID)
+	path := fmt.Sprintf("/v1/key?id=%s", url.QueryEscape(keyID))
 	resp, err := s.doRequest(ctx, http.MethodDelete, path, nil)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -118,7 +119,6 @@ func (s *GarageV1AdminService) DeleteKey(ctx context.Context, keyID string) erro
 	}
 	return nil
 }
-
 
 func (s *GarageV1AdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
 	log := logpkg.FromCtx(ctx).With().Str("component", "admin-v1").Str("operation", "list_buckets").Logger()
@@ -139,7 +139,7 @@ func (s *GarageV1AdminService) ListBuckets(ctx context.Context) ([]models.ListBu
 }
 
 func (s *GarageV1AdminService) GetBucketInfo(ctx context.Context, bucketID string) (*models.GarageBucketInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/bucket?id=%s", bucketID), nil)
+	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/bucket?id=%s", url.QueryEscape(bucketID)), nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -151,7 +151,7 @@ func (s *GarageV1AdminService) GetBucketInfo(ctx context.Context, bucketID strin
 }
 
 func (s *GarageV1AdminService) GetBucketInfoByAlias(ctx context.Context, globalAlias string) (*models.GarageBucketInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/bucket?globalAlias=%s", globalAlias), nil)
+	resp, err := s.doRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/bucket?globalAlias=%s", url.QueryEscape(globalAlias)), nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -181,7 +181,7 @@ func (s *GarageV1AdminService) CreateBucket(ctx context.Context, req models.Crea
 }
 
 func (s *GarageV1AdminService) UpdateBucket(ctx context.Context, bucketID string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
-	resp, err := s.doRequest(ctx, http.MethodPut, fmt.Sprintf("/v1/bucket?id=%s", bucketID), req)
+	resp, err := s.doRequest(ctx, http.MethodPut, fmt.Sprintf("/v1/bucket?id=%s", url.QueryEscape(bucketID)), req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
@@ -193,7 +193,7 @@ func (s *GarageV1AdminService) UpdateBucket(ctx context.Context, bucketID string
 }
 
 func (s *GarageV1AdminService) DeleteBucket(ctx context.Context, bucketID string) error {
-	resp, err := s.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/bucket?id=%s", bucketID), nil)
+	resp, err := s.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/v1/bucket?id=%s", url.QueryEscape(bucketID)), nil)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -226,7 +226,6 @@ func (s *GarageV1AdminService) DenyBucketKey(ctx context.Context, req models.Buc
 	}
 	return &result, nil
 }
-
 
 func (s *GarageV1AdminService) GetClusterHealth(ctx context.Context) (*models.ClusterHealth, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v1/health", nil)
@@ -320,10 +319,10 @@ func (s *GarageV1AdminService) GetMetrics(ctx context.Context) (string, error) {
 	}
 	defer resp.RawBody.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.RawBody, 64<<10))
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
-	bodyBytes, err := io.ReadAll(resp.RawBody)
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.RawBody, 4<<20))
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { objectsApi } from '@/lib/api';
+import { useClusterStore } from '@/store/cluster-store';
 import {
   getPreviewKind,
   getPreviewMime,
@@ -29,6 +30,7 @@ export function useObjectPreview(
   size: number,
   contentType?: string,
 ): ObjectPreviewState {
+  const activeClusterId = useClusterStore((state) => state.activeClusterId);
   const kind = getPreviewKind(contentType, objectKey);
   const sizeLimit = getPreviewSizeLimit(kind);
   const isDocument = kind === 'image' || kind === 'pdf' || kind === 'text';
@@ -36,8 +38,8 @@ export function useObjectPreview(
   const tooLarge = isDocument && sizeLimit !== null && size > sizeLimit;
 
   const blobQuery = useQuery({
-    queryKey: ['object-preview', bucket, objectKey],
-    queryFn: () => objectsApi.get(bucket, objectKey),
+    queryKey: ['object-preview', activeClusterId ?? 'none', bucket, objectKey],
+    queryFn: ({ signal }) => objectsApi.get(bucket, objectKey, signal),
     enabled: isDocument && !tooLarge,
     staleTime: Infinity,
     gcTime: 0,
@@ -45,8 +47,8 @@ export function useObjectPreview(
   });
 
   const urlQuery = useQuery({
-    queryKey: ['object-preview-url', bucket, objectKey],
-    queryFn: () => objectsApi.getPreviewUrl(bucket, objectKey),
+    queryKey: ['object-preview-url', activeClusterId ?? 'none', bucket, objectKey],
+    queryFn: ({ signal }) => objectsApi.getPreviewUrl(bucket, objectKey, signal),
     enabled: isMedia,
     staleTime: Infinity,
     gcTime: 0,
@@ -71,6 +73,7 @@ export function useObjectPreview(
     const blob = blobQuery.data;
     if (!blob) return;
     let cancelled = false;
+    let previousUrl: string | null = null;
     const typed = new Blob([blob], { type: getPreviewMime(kind, contentType, objectKey) });
     if (kind === 'text') {
       blob.text().then((decoded) => {
@@ -80,10 +83,12 @@ export function useObjectPreview(
       });
     } else {
       const url = URL.createObjectURL(typed);
+      previousUrl = url;
       setObjectUrl(url);
     }
     return () => {
       cancelled = true;
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
       setObjectUrl(null);
       setText(null);
       setIsBinary(false);

@@ -36,7 +36,7 @@ export function Connections() {
     e.preventDefault();
     try {
       await addCluster(formData);
-      toast.success('Cluster connection added');
+      toast.success(t('connections.notifications.added'));
       setIsAdding(false);
       setFormData({
         name: '',
@@ -47,18 +47,18 @@ export function Connections() {
         use_ssl: true,
         force_path_style: true,
       });
-    } catch (err: any) {
-      toast.error('Failed to add cluster');
+    } catch {
+      toast.error(t('connections.errors.addFailed'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to remove this connection?')) {
+    if (confirm(t('connections.confirmRemove'))) {
       try {
         await deleteCluster(id);
-        toast.success('Cluster removed');
-      } catch (err) {
-        toast.error('Failed to remove cluster');
+        toast.success(t('connections.notifications.removed'));
+      } catch {
+        toast.error(t('connections.errors.removeFailed'));
       }
     }
   };
@@ -89,7 +89,7 @@ export function Connections() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('connections.name')}</label>
-                    <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Production Cluster" />
+                    <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder={t('connections.name_placeholder')} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('connections.region')}</label>
@@ -133,19 +133,19 @@ export function Connections() {
                   </CardTitle>
                   <CardDescription className="text-xs font-mono">{cluster.id}</CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 -mr-2" onClick={() => handleDelete(cluster.id)}>
+                <Button variant="ghost" size="icon" aria-label={t('connections.removeAriaLabel', { name: cluster.name })} className="text-destructive hover:bg-destructive/10 -mr-2" onClick={() => handleDelete(cluster.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </CardHeader>
               <CardContent className="pt-4 space-y-3">
                 <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                  <span className="text-muted-foreground">S3 URL:</span>
+                  <span className="text-muted-foreground">{t('connections.s3_url')}:</span>
                   <span className="font-medium truncate">{cluster.use_ssl ? 'https://' : 'http://'}{cluster.endpoint}</span>
                   
-                  <span className="text-muted-foreground">Admin API:</span>
+                  <span className="text-muted-foreground">{t('connections.admin_api')}:</span>
                   <span className="font-medium truncate">{cluster.admin_endpoint}</span>
                   
-                  <span className="text-muted-foreground">Region:</span>
+                  <span className="text-muted-foreground">{t('connections.region')}:</span>
                   <span className="font-medium">{cluster.region}</span>
                 </div>
                 

@@ -93,6 +93,28 @@ func TestGetAuthConfig_AdminOnly(t *testing.T) {
 	}
 }
 
+func TestGetAuthConfig_StateAdminEnablesLocalLogin(t *testing.T) {
+	cfg := &config.Config{Auth: config.AuthConfig{Admin: config.AdminAuthConfig{Password: "test-password"}}}
+	app, _ := newAuthTestApp(t, cfg, "admin")
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/auth/config", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Admin struct {
+			Enabled bool `json:"enabled"`
+		} `json:"admin"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Admin.Enabled {
+		t.Fatal("persisted admin account must enable local login")
+	}
+}
+
 func TestGetAuthConfig_OIDCOnly_WithExplicitProvider(t *testing.T) {
 	cfg := &config.Config{
 		Auth: config.AuthConfig{
@@ -184,8 +206,7 @@ func TestLoginAdmin_HappyPath(t *testing.T) {
 	}
 
 	var decoded struct {
-		Success bool   `json:"success"`
-		Token   string `json:"token"`
+		Success bool `json:"success"`
 		User    struct {
 			Username string `json:"username"`
 		} `json:"user"`
@@ -196,8 +217,9 @@ func TestLoginAdmin_HappyPath(t *testing.T) {
 	if !decoded.Success {
 		t.Error("success = false")
 	}
-	if decoded.Token == "" {
-		t.Error("token empty")
+	cookies := resp.Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "garage_session" || !cookies[0].HttpOnly || cookies[0].Value == "" {
+		t.Errorf("secure session cookie missing: %#v", cookies)
 	}
 	if decoded.User.Username != "admin" {
 		t.Errorf("username = %q, want admin", decoded.User.Username)

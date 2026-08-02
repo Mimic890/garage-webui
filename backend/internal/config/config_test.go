@@ -137,7 +137,7 @@ server:
 func validBaseConfig() Config {
 	return Config{
 		Server: ServerConfig{Port: 8080},
-			}
+	}
 }
 
 // applyValidOIDC fills OIDC with all required fields.
@@ -189,7 +189,7 @@ func TestValidate(t *testing.T) {
 			name: "admin auth enabled without username",
 			mutate: func(c *Config) {
 				c.Auth.Admin.Enabled = true
-				c.Auth.Admin.Password = "p"
+				c.Auth.Admin.Password = "long-password"
 			},
 			wantErrContains: "admin auth username and password are required",
 		},
@@ -206,7 +206,7 @@ func TestValidate(t *testing.T) {
 			mutate: func(c *Config) {
 				c.Auth.Admin.Enabled = true
 				c.Auth.Admin.Username = "u"
-				c.Auth.Admin.Password = "p"
+				c.Auth.Admin.Password = "long-password"
 			},
 			wantErrContains: "",
 		},
@@ -378,14 +378,13 @@ func TestIsDevelopment(t *testing.T) {
 	}
 }
 
-
-
 // oidcValidYAML is a minimal configuration that enables OIDC and passes
 // Validate, but deliberately omits auth.oidc.cookie_name.
 const oidcValidYAML = `
 server:
   host: "0.0.0.0"
   port: 8080
+  environment: development
   root_url: "https://garage.example.com"
 auth:
   oidc:
@@ -607,9 +606,6 @@ func TestApplyFileBackedEnvVars_NoFileEnvSet_NoOp(t *testing.T) {
 		t.Fatalf("expected empty password, got %q", got)
 	}
 }
-
-
-
 func TestAccessControlConfigParsing(t *testing.T) {
 	resetViper(t)
 	dir := t.TempDir()
@@ -710,7 +706,7 @@ func TestOIDCAdminRolesOptionalWithAccessControl(t *testing.T) {
 	// default-deny protects unmatched users.
 	cfg := &Config{
 		Server: ServerConfig{Port: 8080, RootURL: "https://ui.example.com"},
-				Auth: AuthConfig{OIDC: OIDCConfig{
+		Auth: AuthConfig{OIDC: OIDCConfig{
 			Enabled: true, ClientID: "id", IssuerURL: "https://idp", Scopes: []string{"openid"},
 		}},
 		AccessControl: &AccessControlConfig{},

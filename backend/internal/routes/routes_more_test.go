@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,26 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 )
+
+func TestRoutes_ObjectQueryKeyPreservesReservedCharacters(t *testing.T) {
+	f := newAuthedFixture(t)
+	want := "folder/metadata+a%2F.txt"
+	f.S3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		if key != want {
+			t.Fatalf("key = %q, want %q", key, want)
+		}
+		return &models.ObjectInfo{Key: key}, nil
+	}
+	req := f.authedRequest(t, http.MethodGet, "/api/v1/buckets/b1/object/metadata?key="+url.QueryEscape(want))
+	resp, err := f.App.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
 
 // newAuthedFixture builds a fixture with admin auth enabled and disabled
 // access_control (Require is passthrough). Used to exercise handler dispatch
@@ -119,9 +140,9 @@ func TestRoutes_ObjectWildcard_GET_PreviewURLSuffixRoutesToPreviewURL(t *testing
 		t.Fatalf("decode: %v", err)
 	}
 	// The dispatch trims the /preview-url suffix, so the key becomes sub/clip.mp4,
-	// percent-encoded whole (slash to %2F) in the returned URL, with a pt token.
-	if !strings.Contains(body.Data.URL, "/api/v1/buckets/b1/objects/sub%2Fclip.mp4?pt=") {
-		t.Errorf("url = %q, want the whole-encoded key with a pt token", body.Data.URL)
+	// query-encoded in the returned URL, with a pt token.
+	if !strings.Contains(body.Data.URL, "/api/v1/buckets/b1/object?key=sub%2Fclip.mp4&pt=") {
+		t.Errorf("url = %q, want the query-encoded key with a pt token", body.Data.URL)
 	}
 }
 

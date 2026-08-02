@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -26,17 +27,23 @@ type StateStore struct {
 }
 
 type StateData struct {
-	Created   time.Time
-	ExpiresAt time.Time
+	Created      time.Time
+	ExpiresAt    time.Time
+	Binding      string
+	CodeVerifier string
+	Nonce        string
 }
 
+const maxPendingStates = 10000
+
 type SessionClaims struct {
-	Username   string   `json:"username"`
-	Email      string   `json:"email"`
-	Name       string   `json:"name"`
-	Roles      []string `json:"roles"`
-	Teams      []string `json:"teams,omitempty"`
-	AuthMethod string   `json:"auth_method,omitempty"`
+	Username        string   `json:"username"`
+	Email           string   `json:"email"`
+	Name            string   `json:"name"`
+	Roles           []string `json:"roles"`
+	Teams           []string `json:"teams,omitempty"`
+	AuthMethod      string   `json:"auth_method,omitempty"`
+	SecurityVersion int      `json:"security_version,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -99,6 +106,18 @@ func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, er
 }
 
 func (j *JWTService) GenerateStateToken() (string, error) {
+	return j.GenerateStateTokenForBinding("")
+}
+
+func (j *JWTService) GenerateStateTokenForBinding(binding string) (string, error) {
+	return j.generateState(binding, "", "")
+}
+
+func (j *JWTService) GenerateOIDCState(binding, verifier, nonce string) (string, error) {
+	return j.generateState(binding, verifier, nonce)
+}
+
+func (j *JWTService) generateState(binding, verifier, nonce string) (string, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", fmt.Errorf("failed to generate state token: %w", err)
@@ -110,9 +129,20 @@ func (j *JWTService) GenerateStateToken() (string, error) {
 	defer j.stateStore.mu.Unlock()
 
 	now := time.Now()
+	for existing, state := range j.stateStore.states {
+		if now.After(state.ExpiresAt) {
+			delete(j.stateStore.states, existing)
+		}
+	}
+	if len(j.stateStore.states) >= maxPendingStates {
+		return "", fmt.Errorf("too many pending OIDC states")
+	}
 	j.stateStore.states[token] = StateData{
-		Created:   now,
-		ExpiresAt: now.Add(10 * time.Minute),
+		Created:      now,
+		ExpiresAt:    now.Add(10 * time.Minute),
+		Binding:      stateBinding(binding),
+		CodeVerifier: verifier,
+		Nonce:        nonce,
 	}
 
 	go j.cleanupExpiredStates()
@@ -121,21 +151,43 @@ func (j *JWTService) GenerateStateToken() (string, error) {
 }
 
 func (j *JWTService) ValidateAndConsumeState(token string) bool {
+	return j.ValidateAndConsumeStateForBinding(token, "")
+}
+
+func (j *JWTService) ValidateAndConsumeStateForBinding(token, binding string) bool {
+	_, ok := j.ConsumeStateForBinding(token, binding)
+	return ok
+}
+
+func (j *JWTService) ConsumeStateForBinding(token, binding string) (StateData, bool) {
 	j.stateStore.mu.Lock()
 	defer j.stateStore.mu.Unlock()
 
 	state, exists := j.stateStore.states[token]
 	if !exists {
-		return false
+		return StateData{}, false
 	}
 
 	if time.Now().After(state.ExpiresAt) {
 		delete(j.stateStore.states, token)
-		return false
+		return StateData{}, false
+	}
+	// Empty bindings are retained for callers of the legacy API; the OIDC
+	// route always creates a bound state and also sets the browser cookie.
+	if state.Binding != "" && state.Binding != stateBinding(binding) {
+		return StateData{}, false
 	}
 
 	delete(j.stateStore.states, token)
-	return true
+	return state, true
+}
+
+func stateBinding(value string) string {
+	if value == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(value))
+	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 func (j *JWTService) cleanupExpiredStates() {
@@ -162,12 +214,13 @@ func (j *JWTService) GenerateToken(userInfo *UserInfo, sessionMaxAge int) (strin
 	expiresAt := now.Add(time.Duration(sessionMaxAge) * time.Second)
 
 	claims := SessionClaims{
-		Username:   userInfo.Username,
-		Email:      userInfo.Email,
-		Name:       userInfo.Name,
-		Roles:      userInfo.Roles,
-		Teams:      userInfo.Teams,
-		AuthMethod: userInfo.AuthMethod,
+		Username:        userInfo.Username,
+		Email:           userInfo.Email,
+		Name:            userInfo.Name,
+		Roles:           userInfo.Roles,
+		Teams:           userInfo.Teams,
+		AuthMethod:      userInfo.AuthMethod,
+		SecurityVersion: userInfo.SecurityVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),

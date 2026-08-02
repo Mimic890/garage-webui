@@ -1,6 +1,15 @@
 # Default values for garage-ui
 
 replicaCount: 1
+strategy:
+  type: Recreate
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  storageClassName: ""
 
 image:
   repository: noooste/garage-ui
@@ -44,8 +53,8 @@ config:
     # Full external URL (required for OIDC)
     root_url: "https://garage-ui.example.com"
     # Request size limits (in bytes)
-    max_body_size: 314572800  # 300MB
-    max_header_size: 1048576  # 1MB
+    max_body_size: 67108864   # 64MB
+    max_header_size: 32768    # 32KB
     read_buffer_size: 4096    # 4KB
     write_buffer_size: 4096   # 4KB
 
@@ -63,6 +72,12 @@ config:
       key: "admin-token"
 
   auth:
+    # Required for first-run setup in production. Keep this in a Secret in
+    # real deployments; the inline value is rendered into a Kubernetes Secret.
+    bootstrap_token: ""
+    bootstrapTokenSecret:
+      name: ""
+      key: "bootstrap-token"
     # Ed25519 private key for JWT signing (PEM format)
     # Generate with: openssl genpkey -algorithm ED25519
     # If not provided and no existing secret is specified, a key will be auto-generated
@@ -86,7 +101,7 @@ config:
     admin:
       enabled: false
       username: "admin"
-      password: "changeme"
+      password: ""
       existingSecret:
         name: ""
         key: "admin-password"
@@ -97,7 +112,7 @@ config:
       enabled: false
       provider_name: "Keycloak"
       client_id: "garage-ui"
-      client_secret: "your-client-secret"
+      client_secret: ""
       existingSecret:
         name: ""
         key: "client-secret"
@@ -182,15 +197,21 @@ podAnnotations: {}
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
+  runAsGroup: 1000
   fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
 
 # Container security context
 securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
   allowPrivilegeEscalation: false
   capabilities:
     drop:
     - ALL
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
 
 service:
   type: ClusterIP
@@ -198,6 +219,8 @@ service:
 
 ingress:
   enabled: false
+  # Set true only when TLS is terminated elsewhere and HTTP is intentional.
+  allowInsecure: false
   className: "nginx"
   annotations: {}
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -255,6 +278,14 @@ networkPolicy:
   policyTypes:
     - Ingress
     - Egress
+  ingress:
+    from: []
+    ports:
+      - protocol: TCP
+        port: http
+  egress:
+    to: []
+    ports: []
 
 # Node labels for pod assignment
 nodeSelector: {}

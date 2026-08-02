@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -23,15 +24,15 @@ type Config struct {
 
 // ServerConfig contains server-related configuration
 type ServerConfig struct {
-	Host            string `mapstructure:"host"`
-	Port            int    `mapstructure:"port"`
-	Environment     string `mapstructure:"environment"`
-	FrontendPath    string `mapstructure:"frontend_path"`     // Path to frontend dist directory
-	Domain          string `mapstructure:"domain"`            // Domain name (e.g., garage-ui.example.com)
-	Protocol        string `mapstructure:"protocol"`          // Protocol for internal communication (http/https)
-	RootURL         string `mapstructure:"root_url"`          // Full external URL for redirects (e.g., https://garage-ui.example.com)
-	MaxBodySize     int64  `mapstructure:"max_body_size"`     // Maximum request body size in bytes (default: 300MB)
-	MaxHeaderSize   int    `mapstructure:"max_header_size"`   // Maximum request header size in bytes (default: 1MB)
+	Host            string   `mapstructure:"host"`
+	Port            int      `mapstructure:"port"`
+	Environment     string   `mapstructure:"environment"`
+	FrontendPath    string   `mapstructure:"frontend_path"`     // Path to frontend dist directory
+	Domain          string   `mapstructure:"domain"`            // Domain name (e.g., garage-ui.example.com)
+	Protocol        string   `mapstructure:"protocol"`          // Protocol for internal communication (http/https)
+	RootURL         string   `mapstructure:"root_url"`          // Full external URL for redirects (e.g., https://garage-ui.example.com)
+	MaxBodySize     int64    `mapstructure:"max_body_size"`     // Maximum request body size in bytes (default: 300MB)
+	MaxHeaderSize   int      `mapstructure:"max_header_size"`   // Maximum request header size in bytes (default: 1MB)
 	ReadBufferSize  int      `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
 	WriteBufferSize int      `mapstructure:"write_buffer_size"` // Write buffer size in bytes (default: 4KB)
 	AllowedIPs      []string `mapstructure:"allowed_ips"`       // List of allowed IPs (supports CIDR notation)
@@ -39,11 +40,12 @@ type ServerConfig struct {
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Admin         AdminAuthConfig `mapstructure:"admin"`
-	OIDC          OIDCConfig      `mapstructure:"oidc"`
-	Token         TokenAuthConfig `mapstructure:"token"`
-	JWTPrivKey    string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
-	MetricsPublic bool            `mapstructure:"metrics_public"`  // Expose Prometheus metrics at top-level /metrics without auth
+	Admin          AdminAuthConfig `mapstructure:"admin"`
+	OIDC           OIDCConfig      `mapstructure:"oidc"`
+	Token          TokenAuthConfig `mapstructure:"token"`
+	BootstrapToken string          `mapstructure:"bootstrap_token"`
+	JWTPrivKey     string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
+	MetricsPublic  bool            `mapstructure:"metrics_public"`  // Expose Prometheus metrics at top-level /metrics without auth
 }
 
 // AdminAuthConfig contains admin authentication settings
@@ -179,6 +181,7 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
 	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
+	viper.SetDefault("auth.oidc.cookie_secure", true)
 	viper.SetDefault("auth.oidc.cookie_http_only", true)
 	viper.SetDefault("auth.oidc.cookie_same_site", "lax")
 	viper.SetDefault("auth.oidc.session_max_age", 86400)
@@ -255,6 +258,7 @@ func bindEnvVars() {
 
 	// Token auth config
 	viper.BindEnv("auth.token.enabled", "GARAGE_UI_AUTH_TOKEN_ENABLED")
+	viper.BindEnv("auth.bootstrap_token", "GARAGE_UI_AUTH_BOOTSTRAP_TOKEN")
 
 	// OIDC config
 	viper.BindEnv("auth.oidc.enabled", "GARAGE_UI_AUTH_OIDC_ENABLED")
@@ -303,6 +307,7 @@ func bindEnvVars() {
 // store in a Kubernetes Secret or Docker secret. Non-sensitive config (host,
 // port, endpoints, etc.) is excluded.
 var fileBackedEnvVars = map[string]string{
+	"GARAGE_UI_AUTH_BOOTSTRAP_TOKEN":    "auth.bootstrap_token",
 	"GARAGE_UI_AUTH_ADMIN_USERNAME":     "auth.admin.username",
 	"GARAGE_UI_AUTH_ADMIN_PASSWORD":     "auth.admin.password",
 	"GARAGE_UI_AUTH_JWT_PRIVATE_KEY":    "auth.jwt_private_key",
@@ -347,6 +352,9 @@ func (c *Config) Validate() error {
 		if c.Auth.Admin.Username == "" || c.Auth.Admin.Password == "" {
 			return fmt.Errorf("admin auth username and password are required when admin auth is enabled")
 		}
+		if len(c.Auth.Admin.Password) < 12 {
+			return fmt.Errorf("admin auth password must be at least 12 characters")
+		}
 	}
 
 	// Validate OIDC config if enabled
@@ -359,6 +367,20 @@ func (c *Config) Validate() error {
 		}
 		if c.Server.RootURL == "" {
 			return fmt.Errorf("server.root_url is required when oidc is enabled")
+		}
+		issuer, err := url.Parse(c.Auth.OIDC.IssuerURL)
+		if err != nil || issuer.Scheme != "https" || issuer.Host == "" {
+			return fmt.Errorf("oidc issuer_url must be a valid https URL")
+		}
+		root, err := url.Parse(c.Server.RootURL)
+		if err != nil || root.Scheme != "https" || root.Host == "" {
+			return fmt.Errorf("server.root_url must be a valid https URL")
+		}
+		if c.IsProduction() && (c.Auth.OIDC.SkipIssuerCheck || c.Auth.OIDC.SkipExpiryCheck || c.Auth.OIDC.TLSSkipVerify) {
+			return fmt.Errorf("insecure OIDC verification flags are forbidden in production")
+		}
+		if c.IsProduction() && (!c.Auth.OIDC.CookieSecure || !c.Auth.OIDC.CookieHTTPOnly || strings.EqualFold(c.Auth.OIDC.CookieSameSite, "none")) {
+			return fmt.Errorf("OIDC cookies must be secure, HttpOnly, and not SameSite=None in production")
 		}
 		if len(c.Auth.OIDC.Scopes) == 0 {
 			return fmt.Errorf("oidc scopes are required when oidc is enabled")

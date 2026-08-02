@@ -45,6 +45,7 @@ You will need the following information from your Garage installation:
 1. **Garage S3 Endpoint** - The Garage S3 API endpoint (default port: `3900`)
 2. **Garage Admin Endpoint** - The Garage Admin API endpoint (default port: `3903`)
 3. **Admin Token** - Bearer token for authenticating with the Admin API
+4. **Bootstrap Token** - A random one-time token protecting initial panel setup
 
 To find your admin token, check your Garage server's configuration file.
 
@@ -58,12 +59,19 @@ Create a file named `my-values.yaml` with your Garage configuration:
 
 ```yaml
 config:
+  auth:
+    bootstrap_token: "GENERATE_A_LONG_RANDOM_VALUE"
   garage:
     endpoint: "http://garage:3900"              # Your Garage S3 endpoint
     admin_endpoint: "http://garage:3903"        # Your Garage Admin endpoint
     admin_token: "YOUR_ADMIN_TOKEN_HERE"        # Your admin token
     region: "garage"                            # S3 region (can be any value)
 ```
+
+For production, prefer `config.auth.bootstrapTokenSecret` and
+`config.garage.existingSecret` so neither token is stored in the values file.
+The setup page sends the bootstrap token once; it is never persisted in panel
+state.
 
 ### Step 2: Install the chart
 
@@ -892,9 +900,8 @@ config:
 ```
 
 The chart will:
-1. Run a pre-install/pre-upgrade Job to generate an Ed25519 key
-2. Store it in a secret named `<release-name>-jwt-key`
-3. Preserve the secret across chart upgrades (using `helm.sh/resource-policy: keep`)
+  1. Create an Ed25519 key in a secret named `<release-name>-jwt-key`
+  2. Preserve the secret across chart upgrades (using `helm.sh/resource-policy: keep`)
 
 **Method 2: Provide your own key inline**
 
@@ -988,9 +995,41 @@ networkPolicy:
   policyTypes:
     - Ingress
     - Egress
+  ingress:
+    from:
+      - namespaceSelector: {}
+    ports:
+      - protocol: TCP
+        port: http
+  egress:
+    to: []
+    ports: []
 ```
 
 This restricts network traffic to/from the pods. Requires a CNI that supports NetworkPolicy (e.g., Calico, Cilium).
+
+Empty `from`/`to` and `ports` lists intentionally allow all peers and ports for
+that direction. Set both lists to restrict traffic; the port is templated and
+may be a number or named port. Only directions listed in `policyTypes` are
+rendered.
+
+### Persistence and probes
+
+The default deployment uses one replica, `Recreate`, and a `ReadWriteOnce` PVC
+mounted at `/app/data` because the backend stores `state.json` there. The
+schema limits `replicaCount` to one; do not scale this chart without changing
+the backend state model and storage design.
+
+The default readiness probe is the backend's process health endpoint (`/health`)
+and does not verify Garage connectivity. Configure `readinessProbe` separately
+if an external readiness contract is added; no Garage-aware readiness endpoint
+is currently supported by the backend.
+
+### Ingress TLS
+
+Enabled ingress requires at least one `ingress.tls` entry. Set
+`ingress.allowInsecure: true` only when HTTP is intentionally protected or TLS
+is terminated before Kubernetes.
 
 ### Custom Container Images
 

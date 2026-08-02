@@ -1,4 +1,7 @@
 {{- if .Values.ingress.enabled -}}
+{{- if and (not .Values.ingress.allowInsecure) (not .Values.ingress.tls) }}
+{{- fail "ingress.tls is required when ingress is enabled; set ingress.allowInsecure=true only for intentional HTTP" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,6 +12,13 @@ metadata:
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
+    {{- if and (eq $.Values.ingress.className "nginx") (not $.Values.ingress.allowInsecure) (not (hasKey . "nginx.ingress.kubernetes.io/force-ssl-redirect")) }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+  {{- end }}
+  {{- if and (not .Values.ingress.annotations) (eq .Values.ingress.className "nginx") (not .Values.ingress.allowInsecure) }}
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   {{- end }}
 spec:
   {{- if .Values.ingress.className }}

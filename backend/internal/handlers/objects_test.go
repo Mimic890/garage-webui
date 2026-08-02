@@ -248,20 +248,20 @@ func TestDeleteObject_Success(t *testing.T) {
 
 func TestDeleteObject_NotExists404(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return false, nil }
+	s3.DeleteObjectFn = func(_ context.Context, _, _ string) error { return nil }
 	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/buckets/b1/objects/nope", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 }
 
 func TestDeleteObject_ExistsCheckError500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return false, errors.New("boom") }
+	s3.DeleteObjectFn = func(_ context.Context, _, _ string) error { return errors.New("boom") }
 	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/buckets/b1/objects/k1", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
@@ -372,8 +372,8 @@ func TestGetPreviewURL_Success(t *testing.T) {
 		if bucket != "b1" || key != "clip.mp4" {
 			t.Errorf("mint args = (%q, %q)", bucket, key)
 		}
-		if ttl != time.Hour {
-			t.Errorf("ttl = %v, want 1h", ttl)
+		if ttl != 15*time.Minute {
+			t.Errorf("ttl = %v, want 15m", ttl)
 		}
 		return "tok123", fixed, nil
 	}
@@ -389,7 +389,7 @@ func TestGetPreviewURL_Success(t *testing.T) {
 		Data models.PreviewURLResponse `json:"data"`
 	}
 	decodeJSON(t, resp.Body, &body)
-	if body.Data.URL != "/api/v1/buckets/b1/objects/clip.mp4?pt=tok123" {
+	if body.Data.URL != "/api/v1/buckets/b1/object?key=clip.mp4&pt=tok123" {
 		t.Errorf("url = %q", body.Data.URL)
 	}
 	if body.Data.ExpiresAt != "2026-07-11T12:00:00Z" {
@@ -426,8 +426,8 @@ func TestGetPreviewURL_EscapesKeyInURL(t *testing.T) {
 		Data models.PreviewURLResponse `json:"data"`
 	}
 	decodeJSON(t, resp.Body, &body)
-	if !strings.HasPrefix(body.Data.URL, "/api/v1/buckets/b1/objects/dir%2Fmy%20file.mp4?pt=") {
-		t.Errorf("url = %q, want the key percent-encoded whole", body.Data.URL)
+	if !strings.HasPrefix(body.Data.URL, "/api/v1/buckets/b1/object?key=dir%2Fmy+file.mp4&pt=") {
+		t.Errorf("url = %q, want the key query-encoded", body.Data.URL)
 	}
 }
 
@@ -587,12 +587,15 @@ func buildMultipart(t *testing.T, fields map[string]string, files map[string]str
 
 func TestUploadObject_Success(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.UploadObjectFn = func(_ context.Context, bucket, key string, body io.Reader, ct string) (*models.ObjectUploadResponse, error) {
+	s3.UploadObjectFn = func(_ context.Context, bucket, key string, body io.Reader, size int64, ct string) (*models.ObjectUploadResponse, error) {
 		if bucket != "b1" || key != "myfile.bin" {
 			t.Errorf("args = (%q, %q)", bucket, key)
 		}
 		if ct != "application/octet-stream" {
 			t.Errorf("contentType = %q", ct)
+		}
+		if size != int64(len("payload")) {
+			t.Errorf("size = %d, want %d", size, len("payload"))
 		}
 		b, _ := io.ReadAll(body)
 		if string(b) != "payload" {
@@ -622,7 +625,7 @@ func TestUploadObject_Success(t *testing.T) {
 
 func TestUploadObject_ExplicitKeyOverridesFilename(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.UploadObjectFn = func(_ context.Context, _, key string, _ io.Reader, _ string) (*models.ObjectUploadResponse, error) {
+	s3.UploadObjectFn = func(_ context.Context, _, key string, _ io.Reader, _ int64, _ string) (*models.ObjectUploadResponse, error) {
 		if key != "custom/key.txt" {
 			t.Errorf("key = %q, want custom/key.txt", key)
 		}
@@ -664,7 +667,7 @@ func TestUploadObject_MissingFileReturns400(t *testing.T) {
 
 func TestUploadObject_ServiceError500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.UploadObjectFn = func(_ context.Context, _, _ string, _ io.Reader, _ string) (*models.ObjectUploadResponse, error) {
+	s3.UploadObjectFn = func(_ context.Context, _, _ string, _ io.Reader, _ int64, _ string) (*models.ObjectUploadResponse, error) {
 		return nil, errors.New("boom")
 	}
 	body, ct := buildMultipart(t, nil, map[string]struct {
@@ -880,6 +883,29 @@ func TestDeleteMultipleObjects_ServiceError500(t *testing.T) {
 	}
 }
 
+func TestDeleteMultipleObjects_PartialFailureReturns207AndCount(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, _ []string) (int, error) { return 1, errors.New("one failed") }
+	body, _ := json.Marshal(map[string]any{"keys": []string{"a", "b"}})
+	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMultiStatus {
+		t.Fatalf("status = %d, want 207", resp.StatusCode)
+	}
+	var out struct {
+		Data models.ObjectDeleteMultipleResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &out)
+	if out.Data.Deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", out.Data.Deleted)
+	}
+}
+
 // buildMultipartMulti builds a body with N "files" parts.
 func buildMultipartMulti(t *testing.T, files []struct {
 	Filename, ContentType string
@@ -908,6 +934,7 @@ func TestUploadMultiple_AllSuccess201(t *testing.T) {
 	s3.UploadMultipleObjectsFn = func(_ context.Context, bucket string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []services.UploadResult {
 		if bucket != "b1" || len(files) != 2 {
@@ -951,6 +978,7 @@ func TestUploadMultiple_PartialReturns207(t *testing.T) {
 	s3.UploadMultipleObjectsFn = func(_ context.Context, _ string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []services.UploadResult {
 		return []services.UploadResult{
@@ -982,6 +1010,7 @@ func TestUploadMultiple_AllFailReturns500(t *testing.T) {
 	s3.UploadMultipleObjectsFn = func(_ context.Context, _ string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []services.UploadResult {
 		out := make([]services.UploadResult, len(files))
@@ -1026,6 +1055,7 @@ func TestUploadMultiple_DefaultsContentType(t *testing.T) {
 	s3.UploadMultipleObjectsFn = func(_ context.Context, _ string, files []struct {
 		Key         string
 		Body        io.Reader
+		Size        int64
 		ContentType string
 	}) []services.UploadResult {
 		if files[0].ContentType != "application/octet-stream" {

@@ -50,6 +50,7 @@ const (
 	PermClusterStatistics = "cluster.statistics"
 	PermNodeInfo          = "node.info"
 	PermNodeStatistics    = "node.statistics"
+	PermClusterManage     = "cluster.manage"
 )
 
 // Vocabulary is the full v1 permission registry, ratified in issue #33.
@@ -84,6 +85,7 @@ var Vocabulary = map[string]PermSpec{
 	"key.delete":      {Scope: ScopeGlobal, AdminOnly: true, Endpoints: []string{"DeleteKey"}},
 
 	"cluster.status":        {Scope: ScopeGlobal, Endpoints: []string{"GetClusterStatus"}},
+	"cluster.manage":        {Scope: ScopeGlobal, AdminOnly: true},
 	"cluster.health":        {Scope: ScopeGlobal, Endpoints: []string{"GetClusterHealth"}},
 	"cluster.statistics":    {Scope: ScopeGlobal, Endpoints: []string{"GetClusterStatistics"}},
 	"cluster.connect_nodes": {Scope: ScopeGlobal, Endpoints: []string{"ConnectClusterNodes"}},

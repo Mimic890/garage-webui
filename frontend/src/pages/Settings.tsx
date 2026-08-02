@@ -2,42 +2,34 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSettingsStore } from '@/store/settings-store';
 import type { Language } from '@/store/settings-store';
-import { Settings as SettingsIcon, Shield, Globe, Languages } from 'lucide-react';
+import { Settings as SettingsIcon, Globe, Languages } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { Select, SelectOption } from '@/components/ui/select';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from '@/lib/i18n';
 
 type ByteUnit = 'B' | 'KB' | 'MB' | 'GB';
 
-const formatBytes = (bytes: number | undefined, unit: ByteUnit): string => {
-  if (bytes === undefined) return 'N/A';
-  switch (unit) {
-    case 'GB': return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-    case 'MB': return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-    case 'KB': return (bytes / 1024).toFixed(2) + ' KB';
-    default: return bytes + ' B';
-  }
+const formatBytes = (bytes: number | undefined, unit: ByteUnit = 'MB', unavailable: string = '', locale: string = ''): string => {
+  if (bytes === undefined) return unavailable;
+  const divisor = unit === 'GB' ? 1024 ** 3 : unit === 'MB' ? 1024 ** 2 : unit === 'KB' ? 1024 : 1;
+  return `${new Intl.NumberFormat(locale, unit === 'B' ? undefined : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bytes / divisor)} ${unit}`;
 };
 
 export function Settings() {
   const { config } = useAuthStore();
   const { timezone, setTimezone, language, setLanguage } = useSettingsStore();
-  const { t } = useTranslation();
-  
-  const [maxBodyUnit, setMaxBodyUnit] = useState<ByteUnit>('MB');
-  const [maxHeaderUnit, setMaxHeaderUnit] = useState<ByteUnit>('MB');
-  const [readBufferUnit, setReadBufferUnit] = useState<ByteUnit>('KB');
-  const [writeBufferUnit, setWriteBufferUnit] = useState<ByteUnit>('KB');
+  const { t, language: interfaceLanguage } = useTranslation();
 
   const detectedRootUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
+  const systemDefault = t('settings.timezone.systemDefault');
   const timezones = useMemo(() => {
     try {
       const zones = Intl.supportedValuesOf('timeZone');
       return zones.map(tz => {
         // Build a display string like (UTC+02:00) Europe/Paris
-        const format = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+        const format = new Intl.DateTimeFormat(interfaceLanguage, { timeZone: tz, timeZoneName: 'shortOffset' });
         const parts = format.formatToParts(new Date());
         const offset = parts.find(p => p.type === 'timeZoneName')?.value || 'UTC';
         // Some browsers return "GMT" instead of "UTC" offsets
@@ -50,11 +42,11 @@ export function Settings() {
         // Basic sorting: alphabetical
         return a.label.localeCompare(b.label);
       });
-    } catch (e) {
+    } catch {
       // Fallback if browser is very old
-      return [{ value: Intl.DateTimeFormat().resolvedOptions().timeZone, label: 'System Default' }];
+      return [{ value: Intl.DateTimeFormat().resolvedOptions().timeZone, label: systemDefault }];
     }
-  }, []);
+  }, [interfaceLanguage, systemDefault]);
 
   return (
     <div>
@@ -121,7 +113,7 @@ export function Settings() {
                       setLanguage(val as Language);
                     }}
                   >
-                    <SelectOption value="en">English</SelectOption>
+                    <SelectOption value="en">{t('settings.language.english')}</SelectOption>
                     <SelectOption value="ru">Русский</SelectOption>
                   </Select>
                 </div>
@@ -133,63 +125,46 @@ export function Settings() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[var(--primary)]" />
-              {t('settings.user') || 'User Settings'}
-            </CardTitle>
-            <CardDescription>
-              {t('settings.profile.desc') || 'Manage your account and authentication preferences'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <a href="/user-settings" className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
-              Go to User Settings
-            </a>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5 text-[var(--primary)]" />
-              {t('settings.network') || 'Network Settings'}
+              {t('settings.network')}
             </CardTitle>
             <CardDescription>
-              {t('settings.network.desc') || 'Service binding and network configuration'}
+              {t('settings.network.desc')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {config ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Binding Host</span>
-                  <span className="text-[14px] mt-1 font-mono">{config.server.host === '::' || config.server.host === '' ? '0.0.0.0 (All Interfaces)' : config.server.host}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.bindingHost')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{config.server.host === '::' || config.server.host === '' ? t('settings.network.allInterfaces', { address: '0.0.0.0' }) : config.server.host}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Port</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.port')}</span>
                   <span className="text-[14px] mt-1 font-mono">{config.server.port}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Protocol</span>
-                  <span className="text-[14px] mt-1 font-mono">{config.server.protocol || 'Auto / Reverse Proxy'}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.protocol')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{config.server.protocol || t('settings.network.autoProtocol')}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Root URL</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.rootUrl')}</span>
                   <span className="text-[14px] mt-1 font-mono">
-                    {config.server.root_url || <span className="text-[var(--muted-foreground)] italic">Auto-detected: {detectedRootUrl}</span>}
+                    {config.server.root_url || <span className="text-[var(--muted-foreground)] italic">{t('settings.network.autoDetected', { value: detectedRootUrl })}</span>}
                   </span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] sm:col-span-2">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Allowed IPs (Whitelist)</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.allowedIps')}</span>
                   <span className="text-[14px] mt-1 font-mono break-all">
                     {config.server.allowed_ips && config.server.allowed_ips.length > 0 
                       ? config.server.allowed_ips.join(', ')
-                      : <span className="text-[var(--muted-foreground)] italic">None (All Allowed)</span>}
+                      : <span className="text-[var(--muted-foreground)] italic">{t('settings.network.allIpsAllowed')}</span>}
                   </span>
                 </div>
               </div>
             ) : (
               <div className="text-[14px] text-[var(--muted-foreground)]">
-                Loading configuration...
+                {t('settings.status.loadingConfiguration')}
               </div>
             )}
           </CardContent>
@@ -199,70 +174,38 @@ export function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <SettingsIcon className="h-5 w-5 text-[var(--primary)]" />
-              Limits & Buffers
+              {t('settings.limits.title')}
             </CardTitle>
             <CardDescription>
-              Server request and buffer size limits (Read Only)
+              {t('settings.limits.description')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {config ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Max Body Size</span>
-                    <Select value={maxBodyUnit} onChange={(val) => setMaxBodyUnit(val as ByteUnit)}>
-                      <SelectOption value="B">B</SelectOption>
-                      <SelectOption value="KB">KB</SelectOption>
-                      <SelectOption value="MB">MB</SelectOption>
-                      <SelectOption value="GB">GB</SelectOption>
-                    </Select>
-                  </div>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_body_size, maxBodyUnit)}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxBodySize')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_body_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Max Header Size</span>
-                    <Select value={maxHeaderUnit} onChange={(val) => setMaxHeaderUnit(val as ByteUnit)}>
-                      <SelectOption value="B">B</SelectOption>
-                      <SelectOption value="KB">KB</SelectOption>
-                      <SelectOption value="MB">MB</SelectOption>
-                      <SelectOption value="GB">GB</SelectOption>
-                    </Select>
-                  </div>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_header_size, maxHeaderUnit)}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxHeaderSize')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_header_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Read Buffer Size</span>
-                    <Select value={readBufferUnit} onChange={(val) => setReadBufferUnit(val as ByteUnit)}>
-                      <SelectOption value="B">B</SelectOption>
-                      <SelectOption value="KB">KB</SelectOption>
-                      <SelectOption value="MB">MB</SelectOption>
-                      <SelectOption value="GB">GB</SelectOption>
-                    </Select>
-                  </div>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.read_buffer_size, readBufferUnit)}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.readBufferSize')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.read_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Write Buffer Size</span>
-                    <Select value={writeBufferUnit} onChange={(val) => setWriteBufferUnit(val as ByteUnit)}>
-                      <SelectOption value="B">B</SelectOption>
-                      <SelectOption value="KB">KB</SelectOption>
-                      <SelectOption value="MB">MB</SelectOption>
-                      <SelectOption value="GB">GB</SelectOption>
-                    </Select>
-                  </div>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.write_buffer_size, writeBufferUnit)}</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.writeBufferSize')}</span>
+                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.write_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
               </div>
             ) : (
               <div className="text-[14px] text-[var(--muted-foreground)]">
-                Loading configuration...
+                {t('settings.status.loadingConfiguration')}
               </div>
             )}
           </CardContent>
@@ -272,27 +215,27 @@ export function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <SettingsIcon className="h-5 w-5 text-[var(--primary)]" />
-              Logging
+              {t('settings.logging.title')}
             </CardTitle>
             <CardDescription>
-              Backend service logging configuration
+              {t('settings.logging.description')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {config?.logging ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Log Level</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.logging.level')}</span>
                   <span className="text-[14px] mt-1 font-mono uppercase">{config.logging.level}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Log Format</span>
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.logging.format')}</span>
                   <span className="text-[14px] mt-1 font-mono uppercase">{config.logging.format}</span>
                 </div>
               </div>
             ) : (
               <div className="text-[14px] text-[var(--muted-foreground)]">
-                Loading configuration...
+                {t('settings.status.loadingConfiguration')}
               </div>
             )}
           </CardContent>

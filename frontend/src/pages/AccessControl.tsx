@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {cn} from '@/lib/utils';
 import {PageHeader} from '@/components/ui/page-header';
 import {Button} from '@/components/ui/button';
@@ -33,7 +33,7 @@ import { Navigate } from 'react-router-dom';
 import {accessApi, bucketsApi} from '@/lib/api';
 import {queryKeys} from '@/lib/query-client';
 import { useTranslation } from '@/lib/i18n';
-import {formatDate} from '@/lib/utils';
+import {dateTimeInputToIso, dateTimeInputValue} from '@/lib/utils';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Check, Copy, Database, Edit, Eye, EyeOff, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
 import {toast} from 'sonner';
@@ -53,6 +53,7 @@ function CredentialField({
   maskable?: boolean;
   loading?: boolean;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(!maskable);
   const copy = async () => {
@@ -60,7 +61,7 @@ function CredentialField({
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.success(`${label} copied`);
+      toast.success(t('access_control.credential_copied').replace('{{credential}}', label));
     } catch {
       const ta = document.createElement('textarea');
       ta.value = value;
@@ -71,7 +72,7 @@ function CredentialField({
       document.execCommand('copy');
       document.body.removeChild(ta);
       setCopied(true);
-      toast.success(`${label} copied`);
+      toast.success(t('access_control.credential_copied').replace('{{credential}}', label));
     }
     setTimeout(() => setCopied(false), 1600);
   };
@@ -86,7 +87,7 @@ function CredentialField({
           type="button"
           onClick={copy}
           disabled={loading || !value}
-          title="Click to copy"
+          title={t('access_control.click_to_copy_title')}
           className={cn(
             'flex-1 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-sunken)]',
             'px-3 py-2 text-left text-[13.5px] transition-colors hover:bg-[var(--accent)]',
@@ -99,7 +100,7 @@ function CredentialField({
           {loading ? (
             <span className="inline-flex items-center gap-2 text-[var(--muted-foreground)]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading…
+              {t('common.loading')}
             </span>
           ) : (
             display
@@ -110,13 +111,13 @@ function CredentialField({
             variant="secondary"
             size="icon"
             onClick={() => setRevealed((r) => !r)}
-            aria-label={revealed ? 'Hide' : 'Reveal'}
+            aria-label={revealed ? t('access_control.hide_secret_aria') : t('access_control.reveal_secret_aria')}
             disabled={loading || !value}
           >
             {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </Button>
         )}
-        <Button variant="secondary" size="icon" onClick={copy} aria-label={`Copy ${label}`} disabled={loading || !value}>
+        <Button variant="secondary" size="icon" onClick={copy} aria-label={t('access_control.copy_credential_aria').replace('{{credential}}', label)} disabled={loading || !value}>
           {copied ? <Check className="h-4 w-4 text-[var(--primary)]" /> : <Copy className="h-4 w-4" />}
         </Button>
       </div>
@@ -126,7 +127,10 @@ function CredentialField({
 
 export function AccessControl() {
   const queryClient = useQueryClient();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const formatLocalizedDate = (date: Date | string) => new Intl.DateTimeFormat(language, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(date));
   const [keys, setKeys] = useState<AccessKey[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -172,6 +176,8 @@ export function AccessControl() {
   const [viewingKey, setViewingKey] = useState<AccessKey | null>(null);
   const [detailsSecretKey, setDetailsSecretKey] = useState<string>('');
   const [isLoadingDetailsSecretKey, setIsLoadingDetailsSecretKey] = useState(false);
+  const secretRequestRef = useRef(0);
+  const creatingKeyRef = useRef(false);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -189,10 +195,6 @@ export function AccessControl() {
     fetchKeys();
   }, []);
 
-  if (clusters.length === 0) {
-    return <Navigate to="/" replace />;
-  }
-
   const filteredKeys = useMemo(
     () =>
       keys.filter(
@@ -203,13 +205,19 @@ export function AccessControl() {
     [keys, searchQuery]
   );
 
+  if (clusters.length === 0) {
+    return <Navigate to="/" replace />;
+  }
+
   const handleCreateKey = async () => {
+    if (creatingKeyRef.current) return;
     if (!newKeyName) {
-      toast.error('Please enter a key name');
+      toast.error(t('access_control.key_name_required_error'));
       return;
     }
 
     try {
+      creatingKeyRef.current = true;
       const newKey = await accessApi.createKey(newKeyName);
 
       // If user wants to grant permissions inline
@@ -223,7 +231,7 @@ export function AccessControl() {
             });
           } catch (error) {
             console.error('Failed to grant permissions:', error);
-            toast.warning(`Key created, but failed to grant permissions on "${createSelectedBucket}". You can set them later.`);
+            toast.warning(t('access_control.key_created_permission_failed_warning').replace('{{bucket}}', createSelectedBucket));
             // Continue even if permission grant fails - key is already created
           }
         }
@@ -237,12 +245,14 @@ export function AccessControl() {
       setKeys(data);
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
       if (createGrantPermissions && createSelectedBucket) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(createSelectedBucket) });
+         queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
       }
-      toast.success(`API Key "${newKeyName}" created successfully`);
+      toast.success(t('access_control.key_created_success').replace('{{name}}', newKeyName));
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Create key error:', error);
+    } finally {
+      creatingKeyRef.current = false;
     }
   };
 
@@ -289,7 +299,7 @@ export function AccessControl() {
       setKeys(data);
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      toast.success(`API Key "${keyName}" deleted successfully`);
+      toast.success(t('access_control.key_deleted_success').replace('{{name}}', keyName));
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Delete key error:', error);
@@ -305,7 +315,7 @@ export function AccessControl() {
     if (key.expiration) {
       const expDate = new Date(key.expiration);
       // Format as YYYY-MM-DDTHH:mm for datetime-local input
-      const formattedDate = expDate.toISOString().slice(0, 16);
+      const formattedDate = dateTimeInputValue(expDate);
       setExpirationDate(formattedDate);
       setNeverExpires(false);
     } else {
@@ -323,9 +333,8 @@ export function AccessControl() {
       updates.status = keyStatus;
 
       if (!neverExpires && expirationDate) {
-        updates.expiration = new Date(expirationDate).toISOString();
+         updates.expiration = dateTimeInputToIso(expirationDate);
       } else if (neverExpires) {
-        updates.status = 'active';
         // Clear any previously-set expiration so the backend removes it.
         updates.expiration = null;
       }
@@ -338,7 +347,7 @@ export function AccessControl() {
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
 
       setSettingsDialogOpen(false);
-      toast.success(`Key settings updated successfully`);
+      toast.success(t('access_control.key_settings_updated_success'));
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Update key settings error:', error);
@@ -346,6 +355,7 @@ export function AccessControl() {
   };
 
   const handleRevealSecretKey = async (key: AccessKey) => {
+    const request = ++secretRequestRef.current;
     setSelectedKey(key);
     setIsLoadingSecretKey(true);
     setSecretKeyDialogOpen(true);
@@ -353,12 +363,12 @@ export function AccessControl() {
 
     try {
       const secretKey = await accessApi.getSecretKey(key.accessKeyId);
-      setRevealedSecretKey(secretKey);
+      if (request === secretRequestRef.current) setRevealedSecretKey(secretKey);
     } catch (error) {
       console.error('Failed to fetch secret key:', error);
       setSecretKeyDialogOpen(false);
     } finally {
-      setIsLoadingSecretKey(false);
+      if (request === secretRequestRef.current) setIsLoadingSecretKey(false);
     }
   };
 
@@ -410,12 +420,7 @@ export function AccessControl() {
 
   const handleGrantBucketPermission = async () => {
     if (!editingKey || !selectedBucket) {
-      toast.error('Please select a bucket');
-      return;
-    }
-
-    if (!permissionRead && !permissionWrite && !permissionOwner) {
-      toast.error('Please select at least one permission');
+      toast.error(t('access_control.bucket_required_error'));
       return;
     }
 
@@ -428,7 +433,7 @@ export function AccessControl() {
         owner: permissionOwner,
       });
 
-      toast.success(`Permissions granted on bucket "${selectedBucket}" successfully`);
+      toast.success(t('access_control.permissions_granted_success').replace('{{bucket}}', selectedBucket));
       setEditPermissionsDialogOpen(false);
       setSelectedBucket('');
       setPermissionRead(false);
@@ -439,7 +444,7 @@ export function AccessControl() {
       const data = await accessApi.listKeys();
       setKeys(data);
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(selectedBucket) });
+       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Grant permission error:', error);
@@ -451,13 +456,14 @@ export function AccessControl() {
   // Helper function to format permission flags as a readable string
   const formatPermissions = (perm: BucketPermission): string => {
     const perms = [];
-    if (perm.read) perms.push('Read');
-    if (perm.write) perms.push('Write');
-    if (perm.owner) perms.push('Owner');
-    return perms.join(', ') || 'None';
+    if (perm.read) perms.push(t('access_control.permission_read'));
+    if (perm.write) perms.push(t('access_control.permission_write'));
+    if (perm.owner) perms.push(t('access_control.permission_owner'));
+    return perms.join(', ') || t('access_control.permission_none');
   };
 
   const handleRowClick = async (key: AccessKey) => {
+    const request = ++secretRequestRef.current;
     setViewingKey(key);
     setKeyDetailsDialogOpen(true);
     setDetailsSecretKey('');
@@ -466,17 +472,17 @@ export function AccessControl() {
     // Fetch the secret key immediately
     try {
       const secretKey = await accessApi.getSecretKey(key.accessKeyId);
-      setDetailsSecretKey(secretKey);
+      if (request === secretRequestRef.current) setDetailsSecretKey(secretKey);
     } catch (error) {
       console.error('Failed to fetch secret key:', error);
     } finally {
-      setIsLoadingDetailsSecretKey(false);
+      if (request === secretRequestRef.current) setIsLoadingDetailsSecretKey(false);
     }
   };
 
   return (
     <div>
-      <PageHeader title={t('nav.access')} subtitle="Access keys and per-bucket permissions" />
+      <PageHeader title={t('nav.access')} subtitle={t('access_control.page_subtitle')} />
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <Tabs defaultValue="keys">
           <TabsContent value="keys" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
@@ -484,34 +490,34 @@ export function AccessControl() {
             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Keys</CardTitle>
+                  <CardTitle className="text-sm font-medium">{t('access_control.total_keys')}</CardTitle>
                   <Key className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{keys.length}</div>
+                   <div className="text-2xl font-bold">{keys.length.toLocaleString(language)}</div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Keys</CardTitle>
+                  <CardTitle className="text-sm font-medium">{t('access_control.active_keys')}</CardTitle>
                   <ShieldCheck className="h-4 w-4 text-green-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {keys.filter((k) => k.status === 'active').length}
+                     {keys.filter((k) => k.status === 'active').length.toLocaleString(language)}
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Inactive Keys</CardTitle>
+                  <CardTitle className="text-sm font-medium">{t('access_control.inactive_keys')}</CardTitle>
                   <ShieldX className="h-4 w-4 text-red-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {keys.filter((k) => k.status === 'inactive').length}
+                     {keys.filter((k) => k.status === 'inactive').length.toLocaleString(language)}
                   </div>
                 </CardContent>
               </Card>
@@ -522,7 +528,7 @@ export function AccessControl() {
               <div className="relative flex-1 max-w-full sm:max-w-xs">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search keys..."
+                  placeholder={t('access_control.search_keys_placeholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8"
@@ -530,7 +536,7 @@ export function AccessControl() {
               </div>
               <Button onClick={handleOpenCreateDialog} className="w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
-                Create Key
+                 {t('access_control.create_key_button')}
               </Button>
             </div>
 
@@ -540,11 +546,11 @@ export function AccessControl() {
                 <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden sm:table-cell">Access Key ID</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Created</TableHead>
-                    <TableHead className="hidden md:table-cell">Permissions</TableHead>
+                    <TableHead>{t('access_control.name_column')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('access_control.access_key_id_label')}</TableHead>
+                    <TableHead>{t('access_control.status_label')}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t('access_control.created_label')}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t('access_control.permissions_label')}</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -554,14 +560,14 @@ export function AccessControl() {
                       <TableCell colSpan={6} className="text-center py-12">
                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
                           <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Loading API keys...</span>
+                           <span>{t('access_control.loading_keys')}</span>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : filteredKeys.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                        {searchQuery ? 'No keys found matching your search' : 'No API keys yet'}
+                        {searchQuery ? t('access_control.no_search_results') : t('access_control.no_keys')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -579,7 +585,7 @@ export function AccessControl() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigator.clipboard.writeText(key.accessKeyId).then(() => {
-                                  toast.success('Access Key ID copied to clipboard');
+                                   toast.success(t('access_control.access_key_id_copied'));
                                 }).catch(() => {
                                   const ta = document.createElement('textarea');
                                   ta.value = key.accessKeyId;
@@ -589,7 +595,7 @@ export function AccessControl() {
                                   ta.select();
                                   document.execCommand('copy');
                                   document.body.removeChild(ta);
-                                  toast.success('Access Key ID copied to clipboard');
+                                   toast.success(t('access_control.access_key_id_copied'));
                                 });
                               }}
                             >
@@ -602,7 +608,7 @@ export function AccessControl() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigator.clipboard.writeText(key.accessKeyId).then(() => {
-                                  toast.success('Access Key ID copied to clipboard');
+                                   toast.success(t('access_control.access_key_id_copied'));
                                 }).catch(() => {
                                   const ta = document.createElement('textarea');
                                   ta.value = key.accessKeyId;
@@ -612,7 +618,7 @@ export function AccessControl() {
                                   ta.select();
                                   document.execCommand('copy');
                                   document.body.removeChild(ta);
-                                  toast.success('Access Key ID copied to clipboard');
+                                   toast.success(t('access_control.access_key_id_copied'));
                                 });
                               }}
                             >
@@ -622,10 +628,10 @@ export function AccessControl() {
                         </TableCell>
                         <TableCell>
                           <Badge variant={key.status === 'active' ? 'primary' : 'neutral'}>
-                            {key.status}
+                             {t(`access_control.status_${key.status}`)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">{formatDate(key.createdAt)}</TableCell>
+                        <TableCell className="hidden md:table-cell">{formatLocalizedDate(key.createdAt)}</TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {key.permissions.slice(0, 2).map((perm, idx) => (
@@ -635,11 +641,11 @@ export function AccessControl() {
                             ))}
                             {key.permissions.length > 2 && (
                               <Badge variant="neutral" className="text-xs">
-                                +{key.permissions.length - 2} more
+                                 {t('access_control.more_permissions').replace('{{count}}', (key.permissions.length - 2).toLocaleString(language))}
                               </Badge>
                             )}
                             {key.permissions.length === 0 && (
-                              <span className="text-xs text-muted-foreground">No permissions</span>
+                               <span className="text-xs text-muted-foreground">{t('access_control.no_permissions')}</span>
                             )}
                           </div>
                         </TableCell>
@@ -653,23 +659,23 @@ export function AccessControl() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handleRevealSecretKey(key)}>
                                 <Key className="h-4 w-4" />
-                                View Secret Key
+                                 {t('access_control.view_secret_key_action')}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleOpenEditPermissions(key)}>
                                 <Edit className="h-4 w-4" />
-                                Edit Permissions
+                                 {t('access_control.edit_permissions_action')}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleOpenSettings(key)}>
                                 {key.status === 'active' ? (
                                   <>
                                     <ShieldX className="h-4 w-4" />
-                                    Manage Status
+                                     {t('access_control.manage_status_action')}
                                   </>
                                 ) : (
                                   <>
                                     <ShieldCheck className="h-4 w-4" />
-                                    Manage Status
+                                     {t('access_control.manage_status_action')}
                                   </>
                                 )}
                               </DropdownMenuItem>
@@ -682,7 +688,7 @@ export function AccessControl() {
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
-                                Delete
+                                 {t('common.delete')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -706,22 +712,22 @@ export function AccessControl() {
               <DialogHeader>
                 <IconTile icon={<ShieldCheck />} tone="primary" size="md" />
                 <div className="min-w-0 flex-1">
-                  <DialogTitle>API key created</DialogTitle>
+                   <DialogTitle>{t('access_control.created_dialog_title')}</DialogTitle>
                   <DialogDescription>
-                    Copy your secret access key now, this is the only time it will be shown.
+                     {t('access_control.created_dialog_description')}
                   </DialogDescription>
                 </div>
               </DialogHeader>
               <DialogBody className="space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                    Key name
+                     {t('access_control.key_name_label')}
                   </label>
                   <div className="text-[14px] font-medium">{newlyCreatedKey.name}</div>
                 </div>
-                <CredentialField label="Access Key ID" value={newlyCreatedKey.accessKeyId} />
+                 <CredentialField label={t('access_control.access_key_id_label')} value={newlyCreatedKey.accessKeyId} />
                 <CredentialField
-                  label="Secret Access Key"
+                   label={t('access_control.secret_access_key_label')}
                   value={newlyCreatedKey.secretKey || ''}
                   breakAll
                 />
@@ -729,16 +735,16 @@ export function AccessControl() {
                   <AlertTriangle className="h-4 w-4 flex-shrink-0 text-[var(--primary)] mt-0.5" />
                   <div className="space-y-0.5">
                     <p className="text-[13.5px] font-medium text-[var(--foreground)]">
-                      Save this key now
+                       {t('access_control.save_key_warning_title')}
                     </p>
                     <p className="text-[12.5px] leading-[1.5] text-[var(--muted-foreground)]">
-                      The secret access key cannot be retrieved again. If lost, you'll need to create a new key.
+                       {t('access_control.save_key_warning_description')}
                     </p>
                   </div>
                 </div>
               </DialogBody>
               <DialogFooter>
-                <Button onClick={handleCloseCreateDialog}>Done</Button>
+                 <Button onClick={handleCloseCreateDialog}>{t('common.done')}</Button>
               </DialogFooter>
             </>
           ) : (
@@ -746,26 +752,26 @@ export function AccessControl() {
               <DialogHeader>
                 <IconTile icon={<KeyRound />} tone="primary" size="md" />
                 <div className="min-w-0 flex-1">
-                  <DialogTitle>Create API key</DialogTitle>
+                   <DialogTitle>{t('access_control.create_dialog_title')}</DialogTitle>
                   <DialogDescription>
-                    Generate a new access key pair. You can optionally grant bucket permissions in the same step.
+                     {t('access_control.create_dialog_description')}
                   </DialogDescription>
                 </div>
               </DialogHeader>
               <DialogBody className="space-y-6">
                 <div className="space-y-1.5">
                   <label htmlFor="new-key-name" className="text-[13px] font-medium">
-                    Key name
+                     {t('access_control.key_name_label')}
                   </label>
                   <Input
                     id="new-key-name"
-                    placeholder="e.g. backups-prod"
+                     placeholder={t('access_control.key_name_placeholder')}
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
                     autoFocus
                   />
                   <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                    A friendly name to identify this key in the console.
+                     {t('access_control.key_name_help')}
                   </p>
                 </div>
 
@@ -786,9 +792,9 @@ export function AccessControl() {
                       }}
                     />
                     <div className="flex-1">
-                      <div className="text-[13.5px] font-medium">Grant bucket permissions now</div>
+                       <div className="text-[13.5px] font-medium">{t('access_control.grant_permissions_now')}</div>
                       <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
-                        Optional, you can also do this later from the key's edit menu.
+                         {t('access_control.grant_permissions_help')}
                       </p>
                     </div>
                   </label>
@@ -796,12 +802,12 @@ export function AccessControl() {
                   {createGrantPermissions && (
                     <div className="space-y-4 border-t border-[var(--border)] pt-4">
                       <div className="space-y-1.5">
-                        <label className="text-[13px] font-medium">Bucket</label>
+                         <label className="text-[13px] font-medium">{t('access_control.bucket_label')}</label>
                         <Select
                           value={createSelectedBucket}
                           onChange={(value) => setCreateSelectedBucket(value)}
                         >
-                          <SelectOption value="">Select a bucket…</SelectOption>
+                           <SelectOption value="">{t('access_control.select_bucket_placeholder')}</SelectOption>
                           {createAvailableBuckets.map((bucket) => (
                             <SelectOption key={bucket.name} value={bucket.name}>
                               {bucket.name}
@@ -812,26 +818,26 @@ export function AccessControl() {
 
                       {createSelectedBucket && (
                         <div className="space-y-1.5">
-                          <label className="text-[13px] font-medium">Permissions</label>
+                           <label className="text-[13px] font-medium">{t('access_control.permissions_label')}</label>
                           <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
                             {[
                               {
                                 id: 'create-permission-read',
-                                label: 'Read',
+                                 label: t('access_control.permission_read'),
                                 desc: 'GetObject, HeadObject, ListObjects',
                                 checked: createPermissionRead,
                                 setChecked: setCreatePermissionRead,
                               },
                               {
                                 id: 'create-permission-write',
-                                label: 'Write',
+                                 label: t('access_control.permission_write'),
                                 desc: 'PutObject, DeleteObject',
                                 checked: createPermissionWrite,
                                 setChecked: setCreatePermissionWrite,
                               },
                               {
                                 id: 'create-permission-owner',
-                                label: 'Owner',
+                                 label: t('access_control.permission_owner'),
                                 desc: 'DeleteBucket, PutBucketPolicy',
                                 checked: createPermissionOwner,
                                 setChecked: setCreatePermissionOwner,
@@ -865,10 +871,10 @@ export function AccessControl() {
               </DialogBody>
               <DialogFooter>
                 <Button variant="secondary" onClick={handleCloseCreateDialog}>
-                  Cancel
+                   {t('common.cancel')}
                 </Button>
                 <Button onClick={handleCreateKey} disabled={!newKeyName}>
-                  Create key
+                   {t('access_control.create_key_button')}
                 </Button>
               </DialogFooter>
             </>
@@ -880,9 +886,9 @@ export function AccessControl() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title={`Delete "${selectedKey?.name ?? ''}"?`}
-        description="Applications using this key will lose access immediately."
-        confirmLabel="Delete key"
+        title={t('access_control.delete_dialog_title').replace('{{name}}', selectedKey?.name ?? '')}
+        description={t('access_control.delete_dialog_description')}
+        confirmLabel={t('access_control.delete_key_button')}
         onConfirm={handleDeleteKey}
       />
 
@@ -892,20 +898,20 @@ export function AccessControl() {
           <DialogHeader>
             <IconTile icon={<KeyRound />} tone="primary" size="md" />
             <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate">{selectedKey?.name || 'Access key'}</DialogTitle>
+               <DialogTitle className="truncate">{selectedKey?.name || t('access_control.access_key_fallback')}</DialogTitle>
               <DialogDescription>
-                Reveal and copy this key's credentials. The secret is fetched on demand.
+                 {t('access_control.secret_dialog_description')}
               </DialogDescription>
             </div>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <CredentialField
-              label="Access Key ID"
+               label={t('access_control.access_key_id_label')}
               value={selectedKey?.accessKeyId || ''}
               breakAll
             />
             <CredentialField
-              label="Secret Access Key"
+               label={t('access_control.secret_access_key_label')}
               value={revealedSecretKey}
               breakAll
               maskable
@@ -913,7 +919,7 @@ export function AccessControl() {
             />
           </DialogBody>
           <DialogFooter>
-            <Button onClick={() => setSecretKeyDialogOpen(false)}>Close</Button>
+             <Button onClick={() => setSecretKeyDialogOpen(false)}>{t('common.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -924,14 +930,14 @@ export function AccessControl() {
           <DialogHeader>
             <IconTile icon={<ShieldCheck />} tone="primary" size="md" />
             <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate">Key settings · {settingsKey?.name}</DialogTitle>
-              <DialogDescription>Manage activation and expiration for this access key.</DialogDescription>
+               <DialogTitle className="truncate">{t('access_control.settings_dialog_title').replace('{{name}}', settingsKey?.name ?? '')}</DialogTitle>
+               <DialogDescription>{t('access_control.settings_dialog_description')}</DialogDescription>
             </div>
           </DialogHeader>
           <DialogBody className="space-y-6">
             <div className="space-y-2">
               <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                Status
+                 {t('access_control.status_label')}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {(['active', 'inactive'] as const).map((s) => {
@@ -949,13 +955,13 @@ export function AccessControl() {
                       )}
                     >
                       {s === 'active' ? <ShieldCheck className="h-4 w-4" /> : <ShieldX className="h-4 w-4" />}
-                      {s[0].toUpperCase() + s.slice(1)}
+                       {t(`access_control.status_${s}`)}
                     </button>
                   );
                 })}
               </div>
               <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                Inactive keys cannot be used for authentication.
+                 {t('access_control.inactive_help')}
               </p>
             </div>
 
@@ -968,16 +974,16 @@ export function AccessControl() {
                   onCheckedChange={(checked) => setNeverExpires(checked as boolean)}
                 />
                 <div className="flex-1">
-                  <div className="text-[13.5px] font-medium">Never expires</div>
+                   <div className="text-[13.5px] font-medium">{t('access_control.never_expires_label')}</div>
                   <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
-                    Turn off to set an automatic expiration date.
+                     {t('access_control.never_expires_help')}
                   </p>
                 </div>
               </label>
 
               {!neverExpires && (
                 <div className="space-y-1.5 border-t border-[var(--border)] pt-4">
-                  <label className="text-[13px] font-medium">Expiration date &amp; time</label>
+                   <label className="text-[13px] font-medium">{t('access_control.expiration_datetime_label')}</label>
                   <Input
                     type="datetime-local"
                     value={expirationDate}
@@ -985,7 +991,7 @@ export function AccessControl() {
                     className="w-full"
                   />
                   <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                    The key will become inactive after this moment.
+                     {t('access_control.expiration_help')}
                   </p>
                 </div>
               )}
@@ -993,9 +999,9 @@ export function AccessControl() {
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setSettingsDialogOpen(false)}>
-              Cancel
+               {t('common.cancel')}
             </Button>
-            <Button onClick={handleSaveKeySettings}>Save settings</Button>
+             <Button onClick={handleSaveKeySettings}>{t('access_control.save_settings_button')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1006,8 +1012,8 @@ export function AccessControl() {
           <DialogHeader>
             <IconTile icon={<KeyRound />} tone="primary" size="md" />
             <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate">{viewingKey?.name || 'API key'}</DialogTitle>
-              <DialogDescription>View credentials and bucket permissions for this key.</DialogDescription>
+               <DialogTitle className="truncate">{viewingKey?.name || t('access_control.api_key_fallback')}</DialogTitle>
+               <DialogDescription>{t('access_control.details_dialog_description')}</DialogDescription>
             </div>
           </DialogHeader>
           <DialogBody className="space-y-5">
@@ -1015,24 +1021,24 @@ export function AccessControl() {
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface-sunken)] px-4 py-3">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                  Status
+                   {t('access_control.status_label')}
                 </span>
                 <Badge variant={viewingKey?.status === 'active' ? 'success' : 'neutral'}>
-                  {viewingKey?.status}
+                   {viewingKey?.status && t(`access_control.status_${viewingKey.status}`)}
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
                 <Calendar className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium uppercase tracking-[0.06em]">Created</span>
+                 <span className="text-[11px] font-medium uppercase tracking-[0.06em]">{t('access_control.created_label')}</span>
                 <span className="text-[var(--foreground)]">
-                  {viewingKey && formatDate(viewingKey.createdAt)}
+                   {viewingKey && formatLocalizedDate(viewingKey.createdAt)}
                 </span>
               </div>
               {viewingKey?.expiration && (
                 <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
                   <Calendar className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-medium uppercase tracking-[0.06em]">Expires</span>
-                  <span className="text-[var(--foreground)]">{formatDate(viewingKey.expiration)}</span>
+                   <span className="text-[11px] font-medium uppercase tracking-[0.06em]">{t('access_control.expires_label')}</span>
+                   <span className="text-[var(--foreground)]">{formatLocalizedDate(viewingKey.expiration)}</span>
                 </div>
               )}
             </div>
@@ -1040,12 +1046,12 @@ export function AccessControl() {
             {/* Credentials */}
             <div className="space-y-4">
               <CredentialField
-                label="Access Key ID"
+                 label={t('access_control.access_key_id_label')}
                 value={viewingKey?.accessKeyId || ''}
                 breakAll
               />
               <CredentialField
-                label="Secret Access Key"
+                 label={t('access_control.secret_access_key_label')}
                 value={detailsSecretKey}
                 breakAll
                 maskable
@@ -1057,12 +1063,12 @@ export function AccessControl() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                  Bucket permissions
+                   {t('access_control.bucket_permissions_label')}
                 </label>
                 {viewingKey && viewingKey.permissions.length > 0 && (
                   <span className="text-[12px] text-[var(--muted-foreground)]">
-                    {viewingKey.permissions.length} bucket
-                    {viewingKey.permissions.length === 1 ? '' : 's'}
+                     {t(viewingKey.permissions.length === 1 ? 'access_control.one_bucket_count' : 'access_control.buckets_count')
+                       .replace('{{count}}', viewingKey.permissions.length.toLocaleString(language))}
                   </span>
                 )}
               </div>
@@ -1078,9 +1084,9 @@ export function AccessControl() {
                         <span className="truncate font-mono text-[13px]">{perm.bucketName}</span>
                       </div>
                       <div className="flex flex-shrink-0 gap-1">
-                        {perm.read && <Badge variant="neutral">Read</Badge>}
-                        {perm.write && <Badge variant="neutral">Write</Badge>}
-                        {perm.owner && <Badge variant="warning">Owner</Badge>}
+                         {perm.read && <Badge variant="neutral">{t('access_control.permission_read')}</Badge>}
+                         {perm.write && <Badge variant="neutral">{t('access_control.permission_write')}</Badge>}
+                         {perm.owner && <Badge variant="warning">{t('access_control.permission_owner')}</Badge>}
                       </div>
                     </div>
                   ))}
@@ -1088,7 +1094,7 @@ export function AccessControl() {
               ) : (
                 <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-6 text-center">
                   <p className="text-[13px] text-[var(--muted-foreground)]">
-                    No bucket permissions yet.
+                     {t('access_control.no_bucket_permissions')}
                   </p>
                 </div>
               )}
@@ -1105,9 +1111,9 @@ export function AccessControl() {
               }}
             >
               <Edit className="h-4 w-4" />
-              Edit permissions
+               {t('access_control.edit_permissions_action')}
             </Button>
-            <Button onClick={() => setKeyDetailsDialogOpen(false)}>Close</Button>
+             <Button onClick={() => setKeyDetailsDialogOpen(false)}>{t('common.close')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1118,17 +1124,17 @@ export function AccessControl() {
           <DialogHeader>
             <IconTile icon={<Edit />} tone="primary" size="md" />
             <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate">Bucket permissions · {editingKey?.name}</DialogTitle>
+               <DialogTitle className="truncate">{t('access_control.permissions_dialog_title').replace('{{name}}', editingKey?.name ?? '')}</DialogTitle>
               <DialogDescription>
-                Select a bucket, then toggle the scopes this key should have on it.
+                 {t('access_control.permissions_dialog_description')}
               </DialogDescription>
             </div>
           </DialogHeader>
           <DialogBody className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-[13px] font-medium">Bucket</label>
+               <label className="text-[13px] font-medium">{t('access_control.bucket_label')}</label>
               <Select value={selectedBucket} onChange={(value) => handleBucketChange(value)}>
-                <SelectOption value="">Select a bucket…</SelectOption>
+                 <SelectOption value="">{t('access_control.select_bucket_placeholder')}</SelectOption>
                 {availableBuckets.map((bucket) => (
                   <SelectOption key={bucket.name} value={bucket.name}>
                     {bucket.name}
@@ -1140,26 +1146,26 @@ export function AccessControl() {
             {selectedBucket && (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-[13px] font-medium">Permissions</label>
+                   <label className="text-[13px] font-medium">{t('access_control.permissions_label')}</label>
                   <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
                     {[
                       {
                         id: 'edit-permission-read',
-                        label: 'Read',
+                       label: t('access_control.permission_read'),
                         desc: 'GetObject, HeadObject, ListObjects',
                         checked: permissionRead,
                         setChecked: setPermissionRead,
                       },
                       {
                         id: 'edit-permission-write',
-                        label: 'Write',
+                       label: t('access_control.permission_write'),
                         desc: 'PutObject, DeleteObject',
                         checked: permissionWrite,
                         setChecked: setPermissionWrite,
                       },
                       {
                         id: 'edit-permission-owner',
-                        label: 'Owner',
+                       label: t('access_control.permission_owner'),
                         desc: 'DeleteBucket, PutBucketPolicy',
                         checked: permissionOwner,
                         setChecked: setPermissionOwner,
@@ -1195,17 +1201,17 @@ export function AccessControl() {
                   return (
                     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-sunken)] px-3.5 py-3">
                       <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                        Currently granted
+                         {t('access_control.currently_granted')}
                       </div>
                       {hasAny ? (
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {current!.read && <Badge variant="neutral">Read</Badge>}
-                          {current!.write && <Badge variant="neutral">Write</Badge>}
-                          {current!.owner && <Badge variant="warning">Owner</Badge>}
+                           {current!.read && <Badge variant="neutral">{t('access_control.permission_read')}</Badge>}
+                           {current!.write && <Badge variant="neutral">{t('access_control.permission_write')}</Badge>}
+                           {current!.owner && <Badge variant="warning">{t('access_control.permission_owner')}</Badge>}
                         </div>
                       ) : (
                         <p className="mt-1 text-[12.5px] text-[var(--muted-foreground)]">
-                          No permissions on this bucket yet.
+                           {t('access_control.no_permissions_for_bucket')}
                         </p>
                       )}
                     </div>
@@ -1217,16 +1223,16 @@ export function AccessControl() {
             {editingKey && editingKey.permissions.length > 0 && (
               <div className="space-y-1.5">
                 <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
-                  All bucket permissions for this key
+                   {t('access_control.all_bucket_permissions')}
                 </label>
                 <div className="max-h-48 divide-y divide-[var(--border)] overflow-y-auto rounded-md border border-[var(--border)]">
                   {editingKey.permissions.map((perm, idx) => (
                     <div key={idx} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                       <span className="truncate font-mono text-[13px]">{perm.bucketName}</span>
                       <div className="flex flex-shrink-0 gap-1">
-                        {perm.read && <Badge variant="neutral">R</Badge>}
-                        {perm.write && <Badge variant="neutral">W</Badge>}
-                        {perm.owner && <Badge variant="warning">O</Badge>}
+                         {perm.read && <Badge variant="neutral">{t('access_control.permission_read_short')}</Badge>}
+                         {perm.write && <Badge variant="neutral">{t('access_control.permission_write_short')}</Badge>}
+                         {perm.owner && <Badge variant="warning">{t('access_control.permission_owner_short')}</Badge>}
                       </div>
                     </div>
                   ))}
@@ -1236,11 +1242,11 @@ export function AccessControl() {
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setEditPermissionsDialogOpen(false)}>
-              Cancel
+               {t('common.cancel')}
             </Button>
             <Button onClick={handleGrantBucketPermission} disabled={!selectedBucket || savingPermissions}>
               {savingPermissions && <Loader2 className="h-4 w-4 animate-spin" />}
-              {savingPermissions ? 'Saving...' : 'Save permissions'}
+               {savingPermissions ? t('access_control.saving_permissions') : t('access_control.save_permissions_button')}
             </Button>
           </DialogFooter>
         </DialogContent>

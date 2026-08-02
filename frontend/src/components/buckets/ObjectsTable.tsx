@@ -16,6 +16,8 @@ import {ChevronLeft, ChevronRight, Download, Eye, FileIcon, FolderIcon, Loader2,
 import {Select, SelectOption} from '@/components/ui/select';
 import {downloadObject, formatBytes, formatRelativeTime} from '@/lib/file-utils';
 import type {S3Object} from '@/types';
+import { useSettingsStore } from '@/store/settings-store';
+import { useTranslation } from '@/lib/i18n';
 
 interface ObjectsTableProps {
   bucketName: string;
@@ -77,7 +79,9 @@ export function ObjectsTable({
   initialPageToken,
   initialItemsPerPage,
 }: ObjectsTableProps) {
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
+  const timezone = useSettingsStore((state) => state.timezone);
   const canDelete = Boolean(onDeleteObject);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -117,7 +121,7 @@ export function ObjectsTable({
         case 'name': {
           const aName = a.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
           const bName = b.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
-          compareValue = aName.localeCompare(bName);
+          compareValue = aName.localeCompare(bName, language);
           break;
         }
         case 'size':
@@ -133,7 +137,7 @@ export function ObjectsTable({
 
       return sortDirection === 'asc' ? compareValue : -compareValue;
     });
-  }, [objects, filterQuery, sortColumn, sortDirection, currentPath]);
+  }, [objects, filterQuery, sortColumn, sortDirection, currentPath, language]);
 
   // Effect 2: Reset pagination on path navigation or when a search begins/ends.
   // Search results are a single flat list, so page-token state must not leak
@@ -245,7 +249,7 @@ export function ObjectsTable({
                       pageObjects.filter(obj => obj.isFolder).map(obj => obj.key),
                     )
                   }
-                  aria-label="Select all objects"
+                  aria-label={t('buckets.objects.select_all_aria')}
                 />
               </TableHead>
             )}
@@ -253,21 +257,21 @@ export function ObjectsTable({
             className="cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('name')}
           >
-            Objects {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+            {t('buckets.fields.objects')} {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
           </TableHead>
-          <TableHead className="hidden sm:table-cell">Type</TableHead>
-          <TableHead className="hidden md:table-cell">Storage Class</TableHead>
+          <TableHead className="hidden sm:table-cell">{t('buckets.fields.type')}</TableHead>
+          <TableHead className="hidden md:table-cell">{t('buckets.fields.storage_class')}</TableHead>
           <TableHead
             className="cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('size')}
           >
-            Size {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
+            {t('buckets.fields.size')} {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
           </TableHead>
           <TableHead
             className="cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('modified')}
           >
-            Modified {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
+            {t('buckets.fields.modified')} {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
           </TableHead>
           <TableHead className="w-[50px]"></TableHead>
         </TableRow>
@@ -278,7 +282,7 @@ export function ObjectsTable({
             <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12">
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span>Loading objects...</span>
+                <span>{t('buckets.objects.loading')}</span>
               </div>
             </TableCell>
           </TableRow>
@@ -286,8 +290,7 @@ export function ObjectsTable({
           <TableRow>
             <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12">
               <div className="flex flex-col items-center gap-2 text-destructive">
-                <span className="text-sm font-medium">Failed to load objects</span>
-                <span className="text-xs text-muted-foreground">{error.message}</span>
+                <span className="text-sm font-medium">{t('buckets.objects.load_failed')}</span>
               </div>
             </TableCell>
           </TableRow>
@@ -295,10 +298,10 @@ export function ObjectsTable({
           <TableRow>
             <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12 text-muted-foreground">
               {searchQuery
-                ? 'No objects found matching your search'
+                ? t('buckets.objects.empty_search')
                 : isDragActive
-                ? 'Drop files or folders here'
-                : 'No objects in this location'}
+                ? t('buckets.upload.drop_files_or_folders')
+                : t('buckets.objects.empty_location')}
             </TableCell>
           </TableRow>
         ) : (
@@ -310,13 +313,13 @@ export function ObjectsTable({
                     <Checkbox
                       checked={selectedFolderKeys.has(obj.key)}
                       onCheckedChange={() => onToggleFolderSelection(obj.key)}
-                      aria-label={`Select folder ${obj.key} (deletes its contents recursively)`}
+                      aria-label={t('buckets.objects.select_folder_aria', { key: obj.key })}
                     />
                   ) : (
                     <Checkbox
                       checked={selectedFileKeys.has(obj.key)}
                       onCheckedChange={() => onToggleFileSelection(obj.key)}
-                      aria-label={`Select file ${obj.key}`}
+                      aria-label={t('buckets.objects.select_file_aria', { key: obj.key })}
                     />
                   )}
                 </TableCell>
@@ -330,6 +333,8 @@ export function ObjectsTable({
                   )}
                   {obj.isFolder ? (
                     <button
+                      type="button"
+                      aria-label={t('buckets.objects.open_folder_aria', { key: obj.key })}
                       onClick={() => onNavigateToFolder(obj.key)}
                       className="font-medium cursor-pointer underline hover:text-primary"
                     >
@@ -337,6 +342,8 @@ export function ObjectsTable({
                     </button>
                   ) : (
                     <button
+                      type="button"
+                      aria-label={t('buckets.objects.open_object_aria', { key: obj.key })}
                       onClick={() => navigate(`/buckets/${bucketName}/objects/${encodeURIComponent(obj.key)}`)}
                       className="font-medium cursor-pointer hover:underline hover:text-primary"
                     >
@@ -346,7 +353,7 @@ export function ObjectsTable({
                 </div>
               </TableCell>
               <TableCell className="hidden sm:table-cell">
-                {obj.isFolder ? 'Directory' : (obj.contentType || 'application/octet-stream')}
+                 {obj.isFolder ? t('buckets.objects.directory') : (obj.contentType || 'application/octet-stream')}
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 {obj.storageClass && (
@@ -361,16 +368,17 @@ export function ObjectsTable({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="decoration-dashed decoration-1 underline underline-offset-6 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-                          {d.toLocaleDateString('en-GB', {
+                          {d.toLocaleString(language, {
                             day: '2-digit',
                             month: 'short',
                             year: 'numeric',
-                          })} {d.toLocaleTimeString('en-GB', {
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
                             hour12: false,
-                          })} CET
+                            timeZone: timezone,
+                            timeZoneName: 'short',
+                          })}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -378,7 +386,7 @@ export function ObjectsTable({
                           <div className="flex gap-3 items-center">
                             <span className="text-sm text-gray-400 w-20 text-right">UTC</span>
                             <span className="text-sm text-white">
-                              {d.toLocaleString('en-GB', {
+                              {d.toLocaleString(language, {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric',
@@ -391,13 +399,13 @@ export function ObjectsTable({
                             </span>
                           </div>
                           <div className="flex gap-3 items-center">
-                            <span className="text-sm text-gray-400 w-20 text-right">Relative</span>
+                             <span className="text-sm text-gray-400 w-20 text-right">{t('buckets.objects.date.relative')}</span>
                             <span className="text-sm text-white">
                               {formatRelativeTime(d)}
                             </span>
                           </div>
                           <div className="flex gap-3 items-center">
-                            <span className="text-sm text-gray-400 w-20 text-right">Timestamp</span>
+                             <span className="text-sm text-gray-400 w-20 text-right">{t('buckets.objects.date.timestamp')}</span>
                             <span className="text-sm text-white font-mono">
                               {d.toISOString()}
                             </span>
@@ -412,14 +420,14 @@ export function ObjectsTable({
                 {obj.isFolder ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger>
-                      <Button variant="ghost" size="icon" className="-m-6 top-1 relative">
+                       <Button variant="ghost" size="icon" className="-m-6 top-1 relative" aria-label={t('buckets.objects.folder_actions_aria', { key: obj.key })}>
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => onNavigateToFolder(obj.key)}>
                         <FolderIcon className="h-4 w-4" />
-                        Open
+                         {t('buckets.actions.open')}
                       </DropdownMenuItem>
                       {onDeleteFolder && (
                         <>
@@ -429,7 +437,7 @@ export function ObjectsTable({
                             onClick={() => onDeleteFolder(obj)}
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete folder
+                             {t('buckets.actions.delete_folder')}
                           </DropdownMenuItem>
                         </>
                       )}
@@ -438,18 +446,18 @@ export function ObjectsTable({
                 ) : (
                   <DropdownMenu>
                     <DropdownMenuTrigger>
-                      <Button variant="ghost" size="icon" className="-m-6 top-1 relative">
+                       <Button variant="ghost" size="icon" className="-m-6 top-1 relative" aria-label={t('buckets.objects.object_actions_aria', { key: obj.key })}>
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => navigate(`/buckets/${bucketName}/objects/${encodeURIComponent(obj.key)}`)}>
                         <Eye className="h-4 w-4" />
-                        View Details
+                         {t('buckets.actions.view_details')}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => downloadObject(bucketName, obj.key)}>
+                       <DropdownMenuItem onClick={() => downloadObject(bucketName, obj.key)}>
                         <Download className="h-4 w-4" />
-                        Download
+                         {t('buckets.actions.download')}
                       </DropdownMenuItem>
                       {onDeleteObject && (
                         <>
@@ -459,7 +467,7 @@ export function ObjectsTable({
                             onClick={() => onDeleteObject(obj)}
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete
+                             {t('buckets.actions.delete')}
                           </DropdownMenuItem>
                         </>
                       )}
@@ -480,13 +488,13 @@ export function ObjectsTable({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t bg-background">
         {/* Items per page selector */}
         <div className="flex items-center gap-2 text-sm relative z-10">
-          <span className="text-muted-foreground">Items per page:</span>
+           <span className="text-muted-foreground">{t('buckets.pagination.items_per_page')}</span>
           <Select value={itemsPerPage.toString()} onChange={handleItemsPerPageChange}>
-            <SelectOption value="10">10</SelectOption>
-            <SelectOption value="25">25</SelectOption>
-            <SelectOption value="50">50</SelectOption>
-            <SelectOption value="100">100</SelectOption>
-            <SelectOption value="200">200</SelectOption>
+            <SelectOption value="10">{(10).toLocaleString(language)}</SelectOption>
+            <SelectOption value="25">{(25).toLocaleString(language)}</SelectOption>
+            <SelectOption value="50">{(50).toLocaleString(language)}</SelectOption>
+            <SelectOption value="100">{(100).toLocaleString(language)}</SelectOption>
+            <SelectOption value="200">{(200).toLocaleString(language)}</SelectOption>
           </Select>
         </div>
 
@@ -494,8 +502,16 @@ export function ObjectsTable({
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">
             {isDeepSearching
-              ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
-              : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`}
+               ? t('buckets.pagination.deep_search_summary', {
+                   page: (pageIndex + 1).toLocaleString(language),
+                   pages: totalPages.toLocaleString(language),
+                   matches: filteredObjects.length.toLocaleString(language),
+                   capped: isTruncated ? t('buckets.pagination.capped') : '',
+                 })
+               : t('buckets.pagination.summary', {
+                   page: (pageIndex + 1).toLocaleString(language),
+                   items: pageObjects.length.toLocaleString(language),
+                 })}
           </span>
 
           <div className="flex items-center gap-2">
@@ -507,7 +523,7 @@ export function ObjectsTable({
               className="h-8"
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
+               {t('buckets.pagination.previous')}
             </Button>
 
             <Button
@@ -517,7 +533,7 @@ export function ObjectsTable({
               disabled={!hasNext}
               className="h-8"
             >
-              Next
+               {t('buckets.pagination.next')}
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>

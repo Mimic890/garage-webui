@@ -7,6 +7,8 @@ metadata:
     {{- include "garage-ui.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy.type }}
   selector:
     matchLabels:
       {{- include "garage-ui.selectorLabels" . | nindent 6 }}
@@ -14,6 +16,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -37,6 +40,19 @@ spec:
           containerPort: {{ .Values.config.server.port }}
           protocol: TCP
         env:
+        {{- with .Values.config.garage.endpoint }}
+        - name: GARAGE_UI_GARAGE_ENDPOINT
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.config.garage.admin_endpoint }}
+        - name: GARAGE_UI_GARAGE_ADMIN_ENDPOINT
+          value: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.config.garage.region }}
+        - name: GARAGE_UI_GARAGE_REGION
+          value: {{ . | quote }}
+        {{- end }}
+        {{- if or .Values.config.garage.admin_token .Values.config.garage.existingSecret.name }}
         - name: GARAGE_UI_GARAGE_ADMIN_TOKEN
           valueFrom:
             secretKeyRef:
@@ -47,6 +63,23 @@ spec:
               name: {{ include "garage-ui.fullname" . }}-admin-token
               key: admin-token
               {{- end }}
+        {{- end }}
+        {{- if or .Values.config.auth.bootstrap_token .Values.config.auth.bootstrapTokenSecret.name }}
+        - name: GARAGE_UI_AUTH_BOOTSTRAP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              {{- if .Values.config.auth.bootstrapTokenSecret.name }}
+              name: {{ .Values.config.auth.bootstrapTokenSecret.name }}
+              key: {{ .Values.config.auth.bootstrapTokenSecret.key }}
+              {{- else }}
+              name: {{ include "garage-ui.fullname" . }}-bootstrap-token
+              key: bootstrap-token
+              {{- end }}
+        {{- end }}
+        {{- if .Values.config.auth.admin.enabled }}
+        - name: GARAGE_UI_AUTH_ADMIN_USERNAME
+          value: {{ .Values.config.auth.admin.username | quote }}
+        {{- end }}
         - name: GARAGE_UI_AUTH_JWT_PRIVATE_KEY
           valueFrom:
             secretKeyRef:
@@ -111,10 +144,19 @@ spec:
           mountPath: /app/config.yaml
           subPath: config.yaml
           readOnly: true
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          mountPath: /app/data
+        {{- end }}
       volumes:
       - name: config
         configMap:
           name: {{ include "garage-ui.fullname" . }}-config
+      {{- if .Values.persistence.enabled }}
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ include "garage-ui.fullname" . }}-data
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

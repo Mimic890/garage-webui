@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"Noooste/garage-ui/pkg/logger"
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
@@ -30,12 +29,13 @@ type Service struct {
 
 // UserInfo represents authenticated user information
 type UserInfo struct {
-	Username   string
-	Email      string
-	Name       string
-	Roles      []string
-	Teams      []string // raw team claim values (team_attribute_path), OIDC only
-	AuthMethod string   // "oidc" | "admin" | "token"; "" on legacy sessions
+	Username        string
+	Email           string
+	Name            string
+	Roles           []string
+	Teams           []string // raw team claim values (team_attribute_path), OIDC only
+	AuthMethod      string   // "oidc" | "admin" | "passkey" | "token"; "" on legacy sessions
+	SecurityVersion int      // local sessions only
 }
 
 // NewAuthService creates a new authentication service
@@ -137,6 +137,13 @@ func (a *Service) GetAuthorizationURL(state string) (string, error) {
 	return a.oauth2Config.AuthCodeURL(state), nil
 }
 
+func (a *Service) GetAuthorizationURLWithPKCE(state, verifier, nonce string) (string, error) {
+	if a.oauth2Config == nil {
+		return "", fmt.Errorf("OIDC not initialized")
+	}
+	return a.oauth2Config.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier), oidc.Nonce(nonce)), nil
+}
+
 // ExchangeCode exchanges an authorization code for tokens
 func (a *Service) ExchangeCode(ctx context.Context, code string) (*oauth2.Token, error) {
 	if a.oauth2Config == nil {
@@ -151,8 +158,23 @@ func (a *Service) ExchangeCode(ctx context.Context, code string) (*oauth2.Token,
 	return token, nil
 }
 
+func (a *Service) ExchangeCodeWithVerifier(ctx context.Context, code, verifier string) (*oauth2.Token, error) {
+	if a.oauth2Config == nil {
+		return nil, fmt.Errorf("OIDC not initialized")
+	}
+	return a.oauth2Config.Exchange(a.oidcContext(ctx), code, oauth2.VerifierOption(verifier))
+}
+
 // VerifyIDToken verifies an OIDC ID token and extracts user info
 func (a *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserInfo, error) {
+	return a.userInfoFromIDToken(ctx, rawIDToken, "")
+}
+
+func (a *Service) VerifyIDTokenWithNonce(ctx context.Context, rawIDToken, expectedNonce string) (*UserInfo, error) {
+	return a.userInfoFromIDToken(ctx, rawIDToken, expectedNonce)
+}
+
+func (a *Service) userInfoFromIDToken(ctx context.Context, rawIDToken, expectedNonce string) (*UserInfo, error) {
 	if a.oidcVerifier == nil {
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
@@ -161,6 +183,9 @@ func (a *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserIn
 	idToken, err := a.oidcVerifier.Verify(a.oidcContext(ctx), rawIDToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify ID token: %w", err)
+	}
+	if expectedNonce != "" && idToken.Nonce != expectedNonce {
+		return nil, fmt.Errorf("ID token nonce mismatch")
 	}
 
 	// Extract claims
@@ -210,8 +235,6 @@ func (a *Service) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserIn
 	if err := userInfoEndpoint.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("failed to parse user info claims: %w", err)
 	}
-
-	logger.Debug().Interface("claims", claims).Msg("Extracted user info claims")
 
 	// Build user info
 	userInfo := &UserInfo{
@@ -398,9 +421,26 @@ func (a *Service) GenerateStateToken() (string, error) {
 	return a.jwtService.GenerateStateToken()
 }
 
+func (a *Service) GenerateStateTokenForBinding(binding string) (string, error) {
+	return a.jwtService.GenerateStateTokenForBinding(binding)
+}
+
+func (a *Service) GenerateOIDCState(binding, verifier, nonce string) (string, error) {
+	return a.jwtService.GenerateOIDCState(binding, verifier, nonce)
+}
+
 // ValidateAndConsumeState validates and consumes a CSRF state token
 func (a *Service) ValidateAndConsumeState(token string) bool {
 	return a.jwtService.ValidateAndConsumeState(token)
+}
+
+func (a *Service) ValidateAndConsumeStateForBinding(token, binding string) bool {
+	return a.jwtService.ValidateAndConsumeStateForBinding(token, binding)
+}
+
+func (a *Service) ConsumeStateForBinding(token, binding string) (string, string, bool) {
+	state, ok := a.jwtService.ConsumeStateForBinding(token, binding)
+	return state.CodeVerifier, state.Nonce, ok
 }
 
 // GenerateSessionToken generates a JWT session token for the user.
@@ -425,11 +465,12 @@ func (a *Service) ValidateSessionToken(tokenString string) (*UserInfo, error) {
 	}
 
 	return &UserInfo{
-		Username:   claims.Username,
-		Email:      claims.Email,
-		Name:       claims.Name,
-		Roles:      claims.Roles,
-		Teams:      claims.Teams,
-		AuthMethod: claims.AuthMethod,
+		Username:        claims.Username,
+		Email:           claims.Email,
+		Name:            claims.Name,
+		Roles:           claims.Roles,
+		Teams:           claims.Teams,
+		AuthMethod:      claims.AuthMethod,
+		SecurityVersion: claims.SecurityVersion,
 	}, nil
 }
