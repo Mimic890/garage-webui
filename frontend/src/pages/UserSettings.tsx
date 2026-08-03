@@ -90,6 +90,11 @@ export function UserSettings() {
   const [passkeyAuth, setPasskeyAuth] = useState(emptySensitive);
   const [removeAuth, setRemoveAuth] = useState(emptySensitive);
 
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [disableOpen, setDisableOpen] = useState(false);
+
   const loadAccount = async () => {
     const next = await authApi.getAccount();
     setAccount(next);
@@ -231,41 +236,25 @@ export function UserSettings() {
         <CardHeader><CardTitle className="flex items-center gap-2"><User className="h-5 w-5" />{t('userSettings.profile.title')}</CardTitle><CardDescription>{t('userSettings.profile.description')}</CardDescription></CardHeader>
         <CardContent className="space-y-4">
           <div><span className="text-xs text-[var(--muted-foreground)]">{t('userSettings.profile.username')}</span><p>{account?.username || user?.username}</p></div>
+          <div><span className="text-xs text-[var(--muted-foreground)]">{t('userSettings.profile.email')}</span><p>{account?.email || user?.email || t('userSettings.profile.emailValue')}</p></div>
           {(managed || token) ? <p className="rounded-md border p-3 text-sm text-[var(--muted-foreground)]">
             {managed ? t('userSettings.profile.managedByProvider') : t('userSettings.profile.tokenChangesUnavailable')}
-          </p> : <form className="space-y-4" onSubmit={saveEmail}>
-            <div className="space-y-2"><label className={labelClass} htmlFor="account-email">{t('userSettings.profile.email')}</label><Input id="account-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-            <SensitiveFields id="profile" value={profileAuth} onChange={setProfileAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
-            <Button disabled={!!pending} type="submit">{pending === 'profile' ? t('userSettings.profile.saving') : t('userSettings.profile.saveEmail')}</Button>
-          </form>}
+          </p> : <Button variant="secondary" onClick={() => { setEmail(account?.email || user?.email || ''); setEmailOpen(true); }}>{t('userSettings.profile.changeEmail')}</Button>}
         </CardContent>
       </Card>
 
       {!managed && !token && <>
         <Card>
           <CardHeader><CardTitle>{t('userSettings.password.title')}</CardTitle><CardDescription>{t('userSettings.password.description')}</CardDescription></CardHeader>
-          <CardContent><form className="space-y-4" onSubmit={changePassword}>
-            <SensitiveFields id="change-password" value={passwordAuth} onChange={setPasswordAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
-            <div className="space-y-2"><label className={labelClass} htmlFor="new-password">{t('userSettings.password.newPassword')}</label><Input id="new-password" type="password" autoComplete="new-password" required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
-            <div className="space-y-2"><label className={labelClass} htmlFor="confirm-password">{t('userSettings.password.confirmPassword')}</label><Input id="confirm-password" type="password" autoComplete="new-password" required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></div>
-            <Button disabled={!!pending} type="submit">{pending === 'password' ? t('userSettings.password.changing') : t('userSettings.password.changeAction')}</Button>
-          </form></CardContent>
+          <CardContent><Button variant="secondary" onClick={() => setPasswordOpen(true)}>{t('userSettings.password.changePassword')}</Button></CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />{t('userSettings.totp.title')}</CardTitle><CardDescription>{needsSecondFactor ? t('userSettings.totp.recoveryCodesRemaining', { count: number.format(account?.recovery_codes_remaining || 0) }) : t('userSettings.totp.description')}</CardDescription></CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4">
             {!needsSecondFactor ? <Button onClick={() => setTotpOpen(true)}>{t('userSettings.totp.enableAction')}</Button> : <>
-              <form className="space-y-4" onSubmit={regenerateCodes}>
-                 <h4 className="font-medium">{t('userSettings.totp.regenerateTitle')}</h4>
-                <SensitiveFields id="recovery" value={recoveryAuth} onChange={setRecoveryAuth} secondFactor disabled={!!pending} />
-                 <Button variant="secondary" disabled={!!pending} type="submit">{pending === 'recovery' ? t('userSettings.totp.generating') : t('userSettings.totp.generateAction')}</Button>
-              </form>
-              <form className="space-y-4 border-t pt-5" onSubmit={disableTotp}>
-                 <h4 className="font-medium">{t('userSettings.totp.disableTitle')}</h4>
-                <SensitiveFields id="disable-totp" value={disableAuth} onChange={setDisableAuth} secondFactor disabled={!!pending} />
-                 <Button variant="destructive" disabled={!!pending} type="submit">{pending === 'totp-disable' ? t('userSettings.totp.disabling') : t('userSettings.totp.disableAction')}</Button>
-              </form>
+              <Button variant="secondary" onClick={() => setRegenOpen(true)}>{t('userSettings.totp.generateAction')}</Button>
+              <Button variant="destructive" onClick={() => setDisableOpen(true)}>{t('userSettings.totp.disableAction')}</Button>
             </>}
           </CardContent>
         </Card>
@@ -290,6 +279,69 @@ export function UserSettings() {
         </Card>}
       </>}
     </div>
+
+    <Dialog open={emailOpen} onOpenChange={setEmailOpen} size="form">
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t('userSettings.profile.changeEmailTitle')}</DialogTitle><DialogDescription>{t('userSettings.profile.changeEmailDescription')}</DialogDescription></DialogHeader>
+        <DialogBody>
+          <form id="email-form" className="space-y-4" onSubmit={(e) => { e.preventDefault(); setEmailOpen(false); saveEmail(e); }}>
+            <div className="space-y-2"><label className={labelClass} htmlFor="new-email">{t('userSettings.profile.email')}</label><Input id="new-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+            <SensitiveFields id="email-auth" value={profileAuth} onChange={setProfileAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={() => setEmailOpen(false)}>{t('common.actions.cancel')}</Button>
+          <Button type="submit" form="email-form" disabled={!!pending}>{pending === 'profile' ? t('userSettings.profile.saving') : t('userSettings.profile.saveEmail')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={passwordOpen} onOpenChange={setPasswordOpen} size="form">
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t('userSettings.password.changePasswordTitle')}</DialogTitle><DialogDescription>{t('userSettings.password.changePasswordDescription')}</DialogDescription></DialogHeader>
+        <DialogBody>
+          <form id="password-form" className="space-y-4" onSubmit={(e) => { e.preventDefault(); setPasswordOpen(false); changePassword(e); }}>
+            <SensitiveFields id="change-password" value={passwordAuth} onChange={setPasswordAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
+            <div className="space-y-2"><label className={labelClass} htmlFor="new-password">{t('userSettings.password.newPassword')}</label><Input id="new-password" type="password" autoComplete="new-password" required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
+            <div className="space-y-2"><label className={labelClass} htmlFor="confirm-password">{t('userSettings.password.confirmPassword')}</label><Input id="confirm-password" type="password" autoComplete="new-password" required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></div>
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={() => setPasswordOpen(false)}>{t('common.actions.cancel')}</Button>
+          <Button type="submit" form="password-form" disabled={!!pending}>{pending === 'password' ? t('userSettings.password.changing') : t('userSettings.password.changeAction')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={regenOpen} onOpenChange={setRegenOpen} size="form">
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t('userSettings.totp.regenerateTitle')}</DialogTitle><DialogDescription>{t('userSettings.totp.regenerateDescription')}</DialogDescription></DialogHeader>
+        <DialogBody>
+          <form id="regen-form" className="space-y-4" onSubmit={(e) => { e.preventDefault(); setRegenOpen(false); regenerateCodes(e); }}>
+            <SensitiveFields id="recovery" value={recoveryAuth} onChange={setRecoveryAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={() => setRegenOpen(false)}>{t('common.actions.cancel')}</Button>
+          <Button type="submit" form="regen-form" disabled={!!pending}>{pending === 'recovery' ? t('userSettings.totp.generating') : t('userSettings.totp.generateAction')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={disableOpen} onOpenChange={setDisableOpen} size="form">
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t('userSettings.totp.disableTitle')}</DialogTitle><DialogDescription>{t('userSettings.totp.disableDescription')}</DialogDescription></DialogHeader>
+        <DialogBody>
+          <form id="disable-totp-form" className="space-y-4" onSubmit={(e) => { e.preventDefault(); setDisableOpen(false); disableTotp(e); }}>
+            <SensitiveFields id="disable-totp" value={disableAuth} onChange={setDisableAuth} secondFactor={needsSecondFactor} disabled={!!pending} />
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={() => setDisableOpen(false)}>{t('common.actions.cancel')}</Button>
+          <Button type="submit" form="disable-totp-form" variant="destructive" disabled={!!pending}>{pending === 'totp-disable' ? t('userSettings.totp.disabling') : t('userSettings.totp.disableAction')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={totpOpen} onOpenChange={(open) => open ? setTotpOpen(true) : closeCodes()} size="form">
       <DialogContent>
