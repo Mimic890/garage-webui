@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, Shield, Trash2, User } from 'lucide-react';
-import { toast } from 'sonner';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,7 @@ import {
 } from '@/lib/webauthn';
 import { useTranslation } from '@/lib/i18n';
 import { useSettingsStore } from '@/store/settings-store';
+import { copyText } from '@/lib/clipboard';
 
 const labelClass = 'text-sm font-medium';
 
@@ -297,11 +297,11 @@ export function UserSettings() {
         <DialogBody>
           {recoveryCodes.length ? <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 rounded-md border bg-[var(--surface)] p-4 font-mono text-sm" aria-label={t('userSettings.totp.dialog.recoveryCodesAriaLabel')}>{recoveryCodes.map((code) => <span key={code}>{code}</span>)}</div>
-            <Button type="button" variant="secondary" onClick={() => navigator.clipboard.writeText(recoveryCodes.join('\n')).then(() => toast.success(t('userSettings.notifications.recoveryCodesCopied')))}>{t('userSettings.totp.dialog.copyCodesAction')}</Button>
+            <Button type="button" variant="secondary" onClick={() => copyText(recoveryCodes.join('\n'), t('userSettings.notifications.recoveryCodesCopied'))}>{t('userSettings.totp.dialog.copyCodesAction')}</Button>
             <label className="flex items-start gap-2 text-sm"><input className="mt-1" type="checkbox" checked={codesAcknowledged} onChange={(event) => setCodesAcknowledged(event.target.checked)} />{t('userSettings.totp.dialog.savedAcknowledgement')}</label>
           </div> : enrollment ? <form id="totp-finish" className="space-y-4" onSubmit={finishTotp}>
             <img src={enrollment.qr_code_data_url} alt={t('userSettings.totp.dialog.qrCodeAlt')} className="mx-auto max-h-56 max-w-full" />
-            <div className="space-y-2"><label className={labelClass} htmlFor="manual-key">{t('userSettings.totp.dialog.manualKeyLabel')}</label><div className="flex gap-2"><Input id="manual-key" readOnly value={enrollment.secret} className="font-mono" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" onClick={() => navigator.clipboard.writeText(enrollment.secret).then(() => toast.success(t('userSettings.notifications.setupKeyCopied')))}>{t('common.actions.copy')}</Button></div></div>
+            <div className="space-y-2"><label className={labelClass} htmlFor="manual-key">{t('userSettings.totp.dialog.manualKeyLabel')}</label><div className="flex gap-2"><Input id="manual-key" readOnly value={enrollment.secret} className="font-mono" /><Button type="button" variant="secondary" onClick={() => copyText(enrollment.secret, t('userSettings.notifications.setupKeyCopied'))}>{t('common.actions.copy')}</Button></div></div>
             <div className="space-y-2"><label className={labelClass} htmlFor="totp-code">{t('userSettings.totp.dialog.codeLabel')}</label><Input id="totp-code" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" required value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))} /></div>
           </form> : <form id="totp-begin" className="space-y-4" onSubmit={beginTotp}>
             <div className="space-y-2"><label className={labelClass} htmlFor="totp-password">{t('userSettings.credentials.currentPassword')}</label><Input id="totp-password" type="password" autoComplete="current-password" required value={totpPassword} onChange={(event) => setTotpPassword(event.target.value)} /></div>
