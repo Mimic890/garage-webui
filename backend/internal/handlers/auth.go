@@ -237,11 +237,12 @@ func (h *AuthHandler) sessionCookieSecure() bool {
 }
 
 // SessionCookieSecure reports whether the session cookie should carry the
-// Secure flag.  An explicit HTTP root_url disables Secure so the cookie
-// works over plain HTTP; otherwise the OIDC CookieSecure setting applies.
+// Secure flag.  An explicit HTTP root_url (or a missing root_url) disables
+// Secure so the cookie works over plain HTTP; HTTPS deployments should set
+// root_url to https://... so the OIDC CookieSecure setting applies.
 func SessionCookieSecure(cfg *config.Config) bool {
 	root, err := url.Parse(cfg.Server.RootURL)
-	if err == nil && root.Scheme == "http" {
+	if err == nil && (root.Scheme == "http" || root.Scheme == "") {
 		return false
 	}
 	return cfg.Auth.OIDC.CookieSecure

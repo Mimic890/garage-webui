@@ -29,6 +29,7 @@ import { translate } from '@/lib/i18n';
 
 const api = axios.create({
   baseURL: '/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -37,6 +38,7 @@ const api = axios.create({
 // Separate axios instance for auth endpoints (which are not under /api)
 const authApiClient = axios.create({
   baseURL: '/auth',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
