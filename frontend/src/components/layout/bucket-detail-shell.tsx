@@ -6,9 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useBuckets } from '@/hooks/useApi';
 import { useBucketCan } from '@/hooks/usePermissions';
-import { toast } from 'sonner';
 import { useTranslation } from '@/lib/i18n';
 import { formatBytes } from '@/lib/file-utils';
+import { copyText } from '@/lib/clipboard';
 
 interface TabSpec {
   to: string;
@@ -48,20 +48,8 @@ export function BucketDetailShell() {
   }
 
   const s3Url = `s3://${bucketName}`;
-  const copyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(s3Url);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = s3Url;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    }
-    toast.success(t('buckets.toast.url_copied'));
+  const copyUrl = () => {
+    copyText(s3Url, t('buckets.toast.url_copied'));
   };
 
   return (

@@ -37,6 +37,7 @@ import {dateTimeInputToIso, dateTimeInputValue} from '@/lib/utils';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Check, Copy, Database, Edit, Eye, EyeOff, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
 import {toast} from 'sonner';
+import { copyText } from '@/lib/clipboard';
 
 function CredentialField({
   label,
@@ -58,22 +59,8 @@ function CredentialField({
   const [revealed, setRevealed] = useState(!maskable);
   const copy = async () => {
     if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      toast.success(t('access_control.credential_copied').replace('{{credential}}', label));
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = value;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCopied(true);
-      toast.success(t('access_control.credential_copied').replace('{{credential}}', label));
-    }
+    copyText(value, t('access_control.credential_copied').replace('{{credential}}', label));
+    setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   };
   const display = loading ? '' : revealed || !maskable ? value : '•'.repeat(Math.min(40, value.length || 40));
@@ -584,19 +571,7 @@ export function AccessControl() {
                               className="text-xs bg-muted px-2 py-1 rounded truncate max-w-[150px] block cursor-pointer hover:bg-muted/80 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigator.clipboard.writeText(key.accessKeyId).then(() => {
-                                   toast.success(t('access_control.access_key_id_copied'));
-                                }).catch(() => {
-                                  const ta = document.createElement('textarea');
-                                  ta.value = key.accessKeyId;
-                                  ta.style.position = 'fixed';
-                                  ta.style.opacity = '0';
-                                  document.body.appendChild(ta);
-                                  ta.select();
-                                  document.execCommand('copy');
-                                  document.body.removeChild(ta);
-                                   toast.success(t('access_control.access_key_id_copied'));
-                                });
+                                copyText(key.accessKeyId, t('access_control.access_key_id_copied'));
                               }}
                             >
                               {key.accessKeyId}
@@ -607,19 +582,7 @@ export function AccessControl() {
                               className="h-6 w-6 flex-shrink-0"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigator.clipboard.writeText(key.accessKeyId).then(() => {
-                                   toast.success(t('access_control.access_key_id_copied'));
-                                }).catch(() => {
-                                  const ta = document.createElement('textarea');
-                                  ta.value = key.accessKeyId;
-                                  ta.style.position = 'fixed';
-                                  ta.style.opacity = '0';
-                                  document.body.appendChild(ta);
-                                  ta.select();
-                                  document.execCommand('copy');
-                                  document.body.removeChild(ta);
-                                   toast.success(t('access_control.access_key_id_copied'));
-                                });
+                                copyText(key.accessKeyId, t('access_control.access_key_id_copied'));
                               }}
                             >
                               <Copy className="h-3 w-3" />
