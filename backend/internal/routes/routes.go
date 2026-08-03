@@ -289,7 +289,7 @@ func SetupRoutes(
 						"error": "Failed to generate login URL",
 					})
 				}
-				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: browserState, Path: "/auth/oidc", MaxAge: 600, Secure: cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
+				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: browserState, Path: "/auth/oidc", MaxAge: 600, Secure: handlers.SessionCookieSecure(cfg), HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
 				return c.Redirect().To(authURL)
 			})
 
@@ -303,7 +303,7 @@ func SetupRoutes(
 						"error": "Invalid or expired state token",
 					})
 				}
-				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: "", Path: "/auth/oidc", MaxAge: -1, Secure: cfg.Auth.OIDC.CookieSecure, HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
+				c.Cookie(&fiber.Cookie{Name: "oidc_state", Value: "", Path: "/auth/oidc", MaxAge: -1, Secure: handlers.SessionCookieSecure(cfg), HTTPOnly: true, SameSite: cfg.Auth.OIDC.CookieSameSite})
 
 				// Get authorization code from query
 				code := c.Query("code")
@@ -405,7 +405,7 @@ func SetupRoutes(
 					Value:    sessionToken,
 					Path:     "/",
 					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
-					Secure:   cfg.Auth.OIDC.CookieSecure,
+					Secure:   handlers.SessionCookieSecure(cfg),
 					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,
 					SameSite: cfg.Auth.OIDC.CookieSameSite,
 				})
@@ -418,10 +418,13 @@ func SetupRoutes(
 			oidcRoutes.Post("/logout", func(c fiber.Ctx) error {
 				// Clear session cookie
 				c.Cookie(&fiber.Cookie{
-					Name:   cfg.Auth.OIDC.CookieName,
-					Value:  "",
-					Path:   "/",
-					MaxAge: -1,
+					Name:     cfg.Auth.OIDC.CookieName,
+					Value:    "",
+					Path:     "/",
+					MaxAge:   -1,
+					Secure:   handlers.SessionCookieSecure(cfg),
+					HTTPOnly: true,
+					SameSite: cfg.Auth.OIDC.CookieSameSite,
 				})
 
 				return c.JSON(fiber.Map{
