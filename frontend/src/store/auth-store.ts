@@ -81,20 +81,29 @@ export const useAuthStore = create<AuthStore>()(
               isLoading: false
             });
           } catch {
-            // Not authenticated - this is okay
-            set({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false
-            });
+            // Not authenticated - this is okay, but don't clobber a login
+            // that happened while we were still checking.
+            if (!useAuthStore.getState().isAuthenticated) {
+              set({
+                user: null,
+                isAuthenticated: false,
+                isLoading: false
+              });
+            } else {
+              set({ isLoading: false });
+            }
           }
         } catch (error) {
           console.error('Failed to initialize auth:', error);
-          set({
-            error: translate('auth.errors.initializeFailed'),
-            isLoading: false,
-            isAuthenticated: false
-          });
+          if (!useAuthStore.getState().isAuthenticated) {
+            set({
+              error: translate('auth.errors.initializeFailed'),
+              isLoading: false,
+              isAuthenticated: false
+            });
+          } else {
+            set({ error: translate('auth.errors.initializeFailed'), isLoading: false });
+          }
         }
       },
 
