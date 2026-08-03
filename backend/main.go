@@ -176,6 +176,10 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to initialize auth service")
 	}
+	logger.Info().
+		Str("root_url", cfg.Server.RootURL).
+		Bool("session_cookie_secure", handlers.SessionCookieSecure(cfg)).
+		Msg("Session cookie configuration")
 
 	policy, err := authz.CompilePolicy(cfg.AccessControl)
 	if err != nil {

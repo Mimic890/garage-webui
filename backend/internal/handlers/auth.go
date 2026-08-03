@@ -233,11 +233,18 @@ func (h *AuthHandler) setSessionCookie(c fiber.Ctx, token string) {
 }
 
 func (h *AuthHandler) sessionCookieSecure() bool {
-	root, err := url.Parse(h.cfg.Server.RootURL)
+	return SessionCookieSecure(h.cfg)
+}
+
+// SessionCookieSecure reports whether the session cookie should carry the
+// Secure flag.  An explicit HTTP root_url disables Secure so the cookie
+// works over plain HTTP; otherwise the OIDC CookieSecure setting applies.
+func SessionCookieSecure(cfg *config.Config) bool {
+	root, err := url.Parse(cfg.Server.RootURL)
 	if err == nil && root.Scheme == "http" {
 		return false
 	}
-	return h.cfg.Auth.OIDC.CookieSecure
+	return cfg.Auth.OIDC.CookieSecure
 }
 
 // GetMe returns the current authenticated user's information
