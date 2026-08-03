@@ -10,6 +10,5 @@ export function useCapabilities() {
     queryFn: () => capabilitiesApi.get(),
     staleTime: Infinity,
     gcTime: Infinity,
-    enabled: !!activeClusterId,
   });
 }
