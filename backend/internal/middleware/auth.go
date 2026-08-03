@@ -82,6 +82,7 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service, stateMana
 		if cookieName == "" {
 			cookieName = "garage_session"
 		}
+		failureReason := "no_valid_credentials"
 		if sessionCookie := c.Cookies(cookieName); sessionCookie != "" {
 			userInfo, err := authService.ValidateSessionToken(sessionCookie)
 			if err == nil && validSecurityVersion(userInfo, stateManager) {
@@ -98,12 +99,17 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service, stateMana
 				enrichRequestLogger(c, userInfo.Username, authMethod)
 				return c.Next()
 			}
+			if err != nil {
+				failureReason = "invalid_session_token"
+			} else {
+				failureReason = "security_version_mismatch"
+			}
 		}
 
 		// Auth failed — log at warn without exposing token material.
 		logpkg.FromCtx(c.Context()).Warn().
 			Str("auth_method", authMethodsEnabled(cfg)).
-			Str("reason", "no_valid_credentials").
+			Str("reason", failureReason).
 			Msg("authentication_failed")
 
 		return c.Status(fiber.StatusUnauthorized).JSON(
