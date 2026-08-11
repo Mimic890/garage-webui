@@ -9,6 +9,16 @@ import { Server, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from '@/lib/i18n';
 
+const initialFormData = {
+  name: '',
+  endpoint: '',
+  region: 'us-east-1',
+  admin_endpoint: '',
+  admin_token: '',
+  use_ssl: true,
+  force_path_style: true,
+};
+
 export function Connections() {
   const { clusters, activeClusterId, setActiveCluster, addCluster, deleteCluster } = useClusterStore();
   const { t } = useTranslation();
@@ -22,15 +32,15 @@ export function Connections() {
     }
   }, [location.state]);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    endpoint: '',
-    region: 'us-east-1',
-    admin_endpoint: '',
-    admin_token: '',
-    use_ssl: true,
-    force_path_style: true,
-  });
+  const [formData, setFormData] = useState(initialFormData);
+
+  // Reset the form to defaults each time the user opens the add panel.
+  // On a failed submit we deliberately do NOT clear it so the user can correct the values.
+  useEffect(() => {
+    if (isAdding) {
+      setFormData(initialFormData);
+    }
+  }, [isAdding]);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,15 +48,6 @@ export function Connections() {
       await addCluster(formData);
       toast.success(t('connections.notifications.added'));
       setIsAdding(false);
-      setFormData({
-        name: '',
-        endpoint: '',
-        region: 'us-east-1',
-        admin_endpoint: '',
-        admin_token: '',
-        use_ssl: true,
-        force_path_style: true,
-      });
     } catch {
       toast.error(t('connections.errors.addFailed'));
     }
