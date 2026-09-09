@@ -148,9 +148,15 @@ func main() {
 				AdminEndpoint: garageAdminEndpoint,
 				AdminToken:    adminToken,
 			}
-			if err := state.ValidateClusterEndpointsAllowlist(cfg.Server.ClusterEndpointAllowlist, cluster.Endpoint, cluster.AdminEndpoint); err != nil {
-				logger.Fatal().Err(err).Msg("Refusing unsafe auto-provisioned cluster endpoint")
-			}
+			// No SSRF allowlist check here: these endpoints come from the
+			// operator's own deploy-time environment (the same trust level as
+			// GARAGE_UI_GARAGE_ADMIN_TOKEN), not from an HTTP request. The
+			// allowlist in state.ValidateClusterEndpointsAllowlist exists to
+			// stop a runtime, HTTP-reachable actor (the "Add Cluster" panel
+			// API, handlers.PanelHandler.AddCluster) from pivoting to internal
+			// services — it would otherwise also reject the common
+			// docker-compose deployment where Garage runs on the same private
+			// network as this container (see docker-compose.example.yml).
 			if err := stateManager.AddCluster(cluster); err != nil {
 				logger.Fatal().Err(err).Msg("Failed to save auto-provisioned cluster")
 			}
