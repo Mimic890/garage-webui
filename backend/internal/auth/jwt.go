@@ -105,10 +105,6 @@ func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, er
 		ed25519.PrivateKeySize, len(block.Bytes))
 }
 
-func (j *JWTService) GenerateStateToken() (string, error) {
-	return j.GenerateStateTokenForBinding("")
-}
-
 func (j *JWTService) GenerateStateTokenForBinding(binding string) (string, error) {
 	return j.generateState(binding, "", "")
 }
@@ -148,10 +144,6 @@ func (j *JWTService) generateState(binding, verifier, nonce string) (string, err
 	go j.cleanupExpiredStates()
 
 	return token, nil
-}
-
-func (j *JWTService) ValidateAndConsumeState(token string) bool {
-	return j.ValidateAndConsumeStateForBinding(token, "")
 }
 
 func (j *JWTService) ValidateAndConsumeStateForBinding(token, binding string) bool {
@@ -263,30 +255,4 @@ func (j *JWTService) ValidateToken(tokenString string) (*SessionClaims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
-func (j *JWTService) GetPublicKeyPEM() (string, error) {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
 
-	if j.publicKey == nil {
-		return "", fmt.Errorf("public key not initialized")
-	}
-
-	pubKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: []byte(j.publicKey),
-	})
-
-	return string(pubKeyPEM), nil
-}
-
-// GetPublicKeyBase64 returns the base64url-encoded public key for JWKS
-func (j *JWTService) GetPublicKeyBase64() (string, error) {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
-
-	if j.publicKey == nil {
-		return "", fmt.Errorf("public key not initialized")
-	}
-
-	return base64.RawURLEncoding.EncodeToString(j.publicKey), nil
-}

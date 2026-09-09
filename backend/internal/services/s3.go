@@ -77,18 +77,26 @@ func (op Operation) satisfies(perms models.BucketKeyPermission) bool {
 	return true
 }
 
+// credsCacheKeyPrefix identifies credential-cache entries (see
+// getBucketCredentials/setKeyInCache) so invalidation can drop only those
+// entries without also evicting unrelated cache users such as
+// adminHTTP.cachedBucketInfo's "bucketinfo:" entries.
+const credsCacheKeyPrefix = "key:"
+
 // InvalidateBucketCredsCache removes all cached S3 credentials for a bucket.
 // Call this after granting/revoking bucket permissions or deleting a key.
 func InvalidateBucketCredsCache(bucketName string) {
-	// Cache keys include cluster identity; without a service handle, clearing is
-	// the only safe invalidation and is preferable to leaving stale credentials.
-	utils.GlobalCache.Clear()
+	// Cache keys include cluster identity; without a service handle, clearing
+	// every credential entry is the only safe invalidation and is preferable
+	// to leaving stale credentials. It is scoped to the credentials prefix so
+	// it doesn't also wipe the unrelated bucketInfo cache.
+	ClearAllCredsCache()
 }
 
 // ClearAllCredsCache wipes the entire credentials cache. Use when a key is
 // deleted or modified, since we can't know which buckets it had access to.
 func ClearAllCredsCache() {
-	utils.GlobalCache.Clear()
+	utils.GlobalCache.ClearPrefix(credsCacheKeyPrefix)
 }
 
 func setKeyInCache(scope, bucketName string, permissions models.BucketKeyPermission, creds *credentials.Credentials) {
@@ -124,6 +132,12 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket info: %w", err)
 	}
+	if bucketInfo == nil {
+		// GetBucketInfoByAlias returns (nil, nil) when the bucket does not
+		// exist or was removed; a concurrent bucket deletion racing an S3
+		// operation would otherwise panic on bucketInfo.Keys below.
+		return nil, fmt.Errorf("bucket %s not found or was removed", bucketName)
+	}
 
 	for _, keyInfo := range bucketInfo.Keys {
 		if !op.satisfies(keyInfo.Permissions) {
@@ -134,6 +148,11 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string,
 			continue
 		}
 		creds := credentials.NewStaticV4(keyDetails.AccessKeyID, *keyDetails.SecretAccessKey, "")
+		// GetWithContext takes MinIO's credential-retrieval context
+		// (*credentials.CredContext), which is built by the MinIO client and is
+		// unrelated to the fiber request ctx parameter — it cannot be passed
+		// here. Static V4 credentials perform no network I/O on retrieval, so
+		// there is no request to cancel or time out; nil is safe.
 		if _, err := creds.GetWithContext(nil); err != nil {
 			continue
 		}
@@ -612,22 +631,19 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	return deleted, nil
 }
 
-// DeleteObjectsByPrefix recursively deletes every object stored under the given
-// prefix (i.e. a "folder"), including the directory marker itself. It returns
-// the number of objects that were deleted.
-func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefix string) (int, error) {
-	if prefix == "" {
-		return 0, fmt.Errorf("prefix is required for recursive delete")
-	}
-
+// deleteObjectsRecursive is the shared implementation behind
+// DeleteObjectsByPrefix and DeleteAllObjects. A non-empty prefix lists only
+// the objects (and incomplete uploads) under that subtree; an empty prefix
+// means "the whole bucket".
+func (s *S3Service) deleteObjectsRecursive(ctx context.Context, bucketName, prefix string) (int, error) {
 	// Get bucket-specific MinIO client
 	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// List every object under the prefix recursively (no delimiter), so nested
-	// folders are flattened into their concrete keys.
+	// List every object recursively (no delimiter), so nested folders are
+	// flattened into their concrete keys.
 	keys := make([]string, 0, 1000)
 	deleted := 0
 	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
@@ -635,6 +651,9 @@ func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefi
 		Recursive: true,
 	}) {
 		if obj.Err != nil {
+			if prefix == "" {
+				return 0, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, obj.Err)
+			}
 			return 0, fmt.Errorf("failed to list objects under prefix %s in bucket %s: %w", prefix, bucketName, obj.Err)
 		}
 		keys = append(keys, obj.Key)
@@ -666,49 +685,20 @@ func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefi
 	return deleted, nil
 }
 
+// DeleteObjectsByPrefix recursively deletes every object stored under the given
+// prefix (i.e. a "folder"), including the directory marker itself. It returns
+// the number of objects that were deleted.
+func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefix string) (int, error) {
+	if prefix == "" {
+		return 0, fmt.Errorf("prefix is required for recursive delete")
+	}
+	return s.deleteObjectsRecursive(ctx, bucketName, prefix)
+}
+
 // DeleteAllObjects deletes every object in a bucket and returns the count of
 // deleted objects. This is used to empty a bucket before deletion.
 func (s *S3Service) DeleteAllObjects(ctx context.Context, bucketName string) (int, error) {
-	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
-	}
-
-	keys := make([]string, 0, 1000)
-	deleted := 0
-	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
-		Recursive: true,
-	}) {
-		if obj.Err != nil {
-			return 0, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, obj.Err)
-		}
-		keys = append(keys, obj.Key)
-		if len(keys) == 1000 {
-			n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
-			deleted += n
-			if err != nil {
-				return deleted, err
-			}
-			keys = keys[:0]
-		}
-	}
-
-	if len(keys) > 0 {
-		n, err := s.DeleteMultipleObjects(ctx, bucketName, keys)
-		deleted += n
-		if err != nil {
-			return deleted, err
-		}
-	}
-	for upload := range client.ListIncompleteUploads(ctx, bucketName, "", true) {
-		if upload.Err != nil {
-			return deleted, upload.Err
-		}
-		if err := client.RemoveIncompleteUpload(ctx, bucketName, upload.Key); err != nil {
-			return deleted, err
-		}
-	}
-	return deleted, nil
+	return s.deleteObjectsRecursive(ctx, bucketName, "")
 }
 
 // GetPresignedURL generates a pre-signed URL for temporary access to an object

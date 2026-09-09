@@ -113,10 +113,48 @@ func TestAddRemoveCluster(t *testing.T) {
 func TestValidateClusterEndpointsRejectsUnsafeTargets(t *testing.T) {
 	for _, endpoint := range []string{
 		"file:///etc/passwd", "http://user:pass@example.com", "http://127.0.0.1:3900", "http://169.254.169.254/latest",
+		// RFC 1918 / private ranges are rejected by default (SSRF hardening).
+		"http://10.1.2.3:3900", "http://172.16.4.5:3900", "http://192.168.1.10:3900",
 	} {
 		if err := ValidateClusterEndpoints(endpoint); err == nil {
 			t.Errorf("ValidateClusterEndpoints(%q) accepted unsafe endpoint", endpoint)
 		}
+	}
+}
+
+func TestValidateClusterEndpointsAllowlistAllowsPrivateWhenOptedIn(t *testing.T) {
+	// The whole RFC 1918 space is opted in, so private targets are acceptable.
+	if err := ValidateClusterEndpointsAllowlist(
+		[]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+		"http://192.168.5.20:3900",
+	); err != nil {
+		t.Errorf("allowlisted private endpoint rejected: %v", err)
+	}
+}
+
+func TestValidateClusterEndpointsAllowlistRejectsPrivateOutsideAllowlist(t *testing.T) {
+	// A narrow /32 allowlist must not permit a sibling private address.
+	err := ValidateClusterEndpointsAllowlist(
+		[]string{"192.168.5.20"}, // single host only
+		"http://192.168.5.21:3900",
+	)
+	if err == nil {
+		t.Error("private endpoint outside the allowlist was accepted")
+	}
+}
+
+func TestValidateClusterEndpointsAllowlistAlwaysRejectsLoopbackAndMetadata(t *testing.T) {
+	// Loopback / metadata must stay blocked even when explicitly allowlisted.
+	for _, endpoint := range []string{"http://127.0.0.1:3900", "http://169.254.169.254/latest"} {
+		if err := ValidateClusterEndpointsAllowlist([]string{"127.0.0.0/8", "0.0.0.0/0"}, endpoint); err == nil {
+			t.Errorf("ValidateClusterEndpointsAllowlist(%q) accepted always-blocked target", endpoint)
+		}
+	}
+}
+
+func TestValidateClusterEndpointsAllowlistRejectsMalformedEntry(t *testing.T) {
+	if err := ValidateClusterEndpointsAllowlist([]string{"not-a-cidr"}, "http://example.com:3900"); err == nil {
+		t.Error("malformed allowlist entry accepted instead of erroring")
 	}
 }
 

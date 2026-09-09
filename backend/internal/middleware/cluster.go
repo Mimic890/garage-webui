@@ -14,7 +14,11 @@ import (
 // ClusterMiddleware extracts the X-Cluster-Id header, finds the corresponding
 // cluster in the state manager, and injects the AdminService and S3Service
 // into the request's context for downstream handlers to use.
-func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
+//
+// logLevel/environment are forwarded to the Admin API client so AzureTLS'
+// debug session logging (raw request/response dumps) stays disabled when the
+// application runs in production.
+func ClusterMiddleware(stateManager *state.Manager, logLevel, environment string) fiber.Handler {
 	type cachedServices struct {
 		config state.ClusterConfig
 		admin  *services.AdminServiceResult
@@ -56,7 +60,7 @@ func ClusterMiddleware(stateManager *state.Manager) fiber.Handler {
 		cached, ok := cache[clusterID]
 		mu.RUnlock()
 		if !ok || cached.config != cfg {
-			adminResult, err := services.NewAdminService(&cfg, "debug")
+			adminResult, err := services.NewAdminService(&cfg, logLevel, environment)
 			if err != nil {
 				log.Error().Err(err).Str("cluster_id", clusterID).Msg("Failed to connect to cluster admin API")
 				return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{

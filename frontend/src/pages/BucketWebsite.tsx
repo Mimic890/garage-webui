@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Globe } from 'lucide-react';
 import { useBuckets } from '@/hooks/useApi';
 import { bucketsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -65,7 +66,7 @@ export function BucketWebsite() {
         indexDocument: enabled ? indexDocument : undefined,
         errorDocument: enabled && errorDocument ? errorDocument : undefined,
       });
-      await queryClient.invalidateQueries({ queryKey: ['buckets'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
       toast.success(disabling ? t('buckets.website.toast.disabled') : t('buckets.website.toast.updated'));
     } catch {
       // error toast handled by axios interceptor

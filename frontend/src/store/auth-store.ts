@@ -202,9 +202,6 @@ export const useAuthStore = create<AuthStore>()(
           console.error('Logout API call failed:', error);
         }
 
-        // Clear local storage
-        localStorage.removeItem('auth-token');
-
         // Clear state
         set({
           user: null,

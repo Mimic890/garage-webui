@@ -62,6 +62,7 @@
   "access_control.permissions_dialog_title": "Permissions for {{name}}",
   "access_control.permissions_granted_success": "Permissions for {{bucket}} saved",
   "access_control.permissions_label": "Permissions",
+  "access_control.reveal_secret_action": "Reveal secret key",
   "access_control.reveal_secret_aria": "Reveal secret key",
   "access_control.save_key_warning_description": "Store the secret key securely before closing this dialog.",
   "access_control.save_key_warning_title": "Save this key now",

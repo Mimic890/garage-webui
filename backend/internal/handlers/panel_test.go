@@ -12,7 +12,7 @@ import (
 func TestSetupPanelAllowsFirstRunSetupInProduction(t *testing.T) {
 	body := []byte(`{"nickname":"admin","password":"long-password"}`)
 	app := fiber.New()
-	app.Post("/setup", NewPanelHandler(newTestStateManager(t, "", "")).SetupPanel)
+	app.Post("/setup", NewPanelHandler(newTestStateManager(t, "", ""), nil).SetupPanel)
 	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/setup", bytes.NewReader(body)))
 	if err != nil {
 		t.Fatalf("request: %v", err)

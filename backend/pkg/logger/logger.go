@@ -100,20 +100,6 @@ func Fatal() *zerolog.Event {
 	return Get().Fatal()
 }
 
-// WithContext creates a new logger with additional context fields
-func (l *Logger) WithContext(fields map[string]interface{}) *Logger {
-	ctx := l.Logger.With()
-	for k, v := range fields {
-		ctx = ctx.Interface(k, v)
-	}
-	return &Logger{ctx.Logger()}
-}
-
-// WithComponent creates a logger with a component field
-func WithComponent(component string) *Logger {
-	return &Logger{Get().With().Str("component", component).Logger()}
-}
-
 // WithError creates a logger with an error field
 func WithError(err error) *zerolog.Event {
 	return Get().Error().Err(err)

@@ -416,11 +416,6 @@ func extractStringArray(value interface{}) []string {
 	return nil
 }
 
-// GenerateStateToken generates a secure CSRF state token
-func (a *Service) GenerateStateToken() (string, error) {
-	return a.jwtService.GenerateStateToken()
-}
-
 func (a *Service) GenerateStateTokenForBinding(binding string) (string, error) {
 	return a.jwtService.GenerateStateTokenForBinding(binding)
 }
@@ -430,10 +425,6 @@ func (a *Service) GenerateOIDCState(binding, verifier, nonce string) (string, er
 }
 
 // ValidateAndConsumeState validates and consumes a CSRF state token
-func (a *Service) ValidateAndConsumeState(token string) bool {
-	return a.jwtService.ValidateAndConsumeState(token)
-}
-
 func (a *Service) ValidateAndConsumeStateForBinding(token, binding string) bool {
 	return a.jwtService.ValidateAndConsumeStateForBinding(token, binding)
 }

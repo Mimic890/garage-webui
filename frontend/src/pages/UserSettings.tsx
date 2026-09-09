@@ -21,7 +21,13 @@ import { copyText } from '@/lib/clipboard';
 
 const labelClass = 'text-sm font-medium';
 
-function message(_error: unknown, fallback: string) {
+function message(error: unknown, fallback: string) {
+  if (error && typeof error === 'object') {
+    const serverError = (error as { response?: { data?: { error?: { message?: unknown } } } }).response?.data?.error;
+    if (serverError && typeof serverError.message === 'string' && serverError.message.trim()) {
+      return serverError.message;
+    }
+  }
   return fallback;
 }
 

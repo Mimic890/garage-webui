@@ -284,10 +284,29 @@ func (m *Manager) UpdateCluster(c ClusterConfig) error {
 	return nil
 }
 
-// ValidateClusterEndpoints rejects control-plane targets that could reach
-// local or cloud metadata services. DNS is resolved before persistence so a
-// hostname cannot bypass the IP checks.
+// ValidateClusterEndpoints is the strict default validator: it rejects any
+// control-plane target that could reach a local, link-local, metadata, or
+// private (RFC 1918 / unique-local) address. See ValidateClusterEndpointsAllowlist
+// for a variant that lets self-hosted deployments opt into private ranges.
 func ValidateClusterEndpoints(endpoints ...string) error {
+	return ValidateClusterEndpointsAllowlist(nil, endpoints...)
+}
+
+// ValidateClusterEndpointsAllowlist rejects control-plane targets that could
+// reach local, link-local, or cloud metadata services. DNS is resolved before
+// persistence so a hostname cannot bypass the IP checks.
+//
+// In addition to those always-blocked ranges, private address space
+// (net.IP.IsPrivate: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 and fc00::/7)
+// is rejected unless the operator explicitly lists the IP/CIDR in
+// allowlistCIDRs. This keeps the default fail-closed for cloud metadata /
+// internal pivoting while permitting legitimate self-hosted clusters that
+// deliberately run on a private network.
+func ValidateClusterEndpointsAllowlist(allowlistCIDRs []string, endpoints ...string) error {
+	allowlist, err := parseIPAllowlist(allowlistCIDRs)
+	if err != nil {
+		return err
+	}
 	for _, raw := range endpoints {
 		if !strings.Contains(raw, "://") {
 			raw = "http://" + raw
@@ -306,12 +325,59 @@ func ValidateClusterEndpoints(endpoints ...string) error {
 			return fmt.Errorf("cluster endpoint host could not be resolved")
 		}
 		for _, ip := range ips {
-			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.String() == "169.254.169.254" {
-				return fmt.Errorf("cluster endpoint targets a local or metadata address")
+			if isBlockedClusterTarget(ip, allowlist) {
+				return fmt.Errorf("cluster endpoint targets a local, private, or metadata address")
 			}
 		}
 	}
 	return nil
+}
+
+// isBlockedClusterTarget reports whether ip is a target the control plane
+// should never reach. Loopback, link-local, and cloud metadata addresses are
+// always blocked (they cannot be legitimated by configuration). Private ranges
+// are blocked only when they do not match an entry in allowlist.
+func isBlockedClusterTarget(ip net.IP, allowlist []*net.IPNet) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsMulticast() || ip.IsUnspecified() || ip.String() == "169.254.169.254" {
+		return true
+	}
+	if !ip.IsPrivate() {
+		return false // public IP — never a local/metadata target
+	}
+	for _, cidr := range allowlist {
+		if cidr.Contains(ip) {
+			return false // operator explicitly opted into this private range
+		}
+	}
+	return true
+}
+
+// parseIPAllowlist parses CIDR or bare-IP entries into *net.IPNet. A bare IP is
+// treated as a single-host /32 or /128 network. An unparsable entry is a hard
+// error so a typo can never silently widen or leak policy.
+func parseIPAllowlist(entries []string) ([]*net.IPNet, error) {
+	var out []*net.IPNet
+	for _, raw := range entries {
+		entry := strings.TrimSpace(raw)
+		if entry == "" {
+			continue
+		}
+		if ip := net.ParseIP(entry); ip != nil {
+			bits := 128
+			if ip.To4() != nil {
+				bits = 32
+			}
+			out = append(out, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("invalid cluster endpoint allowlist entry %q: %v", entry, err)
+		}
+		out = append(out, ipNet)
+	}
+	return out, nil
 }
 
 func (m *Manager) GetCluster(id string) (ClusterConfig, bool) {

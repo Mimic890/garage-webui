@@ -40,33 +40,94 @@ func CSRFOrigin(rootURL string, cookieNames ...string) fiber.Handler {
 		}
 		authCookie := c.Cookies("garage_session")
 		for _, name := range cookieNames {
-			if name != "" {
-				authCookie = c.Cookies(name)
+			if name == "" {
+				continue
+			}
+			if v := c.Cookies(name); v != "" {
+				authCookie = v
 				break
 			}
 		}
 		if authCookie == "" {
 			return c.Next()
 		}
-		origin := c.Get("Origin")
-		if origin == "" {
+
+		// Validate EVERY Origin value the request carries, not just the first.
+		// Some reverse proxies forward duplicate Origin headers or join them
+		// into a single comma-separated value; checking only one entry could let
+		// an attacker slip a hostile value past the check. If any value is
+		// missing or does not exactly match the expected origin, reject the
+		// request.
+		origins := allHeaderValues(c, "Origin")
+		if len(origins) == 0 {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "origin required"})
 		}
-		o, err := url.Parse(origin)
 		r, rerr := url.Parse(rootURL)
-		if err != nil || rerr != nil || o.Scheme != r.Scheme || !strings.EqualFold(o.Host, r.Host) {
+		if rerr != nil {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "origin rejected"})
+		}
+		for _, origin := range origins {
+			o, err := url.Parse(origin)
+			if err != nil || o.Scheme != r.Scheme || !strings.EqualFold(o.Host, r.Host) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "origin rejected"})
+			}
 		}
 		return c.Next()
 	}
 }
 
+// allHeaderValues returns every value for the given canonical header key,
+// including each element of a comma-joined value. Header keys are matched
+// case-insensitively to be robust to non-canonical proxy-rewritten headers.
+func allHeaderValues(c fiber.Ctx, key string) []string {
+	var out []string
+	for k, vals := range c.GetReqHeaders() {
+		if !strings.EqualFold(k, key) {
+			continue
+		}
+		for _, v := range vals {
+			for _, part := range strings.Split(v, ",") {
+				if part = strings.TrimSpace(part); part != "" {
+					out = append(out, part)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// RateLimit enforces a sliding-window limit per client IP. The per-key
+// timestamp lists are naturally bounded by max, but entries whose timestamps
+// have all slid out of the window would otherwise linger forever, leaking
+// memory proportional to the number of distinct clients ever seen. A sweep
+// triggered once the key count reaches rateLimitMaxKeys reclaims every key
+// with no request newer than the window, so the map stays bounded while a
+// slammed endpoint still admits its burst between sweeps.
 func RateLimit(max int, window time.Duration) fiber.Handler {
+	rateLimitMaxKeys := 10_000
 	var mu sync.Mutex
 	seen := map[string][]time.Time{}
 	return func(c fiber.Ctx) error {
 		now, key := time.Now(), c.IP()
 		mu.Lock()
+		if len(seen) >= rateLimitMaxKeys {
+			var stale []string
+			for k, hits := range seen {
+				var alive bool
+				for _, at := range hits {
+					if now.Sub(at) < window {
+						alive = true
+						break
+					}
+				}
+				if !alive {
+					stale = append(stale, k)
+				}
+			}
+			for _, k := range stale {
+				delete(seen, k)
+			}
+		}
 		items := seen[key][:0]
 		for _, at := range seen[key] {
 			if now.Sub(at) < window {

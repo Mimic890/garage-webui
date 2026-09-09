@@ -435,9 +435,9 @@ func TestRoutes_Registered_OIDCOnly(t *testing.T) {
 // oidcState returns a fresh state token minted by the fixture's auth service.
 func oidcState(t *testing.T, f *routeFixture) string {
 	t.Helper()
-	s, err := f.Auth.GenerateStateToken()
+	s, err := f.Auth.GenerateStateTokenForBinding("")
 	if err != nil {
-		t.Fatalf("GenerateStateToken: %v", err)
+		t.Fatalf("GenerateStateTokenForBinding: %v", err)
 	}
 	return s
 }
