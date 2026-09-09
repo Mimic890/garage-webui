@@ -66,7 +66,7 @@ func adminBackedS3(t *testing.T, handler http.Handler) (*S3Service, *httptest.Se
 	admin := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
-	}, "")
+	}, "", "test")
 	s3 := NewS3Service(&state.ClusterConfig{
 		Endpoint: "garage:3900",
 		Region:   "garage",
@@ -464,5 +464,27 @@ func TestGetBucketCredentials_AdminErrorPropagates(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to get bucket info") {
 		t.Errorf("expected wrapped 'failed to get bucket info' error, got %v", err)
+	}
+}
+
+// Regression test for the panic on a nil bucketInfo: when the bucket was
+// deleted (or never existed), GetBucketInfoByAlias returns (nil, nil) and
+// getBucketCredentials must fail with a clear error instead of dereferencing a
+// nil pointer racing a concurrent bucket removal.
+func TestGetBucketCredentials_BucketNotFound_ReturnsError(t *testing.T) {
+	bucket := uniqueBucket(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v2/GetBucketInfo", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	s3, _ := adminBackedS3(t, mux)
+
+	_, err := s3.getBucketCredentials(context.Background(), bucket, OpRead|OpWrite)
+	if err == nil {
+		t.Fatal("expected error for a non-existent/removed bucket, got nil")
+	}
+	if !strings.Contains(err.Error(), bucket) || !strings.Contains(err.Error(), "not found or was removed") {
+		t.Errorf("expected a clear 'bucket ... not found or was removed' error, got %v", err)
 	}
 }

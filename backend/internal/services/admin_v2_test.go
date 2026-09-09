@@ -25,7 +25,7 @@ func newAdminTestServer(t *testing.T, handler http.Handler) (*GarageV2AdminServi
 	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token-xyz",
-	}, "")
+	}, "", "test")
 	return svc, srv
 }
 
@@ -541,13 +541,44 @@ func TestAllMethods_Non2xxReturnsError(t *testing.T) {
 
 // TestDebugLogLevelEnablesSessionLog exercises the NewGarageV2AdminService
 // branch that enables azuretls' session logging when logLevel == "debug".
+// Session logging dumps raw request/response traffic (Authorization token,
+// secret keys), so the production environment must keep it disabled.
 func TestDebugLogLevelEnablesSessionLog(t *testing.T) {
 	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: "http://127.0.0.1:1",
 		AdminToken:    "t",
-	}, "debug")
-	if svc == nil || svc.httpClient == nil {
+	}, "debug", "development")
+	if svc == nil || svc.http.httpClient == nil {
 		t.Fatal("expected service with configured http client")
+	}
+	if !svc.http.sessionLogging {
+		t.Error("expected azuretls session logging enabled outside production when logLevel == debug")
+	}
+}
+
+func TestDebugLogLevelDisabledInProduction(t *testing.T) {
+	svc := NewGarageV2AdminService(&state.ClusterConfig{
+		AdminEndpoint: "http://127.0.0.1:1",
+		AdminToken:    "t",
+	}, "debug", "production")
+	if svc == nil || svc.http.httpClient == nil {
+		t.Fatal("expected service with configured http client")
+	}
+	if svc.http.sessionLogging {
+		t.Error("azuretls session logging must stay disabled in the production environment even with debug log level")
+	}
+}
+
+func TestNonDebugLogLevelKeepsSessionLoggingOff(t *testing.T) {
+	svc := NewGarageV2AdminService(&state.ClusterConfig{
+		AdminEndpoint: "http://127.0.0.1:1",
+		AdminToken:    "t",
+	}, "info", "development")
+	if svc == nil || svc.http.httpClient == nil {
+		t.Fatal("expected service with configured http client")
+	}
+	if svc.http.sessionLogging {
+		t.Error("azuretls session logging must stay disabled for non-debug log levels")
 	}
 }
 
@@ -564,7 +595,7 @@ func TestDoRequest_RetriesExhaustOnConnectionRefused(t *testing.T) {
 	svc := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: "http://" + addr,
 		AdminToken:    "irrelevant",
-	}, "")
+	}, "", "test")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -65,7 +65,7 @@ func newS3TestService(t *testing.T, s3Handler http.Handler) *S3Service {
 	admin := NewGarageV2AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test",
-	}, "")
+	}, "", "test")
 
 	// strip scheme for S3 endpoint (NewS3Service does this itself if http:// prefix)
 	s3 := NewS3Service(&state.ClusterConfig{

@@ -10,12 +10,17 @@ import (
 )
 
 type PanelHandler struct {
-	stateManager *state.Manager
+	stateManager      *state.Manager
+	endpointAllowlist []string
 }
 
-func NewPanelHandler(stateManager *state.Manager) *PanelHandler {
+// NewPanelHandler builds a PanelHandler. endpointAllowlist may be nil, in
+// which case ValidateClusterEndpointsAllowlist rejects private-range cluster
+// endpoints outright (no opt-in exceptions).
+func NewPanelHandler(stateManager *state.Manager, endpointAllowlist []string) *PanelHandler {
 	return &PanelHandler{
-		stateManager: stateManager,
+		stateManager:      stateManager,
+		endpointAllowlist: endpointAllowlist,
 	}
 }
 
@@ -92,7 +97,7 @@ func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
 	if req.Name == "" || req.Endpoint == "" || req.AdminEndpoint == "" || req.AdminToken == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
 	}
-	if err := state.ValidateClusterEndpoints(req.Endpoint, req.AdminEndpoint); err != nil {
+	if err := state.ValidateClusterEndpointsAllowlist(h.endpointAllowlist, req.Endpoint, req.AdminEndpoint); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, err.Error()))
 	}
 

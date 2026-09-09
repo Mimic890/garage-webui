@@ -148,7 +148,7 @@ func main() {
 				AdminEndpoint: garageAdminEndpoint,
 				AdminToken:    adminToken,
 			}
-			if err := state.ValidateClusterEndpoints(cluster.Endpoint, cluster.AdminEndpoint); err != nil {
+			if err := state.ValidateClusterEndpointsAllowlist(cfg.Server.ClusterEndpointAllowlist, cluster.Endpoint, cluster.AdminEndpoint); err != nil {
 				logger.Fatal().Err(err).Msg("Refusing unsafe auto-provisioned cluster endpoint")
 			}
 			if err := stateManager.AddCluster(cluster); err != nil {
@@ -238,6 +238,7 @@ func main() {
 		ReadTimeout:     30 * time.Second,
 		WriteTimeout:    30 * time.Second,
 		IdleTimeout:     60 * time.Second,
+		StructValidator: appmw.NewStructValidator(),
 		ErrorHandler:    customErrorHandler,
 	})
 

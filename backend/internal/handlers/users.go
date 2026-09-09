@@ -10,6 +10,16 @@ import (
 )
 
 // UserHandler handles user and access key HTTP requests.
+//
+// Access keys are cluster-scoped resources in Garage: they are not owned by any
+// tenant/binding the way buckets are. The multi-tenant role model (access_control
+// teams/bindings) governs bucket and data-plane access; key MANAGEMENT is
+// intentionally cluster-admin-only. See internal/authz/vocabulary.go, where
+// key.read_secret, key.create, key.import, key.update and key.delete are all
+// marked AdminOnly:true. Teams can hold at most key.list and key.read (which
+// never return the secret), so no non-admin subject can read, delete, or modify
+// a key they do not own — including keys used by other teams. Because a key has
+// no tenant owner, no per-key owner check is performed here.
 type UserHandler struct{}
 
 // NewUserHandler creates a new user handler.

@@ -9,6 +9,38 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// IPAllowed reports whether clientIP matches any entry in allowedIPs. Entries
+// may be exact addresses or CIDR blocks (e.g. "10.0.0.0/8"). A clientIP that
+// cannot be parsed is never considered allowed.
+func IPAllowed(clientIP string, allowedIPs []string) bool {
+	parsedClientIP := net.ParseIP(clientIP)
+	if parsedClientIP == nil {
+		return false
+	}
+
+	for _, allowed := range allowedIPs {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "" {
+			continue
+		}
+
+		// Check if it's a CIDR block
+		if strings.Contains(allowed, "/") {
+			_, ipNet, err := net.ParseCIDR(allowed)
+			if err == nil && ipNet.Contains(parsedClientIP) {
+				return true
+			}
+		} else {
+			// Exact IP match
+			if allowed == clientIP {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // IPWhitelistMiddleware blocks requests from IPs not in the configured AllowedIPs list
 func IPWhitelistMiddleware(cfg *config.ServerConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -18,26 +50,8 @@ func IPWhitelistMiddleware(cfg *config.ServerConfig) fiber.Handler {
 		}
 
 		clientIP := c.IP()
-		parsedClientIP := net.ParseIP(clientIP)
-
-		for _, allowed := range cfg.AllowedIPs {
-			allowed = strings.TrimSpace(allowed)
-			if allowed == "" {
-				continue
-			}
-
-			// Check if it's a CIDR block
-			if strings.Contains(allowed, "/") {
-				_, ipNet, err := net.ParseCIDR(allowed)
-				if err == nil && ipNet.Contains(parsedClientIP) {
-					return c.Next()
-				}
-			} else {
-				// Exact IP match
-				if allowed == clientIP {
-					return c.Next()
-				}
-			}
+		if IPAllowed(clientIP, cfg.AllowedIPs) {
+			return c.Next()
 		}
 
 		logger.Warn().

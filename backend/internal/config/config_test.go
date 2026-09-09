@@ -786,3 +786,83 @@ auth:
 		t.Errorf("Auth.MetricsPublic = false, want true (env should override YAML)")
 	}
 }
+
+func TestLoad_MetricsSharedSecret_DefaultsEmpty(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsSharedSecret != "" {
+		t.Errorf("Auth.MetricsSharedSecret = %q, want empty by default", cfg.Auth.MetricsSharedSecret)
+	}
+	if len(cfg.Auth.MetricsAllowedIPs) != 0 {
+		t.Errorf("Auth.MetricsAllowedIPs = %+v, want empty by default", cfg.Auth.MetricsAllowedIPs)
+	}
+}
+
+func TestLoad_MetricsProtection_YAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_shared_secret: "s3cr3t"
+  metrics_allowed_ips:
+    - "192.0.2.0/24"
+    - "203.0.113.1"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsSharedSecret != "s3cr3t" {
+		t.Errorf("MetricsSharedSecret = %q, want s3cr3t from YAML", cfg.Auth.MetricsSharedSecret)
+	}
+	if len(cfg.Auth.MetricsAllowedIPs) != 2 || cfg.Auth.MetricsAllowedIPs[0] != "192.0.2.0/24" || cfg.Auth.MetricsAllowedIPs[1] != "203.0.113.1" {
+		t.Errorf("MetricsAllowedIPs = %+v, want [192.0.2.0/24, 203.0.113.1] from YAML", cfg.Auth.MetricsAllowedIPs)
+	}
+}
+
+func TestLoad_MetricsProtection_EnvOverridesYAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_shared_secret: "file-secret"
+  metrics_allowed_ips:
+    - "10.0.0.1"
+`)
+	t.Setenv("GARAGE_UI_AUTH_METRICS_SHARED_SECRET", "env-secret")
+	t.Setenv("GARAGE_UI_AUTH_METRICS_ALLOWED_IPS", "198.51.100.0/24,203.0.113.7")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsSharedSecret != "env-secret" {
+		t.Errorf("MetricsSharedSecret = %q, want env-secret (env should override YAML)", cfg.Auth.MetricsSharedSecret)
+	}
+	if len(cfg.Auth.MetricsAllowedIPs) != 2 || cfg.Auth.MetricsAllowedIPs[0] != "198.51.100.0/24" || cfg.Auth.MetricsAllowedIPs[1] != "203.0.113.7" {
+		t.Errorf("MetricsAllowedIPs = %+v, want env override values", cfg.Auth.MetricsAllowedIPs)
+	}
+}
+
+func TestApplyFileBackedEnvVars_MetricsSharedSecret(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+
+	secretFile := filepath.Join(t.TempDir(), "metrics-secret")
+	if err := os.WriteFile(secretFile, []byte("from-file\n"), 0600); err != nil {
+		t.Fatalf("write secret file: %v", err)
+	}
+	t.Setenv("GARAGE_UI_AUTH_METRICS_SHARED_SECRET_FILE", secretFile)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsSharedSecret != "from-file" {
+		t.Errorf("MetricsSharedSecret = %q, want from-file (via _FILE env var)", cfg.Auth.MetricsSharedSecret)
+	}
+}

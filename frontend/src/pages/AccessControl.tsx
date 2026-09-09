@@ -449,16 +449,21 @@ export function AccessControl() {
     return perms.join(', ') || t('access_control.permission_none');
   };
 
-  const handleRowClick = async (key: AccessKey) => {
-    const request = ++secretRequestRef.current;
+  const handleRowClick = (key: AccessKey) => {
+    // Opening the details dialog must NOT fetch the secret key. The secret is
+    // loaded only when the user explicitly clicks the reveal control below.
     setViewingKey(key);
     setKeyDetailsDialogOpen(true);
     setDetailsSecretKey('');
-    setIsLoadingDetailsSecretKey(true);
+    setIsLoadingDetailsSecretKey(false);
+  };
 
-    // Fetch the secret key immediately
+  const handleRevealDetailsSecret = async () => {
+    if (!viewingKey) return;
+    const request = ++secretRequestRef.current;
+    setIsLoadingDetailsSecretKey(true);
     try {
-      const secretKey = await accessApi.getSecretKey(key.accessKeyId);
+      const secretKey = await accessApi.getSecretKey(viewingKey.accessKeyId);
       if (request === secretRequestRef.current) setDetailsSecretKey(secretKey);
     } catch (error) {
       console.error('Failed to fetch secret key:', error);
@@ -1013,13 +1018,34 @@ export function AccessControl() {
                 value={viewingKey?.accessKeyId || ''}
                 breakAll
               />
-              <CredentialField
-                 label={t('access_control.secret_access_key_label')}
-                value={detailsSecretKey}
-                breakAll
-                maskable
-                loading={isLoadingDetailsSecretKey}
-              />
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                   {t('access_control.secret_access_key_label')}
+                </label>
+                {detailsSecretKey ? (
+                  <CredentialField
+                    label={t('access_control.secret_access_key_label')}
+                    value={detailsSecretKey}
+                    breakAll
+                    maskable
+                    loading={isLoadingDetailsSecretKey}
+                  />
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={handleRevealDetailsSecret}
+                    disabled={isLoadingDetailsSecretKey}
+                    className="w-full"
+                  >
+                    {isLoadingDetailsSecretKey ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                     {t('access_control.reveal_secret_action')}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Bucket Permissions */}

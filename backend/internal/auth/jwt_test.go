@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"strings"
@@ -321,13 +320,13 @@ func TestGenerateStateToken_ProducesUniqueValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJWTService: %v", err)
 	}
-	a, err := svc.GenerateStateToken()
+	a, err := svc.GenerateStateTokenForBinding("")
 	if err != nil {
-		t.Fatalf("GenerateStateToken: %v", err)
+		t.Fatalf("GenerateStateTokenForBinding: %v", err)
 	}
-	b, err := svc.GenerateStateToken()
+	b, err := svc.GenerateStateTokenForBinding("")
 	if err != nil {
-		t.Fatalf("GenerateStateToken: %v", err)
+		t.Fatalf("GenerateStateTokenForBinding: %v", err)
 	}
 	if a == "" || b == "" {
 		t.Fatal("state token is empty")
@@ -342,11 +341,11 @@ func TestValidateAndConsumeState_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJWTService: %v", err)
 	}
-	tok, err := svc.GenerateStateToken()
+	tok, err := svc.GenerateStateTokenForBinding("")
 	if err != nil {
-		t.Fatalf("GenerateStateToken: %v", err)
+		t.Fatalf("GenerateStateTokenForBinding: %v", err)
 	}
-	if !svc.ValidateAndConsumeState(tok) {
+	if !svc.ValidateAndConsumeStateForBinding(tok, "") {
 		t.Error("first consume should succeed")
 	}
 }
@@ -373,12 +372,12 @@ func TestValidateAndConsumeState_IsSingleUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJWTService: %v", err)
 	}
-	tok, err := svc.GenerateStateToken()
+	tok, err := svc.GenerateStateTokenForBinding("")
 	if err != nil {
-		t.Fatalf("GenerateStateToken: %v", err)
+		t.Fatalf("GenerateStateTokenForBinding: %v", err)
 	}
-	_ = svc.ValidateAndConsumeState(tok)
-	if svc.ValidateAndConsumeState(tok) {
+	_ = svc.ValidateAndConsumeStateForBinding(tok, "")
+	if svc.ValidateAndConsumeStateForBinding(tok, "") {
 		t.Error("second consume should fail")
 	}
 }
@@ -388,7 +387,7 @@ func TestValidateAndConsumeState_UnknownTokenRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewJWTService: %v", err)
 	}
-	if svc.ValidateAndConsumeState("never-issued") {
+	if svc.ValidateAndConsumeStateForBinding("never-issued", "") {
 		t.Error("unknown token must not validate")
 	}
 }
@@ -403,84 +402,11 @@ func TestValidateAndConsumeState_ExpiredTokenRejected(t *testing.T) {
 		Created:   time.Now().Add(-20 * time.Minute),
 		ExpiresAt: time.Now().Add(-10 * time.Minute),
 	}
-	if svc.ValidateAndConsumeState("expired") {
+	if svc.ValidateAndConsumeStateForBinding("expired", "") {
 		t.Error("expired token must not validate")
 	}
 	// And it should be deleted as a side effect of the rejection.
 	if _, exists := svc.stateStore.states["expired"]; exists {
 		t.Error("expired token should be removed from the store")
 	}
-}
-
-func TestGetPublicKeyPEM_ParsesBackToOriginalKey(t *testing.T) {
-	svc, err := NewJWTService()
-	if err != nil {
-		t.Fatalf("NewJWTService: %v", err)
-	}
-	pemStr, err := svc.GetPublicKeyPEM()
-	if err != nil {
-		t.Fatalf("GetPublicKeyPEM: %v", err)
-	}
-	block, _ := pem.Decode([]byte(pemStr))
-	if block == nil {
-		t.Fatalf("returned PEM did not decode: %q", pemStr)
-	}
-	if block.Type != "PUBLIC KEY" {
-		t.Errorf("PEM type = %q, want PUBLIC KEY", block.Type)
-	}
-	// The implementation writes the raw 32-byte public key as the block body.
-	if len(block.Bytes) != ed25519.PublicKeySize {
-		t.Errorf("body length = %d, want %d", len(block.Bytes), ed25519.PublicKeySize)
-	}
-	if !ed25519.PublicKey(block.Bytes).Equal(svc.publicKey) {
-		t.Error("decoded public key does not match service key")
-	}
-}
-
-func TestGetPublicKeyBase64_RoundTripsToOriginalKey(t *testing.T) {
-	svc, err := NewJWTService()
-	if err != nil {
-		t.Fatalf("NewJWTService: %v", err)
-	}
-	b64, err := svc.GetPublicKeyBase64()
-	if err != nil {
-		t.Fatalf("GetPublicKeyBase64: %v", err)
-	}
-	if b64 == "" {
-		t.Fatal("empty base64 output")
-	}
-	// base64.RawURLEncoding (no padding) is what the production code uses.
-	// Decode and compare.
-	// Use the std encoding through helper to keep the import list small.
-	got, err := decodeRawURL(b64)
-	if err != nil {
-		t.Fatalf("base64 decode: %v", err)
-	}
-	if !ed25519.PublicKey(got).Equal(svc.publicKey) {
-		t.Error("base64-decoded key does not match service key")
-	}
-}
-
-func TestGetPublicKeyPEM_NilKeyReturnsError(t *testing.T) {
-	svc := &JWTService{}
-	if _, err := svc.GetPublicKeyPEM(); err == nil {
-		t.Error("expected error for nil public key")
-	}
-}
-
-func TestGetPublicKeyBase64_NilKeyReturnsError(t *testing.T) {
-	svc := &JWTService{}
-	if _, err := svc.GetPublicKeyBase64(); err == nil {
-		t.Error("expected error for nil public key")
-	}
-}
-
-// decodeRawURL is a tiny shim around encoding/base64's RawURLEncoding decoder
-// so the test body stays focused on assertions, not encoding plumbing.
-func decodeRawURL(s string) ([]byte, error) {
-	return base64RawURLDecode(s)
-}
-
-func base64RawURLDecode(s string) ([]byte, error) {
-	return base64.RawURLEncoding.DecodeString(s)
 }

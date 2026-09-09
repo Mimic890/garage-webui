@@ -51,11 +51,9 @@ function authPayload<T>(payload: T | { data: T }): T {
 }
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth-token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  
+  // NOTE: authentication is cookie-based (httpOnly session cookie). The token
+  // is never stored in localStorage or read from it; that branch was removed
+  // to avoid reintroducing an XSS-exfiltration sink. See /auth endpoints.
   let clusterId = null;
   try {
     const storageData = localStorage.getItem('cluster-storage');
@@ -75,14 +73,6 @@ api.interceptors.request.use((config) => {
     config.headers['X-Cluster-Id'] = clusterId;
   }
   
-  return config;
-});
-
-authApiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth-token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
   return config;
 });
 
@@ -107,9 +97,6 @@ api.interceptors.response.use(
   (error) => {
     // Handle 401 Unauthorized - redirect to login
     if (error.response?.status === 401) {
-      // Clear auth token
-      localStorage.removeItem('auth-token');
-
       // Only redirect if not already on login page
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
@@ -287,8 +274,8 @@ export const bucketsApi = {
     return response.data.data;
   },
 
-  create: async (bucketName: string, bucketRegion?: string): Promise<void> => {
-    await api.post('/v1/buckets', { name: bucketName, region: bucketRegion });
+  create: async (bucketName: string): Promise<void> => {
+    await api.post('/v1/buckets', { name: bucketName });
   },
 
   delete: async (name: string): Promise<void> => {

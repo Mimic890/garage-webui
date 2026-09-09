@@ -26,7 +26,7 @@ func newAdminWithServer(t *testing.T, handler http.HandlerFunc) *GarageV2AdminSe
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}
-	return NewGarageV2AdminService(cfg, "info")
+	return NewGarageV2AdminService(cfg, "info", "test")
 }
 
 // ctxWithBufferLogger attaches a zerolog.Logger writing to buf onto ctx.

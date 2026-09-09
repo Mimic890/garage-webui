@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,6 +73,20 @@ func (c *Cache) Clear() {
 	defer c.mu.Unlock()
 
 	c.items = make(map[string]CacheItem)
+}
+
+// ClearPrefix removes only the items whose key starts with prefix, leaving
+// unrelated cache entries (e.g. a different subsystem sharing GlobalCache)
+// untouched.
+func (c *Cache) ClearPrefix(prefix string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key := range c.items {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.items, key)
+		}
+	}
 }
 
 // cleanupExpired periodically removes expired items

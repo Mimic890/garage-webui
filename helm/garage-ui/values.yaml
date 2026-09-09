@@ -97,6 +97,15 @@ config:
     # access with a NetworkPolicy / trusted scrape network.
     metrics_public: false
 
+    # Optional in-app protection for the public /metrics endpoint (used only
+    # when metrics_public is true). If metrics_shared_secret is set, scrapers
+    # must present it via the X-Metrics-Token header or ?token= query parameter.
+    # If metrics_allowed_ips is set, only the listed IPs/CIDRs may scrape.
+    # When neither is set, /metrics keeps its historical open behavior and
+    # protection must be provided at the network layer.
+    metrics_shared_secret: ""
+    metrics_allowed_ips: []
+
     # Admin authentication (username/password)
     admin:
       enabled: false

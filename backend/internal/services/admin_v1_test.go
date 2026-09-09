@@ -21,7 +21,7 @@ func newV1TestServer(t *testing.T, handler http.Handler) *GarageV1AdminService {
 	return NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
-	}, "")
+	}, "", "test")
 }
 
 func TestV1_ListKeys(t *testing.T) {
@@ -119,7 +119,7 @@ func newV1RecordingServer(t *testing.T, status int, body any) (*GarageV1AdminSer
 	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
-	}, "")
+	}, "", "test")
 	return svc, rec
 }
 
@@ -373,7 +373,7 @@ func TestV1_ErrorPaths(t *testing.T) {
 	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv500.URL,
 		AdminToken:    "tok",
-	}, "")
+	}, "", "test")
 
 	ctx := context.Background()
 
@@ -503,7 +503,7 @@ func TestV1_GetMetrics(t *testing.T) {
 	svc := NewGarageV1AdminService(&state.ClusterConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "tok",
-	}, "")
+	}, "", "test")
 
 	got, err := svc.GetMetrics(context.Background())
 	if err != nil {

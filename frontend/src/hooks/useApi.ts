@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { bucketsApi, objectsApi, accessApi, garageApi, analyticsApi } from '@/lib/api';
+import { bucketsApi, accessApi, garageApi, analyticsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-client';
 import { toast } from 'sonner';
 import { useClusterStore } from '@/store/cluster-store';
@@ -15,22 +15,12 @@ export function useBuckets(enabled = true) {
   });
 }
 
-export function useBucket(name: string, enabled = true) {
-  const activeClusterId = useClusterStore((state) => state.activeClusterId);
-  return useQuery({
-    queryKey: queryKeys.buckets.detail(name, activeClusterId),
-    queryFn: () => bucketsApi.get(name),
-    enabled: enabled && !!activeClusterId && !!name,
-  });
-}
-
 export function useCreateBucket() {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: ({ name, region }: { name: string; region?: string }) =>
-      bucketsApi.create(name, region),
+    mutationFn: (name: string) => bucketsApi.create(name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
@@ -87,83 +77,7 @@ export function useUpdateBucketQuotas() {
     }) => bucketsApi.updateBucketQuotas(bucketName, { maxSize, maxObjects }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
       toast.success(t('api.quotas_updated_success'));
-    },
-  });
-}
-
-
-export function useObjects(bucket: string, prefix?: string, enabled = true) {
-  const activeClusterId = useClusterStore((state) => state.activeClusterId);
-  return useQuery({
-    queryKey: queryKeys.objects.list(bucket, prefix, activeClusterId),
-    queryFn: () => objectsApi.list(bucket, prefix),
-    enabled: enabled && !!activeClusterId && !!bucket,
-  });
-}
-
-export function useUploadObject() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ bucket, key, file }: { bucket: string; key: string; file: File }) =>
-      objectsApi.upload(bucket, key, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.objects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-      toast.success(t('api.file_uploaded_success'));
-    },
-  });
-}
-
-export function useUploadMultipleObjects() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ bucket, files }: { bucket: string; files: File[] }) =>
-      objectsApi.uploadMultiple(bucket, files),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.objects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-      toast.success(t('api.files_uploaded_success'));
-    },
-  });
-}
-
-export function useDeleteObject() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ bucket, key }: { bucket: string; key: string }) =>
-      objectsApi.delete(bucket, key),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.objects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-      toast.success(t('api.file_deleted_success'));
-    },
-  });
-}
-
-export function useDeleteMultipleObjects() {
-  const queryClient = useQueryClient();
-  const { t, language } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ bucket, keys, prefixes }: { bucket: string; keys: string[]; prefixes?: string[] }) =>
-      objectsApi.deleteMultiple(bucket, keys, prefixes),
-     onSuccess: (_, variables) => {
-       queryClient.invalidateQueries({ queryKey: queryKeys.objects.all });
-       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-       toast.success(t(variables.keys.length === 1 ? 'api.file_deleted_count_success' : 'api.files_deleted_count_success')
-         .replace('{{count}}', variables.keys.length.toLocaleString(language)));
     },
   });
 }
@@ -178,58 +92,6 @@ export function useAccessKeys(enabled = true) {
   });
 }
 
-export function useAccessKey(keyId: string, enabled = true) {
-  const activeClusterId = useClusterStore((state) => state.activeClusterId);
-  return useQuery({
-    queryKey: queryKeys.accessKeys.detail(keyId, activeClusterId),
-    queryFn: () => accessApi.getKey(keyId),
-    enabled: enabled && !!activeClusterId && !!keyId,
-  });
-}
-
-export function useCreateAccessKey() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ name, permissions }: { name: string; permissions?: any[] }) =>
-      accessApi.createKey(name, permissions),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
-      toast.success(t('api.access_key_created_success'));
-    },
-  });
-}
-
-export function useDeleteAccessKey() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: (keyId: string) => accessApi.deleteKey(keyId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
-      toast.success(t('api.access_key_deleted_success'));
-    },
-  });
-}
-
-export function useUpdateAccessKey() {
-  const queryClient = useQueryClient();
-  const { t } = useTranslation();
-
-  return useMutation({
-    mutationFn: ({ keyId, updates }: { keyId: string; updates: any }) =>
-      accessApi.updateKey(keyId, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
-      toast.success(t('api.access_key_updated_success'));
-    },
-  });
-}
-
-
 export function useClusterHealth(enabled = true) {
   const activeClusterId = useClusterStore((state) => state.activeClusterId);
   return useQuery({
@@ -239,27 +101,6 @@ export function useClusterHealth(enabled = true) {
     enabled: enabled && !!activeClusterId,
   });
 }
-
-export function useClusterStatus(enabled = true) {
-  const activeClusterId = useClusterStore((state) => state.activeClusterId);
-  return useQuery({
-    queryKey: queryKeys.cluster.status(activeClusterId),
-    queryFn: () => garageApi.getClusterStatus(),
-    staleTime: 60 * 1000,
-    enabled: enabled && !!activeClusterId,
-  });
-}
-
-export function useClusterStatistics(enabled = true) {
-  const activeClusterId = useClusterStore((state) => state.activeClusterId);
-  return useQuery({
-    queryKey: queryKeys.cluster.statistics(activeClusterId),
-    queryFn: () => garageApi.getClusterStatistics(),
-    staleTime: 60 * 1000,
-    enabled: enabled && !!activeClusterId,
-  });
-}
-
 
 export function useDashboardMetrics(enabled = true) {
   const activeClusterId = useClusterStore((state) => state.activeClusterId);

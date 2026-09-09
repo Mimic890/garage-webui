@@ -319,7 +319,6 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			)
 		}
 		result = r
-		services.InvalidateBucketCredsCache(bucketName)
 	}
 
 	if deny.Read || deny.Write || deny.Owner {
@@ -341,7 +340,6 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			)
 		}
 		result = r
-		services.InvalidateBucketCredsCache(bucketName)
 	}
 
 	if result == nil {

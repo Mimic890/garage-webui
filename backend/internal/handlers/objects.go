@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/url"
 	"path"
@@ -13,6 +14,12 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 )
+
+// maxUploadFiles caps how many files a single multipart upload-multiple
+// request may contain. Without a limit, a request with an unbounded number
+// of form parts opens one file descriptor per part before any upload work
+// happens, letting a client exhaust file descriptors/memory (DoS).
+const maxUploadFiles = 200
 
 // unsafeInlineContentTypes are MIME types that a browser can execute as
 // JavaScript in the response's origin when rendered inline. Since the SPA is
@@ -504,7 +511,7 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 //	@Failure		400			{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
 //	@Failure		404			{object}	models.APIResponse{error=models.APIError}				"Object not found"
 //	@Failure		500			{object}	models.APIResponse{error=models.APIError}				"Failed to generate pre-signed URL"
-//	@Router			/api/v1/buckets/{bucket}/objects/{key}/presigned-url [get]
+//	@Router			/api/v1/buckets/{bucket}/objects/{key}/presign [get]
 func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	ctx := c.Context()
 
@@ -724,7 +731,7 @@ func partialDeleteResponse(bucket string, deleted int, keys, prefixes []string) 
 // UploadMultipleObjects uploads multiple objects to a bucket
 //
 //	@Summary		Upload multiple objects to bucket
-//	@Description	Uploads multiple objects to the specified bucket using multipart/form-data. Accepts unlimited number of files and handles them in a loop.
+//	@Description	Uploads multiple objects to the specified bucket using multipart/form-data. Accepts up to maxUploadFiles files per request.
 //	@Tags			Objects
 //	@Accept			multipart/form-data
 //	@Produce		json
@@ -758,6 +765,11 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 	if len(files) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(
 			models.ErrorResponse(models.ErrCodeBadRequest, "At least one file is required"),
+		)
+	}
+	if len(files) > maxUploadFiles {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, fmt.Sprintf("Too many files: %d exceeds the limit of %d per request", len(files), maxUploadFiles)),
 		)
 	}
 

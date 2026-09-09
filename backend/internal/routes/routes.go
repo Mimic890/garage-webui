@@ -9,6 +9,7 @@ import (
 	"Mimic890/garage-ui/internal/state"
 	"Mimic890/garage-ui/pkg/logger"
 	cryptorand "crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"net/url"
 	"os"
@@ -55,7 +56,7 @@ func SetupRoutes(
 	opts ...SetupOption,
 ) {
 	so := setupOptions{
-		clusterMW: middleware.ClusterMiddleware(stateManager),
+		clusterMW: middleware.ClusterMiddleware(stateManager, cfg.Logging.Level, cfg.Server.Environment),
 	}
 	for _, opt := range opts {
 		opt(&so)
@@ -80,7 +81,7 @@ func SetupRoutes(
 
 	// Create auth and panel handlers
 	authHandler := handlers.NewAuthHandler(cfg, authService, stateManager)
-	panelHandler := handlers.NewPanelHandler(stateManager)
+	panelHandler := handlers.NewPanelHandler(stateManager, cfg.Server.ClusterEndpointAllowlist)
 
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
@@ -90,11 +91,44 @@ func SetupRoutes(
 	// cascade and the VerifyRouteCoverage fail-closed guard entirely; the
 	// authenticated /api/v1/monitoring/metrics route is unaffected. Because it is
 	// registered before the SPA fallback below, Fiber matches it first.
-	// Protect it at the network layer (NetworkPolicy / trusted scrape network).
-	// clusterMW injects Admin/S3 locals (static mocks in tests; real cluster
-	// resolution in production requires X-Cluster-Id on this path too).
+	// Optional in-handler protection guards the endpoint when
+	// auth.metrics_shared_secret and/or auth.metrics_allowed_ips are configured;
+	// with neither set it keeps the historical open behavior. Regardless of that,
+	// it should still be firewalled to trusted scrape networks, and clusterMW
+	// injects Admin/S3 locals (static mocks in tests; real cluster resolution in
+	// production requires X-Cluster-Id on this path too).
 	if cfg.Auth.MetricsPublic {
-		app.Get("/metrics", clusterMW, monitoringHandler.GetMetrics)
+		if cfg.Auth.MetricsSharedSecret == "" && len(cfg.Auth.MetricsAllowedIPs) == 0 {
+			logger.Warn().Msg("auth.metrics_public is enabled with neither metrics_shared_secret nor metrics_allowed_ips configured: /metrics is served without authentication, protect it at the network layer")
+		}
+		app.Get("/metrics", clusterMW, func(c fiber.Ctx) error {
+			auth := cfg.Auth
+			hasSecret := auth.MetricsSharedSecret != ""
+			hasAllowlist := len(auth.MetricsAllowedIPs) > 0
+			if !hasSecret && !hasAllowlist {
+				// No protection configured: fall back to the historical behavior.
+				return c.Next()
+			}
+			if hasSecret {
+				token := c.Get("X-Metrics-Token")
+				if token == "" {
+					token = c.Query("token")
+				}
+				if token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(auth.MetricsSharedSecret)) == 1 {
+					return c.Next()
+				}
+			}
+			if hasAllowlist && middleware.IPAllowed(c.IP(), auth.MetricsAllowedIPs) {
+				return c.Next()
+			}
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"success": false,
+				"error": fiber.Map{
+					"code":    "ERROR_403",
+					"message": "Access denied: invalid metrics token or source IP",
+				},
+			})
+		}, monitoringHandler.GetMetrics)
 	}
 
 	// API v1 group

@@ -36,6 +36,14 @@ type ServerConfig struct {
 	ReadBufferSize  int      `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
 	WriteBufferSize int      `mapstructure:"write_buffer_size"` // Write buffer size in bytes (default: 4KB)
 	AllowedIPs      []string `mapstructure:"allowed_ips"`       // List of allowed IPs (supports CIDR notation)
+
+	// ClusterEndpointAllowlist lists IP/CIDR entries (e.g. "10.0.0.0/8",
+	// "192.168.1.10") that are exempt from the RFC 1918 / unique-local block in
+	// cluster endpoint SSRF validation. Loopback, link-local, and cloud metadata
+	// addresses are always rejected regardless of this list. Intended for
+	// self-hosted clusters whose control plane deliberately lives on a private
+	// network.
+	ClusterEndpointAllowlist []string `mapstructure:"cluster_endpoint_allowlist"`
 }
 
 // AuthConfig contains authentication configuration
@@ -46,6 +54,14 @@ type AuthConfig struct {
 	BootstrapToken string          `mapstructure:"bootstrap_token"`
 	JWTPrivKey     string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
 	MetricsPublic  bool            `mapstructure:"metrics_public"`  // Expose Prometheus metrics at top-level /metrics without auth
+
+	// Optional in-handler protection for the public /metrics endpoint.
+	// MetricsSharedSecret, when set, requires the caller to present it via the
+	// X-Metrics-Token header or the ?token= query parameter. MetricsAllowedIPs,
+	// when set, restricts /metrics to the listed IPs/CIDR blocks. When neither
+	// is configured the endpoint keeps its historical open behavior.
+	MetricsSharedSecret string   `mapstructure:"metrics_shared_secret"`
+	MetricsAllowedIPs   []string `mapstructure:"metrics_allowed_ips"`
 }
 
 // AdminAuthConfig contains admin authentication settings
@@ -248,6 +264,7 @@ func bindEnvVars() {
 	viper.BindEnv("server.read_buffer_size", "GARAGE_UI_SERVER_READ_BUFFER_SIZE")
 	viper.BindEnv("server.write_buffer_size", "GARAGE_UI_SERVER_WRITE_BUFFER_SIZE")
 	viper.BindEnv("server.allowed_ips", "GARAGE_UI_SERVER_ALLOWED_IPS")
+	viper.BindEnv("server.cluster_endpoint_allowlist", "GARAGE_UI_SERVER_CLUSTER_ENDPOINT_ALLOWLIST")
 
 	// Auth config
 	viper.BindEnv("auth.admin.enabled", "GARAGE_UI_AUTH_ADMIN_ENABLED")
@@ -255,6 +272,8 @@ func bindEnvVars() {
 	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
 	viper.BindEnv("auth.jwt_private_key", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY")
 	viper.BindEnv("auth.metrics_public", "GARAGE_UI_AUTH_METRICS_PUBLIC")
+	viper.BindEnv("auth.metrics_shared_secret", "GARAGE_UI_AUTH_METRICS_SHARED_SECRET")
+	viper.BindEnv("auth.metrics_allowed_ips", "GARAGE_UI_AUTH_METRICS_ALLOWED_IPS")
 
 	// Token auth config
 	viper.BindEnv("auth.token.enabled", "GARAGE_UI_AUTH_TOKEN_ENABLED")
@@ -307,12 +326,13 @@ func bindEnvVars() {
 // store in a Kubernetes Secret or Docker secret. Non-sensitive config (host,
 // port, endpoints, etc.) is excluded.
 var fileBackedEnvVars = map[string]string{
-	"GARAGE_UI_AUTH_BOOTSTRAP_TOKEN":    "auth.bootstrap_token",
-	"GARAGE_UI_AUTH_ADMIN_USERNAME":     "auth.admin.username",
-	"GARAGE_UI_AUTH_ADMIN_PASSWORD":     "auth.admin.password",
-	"GARAGE_UI_AUTH_JWT_PRIVATE_KEY":    "auth.jwt_private_key",
-	"GARAGE_UI_AUTH_OIDC_CLIENT_ID":     "auth.oidc.client_id",
-	"GARAGE_UI_AUTH_OIDC_CLIENT_SECRET": "auth.oidc.client_secret",
+	"GARAGE_UI_AUTH_BOOTSTRAP_TOKEN":            "auth.bootstrap_token",
+	"GARAGE_UI_AUTH_ADMIN_USERNAME":             "auth.admin.username",
+	"GARAGE_UI_AUTH_ADMIN_PASSWORD":             "auth.admin.password",
+	"GARAGE_UI_AUTH_JWT_PRIVATE_KEY":            "auth.jwt_private_key",
+	"GARAGE_UI_AUTH_OIDC_CLIENT_ID":             "auth.oidc.client_id",
+	"GARAGE_UI_AUTH_OIDC_CLIENT_SECRET":         "auth.oidc.client_secret",
+	"GARAGE_UI_AUTH_METRICS_SHARED_SECRET":      "auth.metrics_shared_secret",
 }
 
 // applyFileBackedEnvVars resolves `_FILE`-suffixed env vars listed in

@@ -28,9 +28,9 @@ export function Buckets() {
   const deleteMutation = useDeleteBucket();
   const { clusters } = useClusterStore();
 
-  const createBucket = async (name: string, region?: string) => {
+  const createBucket = async (name: string) => {
     try {
-      await createMutation.mutateAsync({ name, region });
+      await createMutation.mutateAsync(name);
       return true;
     } catch {
       return false;

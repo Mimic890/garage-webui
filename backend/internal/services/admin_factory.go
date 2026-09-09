@@ -43,12 +43,12 @@ type AdminServiceResult struct {
 // /v1/health, so a 404 on /v2 is the only reliable "this is a v1 server" signal.
 var errProbeNotFound = errors.New("probe endpoint not found")
 
-func NewAdminService(cfg *state.ClusterConfig, logLevel string) (*AdminServiceResult, error) {
+func NewAdminService(cfg *state.ClusterConfig, logLevel, environment string) (*AdminServiceResult, error) {
 	// retry so a startup fails doesn't lock us to a v1 client.
 	err := probeEndpointWithRetry(cfg, "/v2/GetClusterHealth")
 	if err == nil {
 		logger.Info().Str("api_version", "v2").Msg("Detected Garage admin API v2")
-		svc := NewGarageV2AdminService(cfg, logLevel)
+		svc := NewGarageV2AdminService(cfg, logLevel, environment)
 		return &AdminServiceResult{
 			Service:      svc,
 			Capabilities: CapabilitiesV2(),
@@ -70,7 +70,7 @@ func NewAdminService(cfg *state.ClusterConfig, logLevel string) (*AdminServiceRe
 		logger.Info().
 			Str("api_version", "v1").
 			Msg("Detected Garage admin API v1 — cluster statistics and per-node details will be unavailable")
-		svc := NewGarageV1AdminService(cfg, logLevel)
+		svc := NewGarageV1AdminService(cfg, logLevel, environment)
 		return &AdminServiceResult{
 			Service:      svc,
 			Capabilities: CapabilitiesV1(),

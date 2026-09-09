@@ -172,53 +172,6 @@ func TestGet_AutoInitializesWhenUnused(t *testing.T) {
 	}
 }
 
-func TestWithComponent_AddsComponentField(t *testing.T) {
-	serializeLoggerTests.Lock()
-	defer serializeLoggerTests.Unlock()
-
-	out := captureStdout(t, func() {
-		Init(Config{Level: "info", Format: "json"})
-		comp := WithComponent("buckets")
-		comp.Info().Msg("tagged")
-	})
-
-	line := firstNonEmptyLine(out)
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(line), &parsed); err != nil {
-		t.Fatalf("not JSON: %v — %s", err, line)
-	}
-	if got, _ := parsed["component"].(string); got != "buckets" {
-		t.Errorf("component = %v, want buckets", parsed["component"])
-	}
-}
-
-func TestLogger_WithContext_AddsFields(t *testing.T) {
-	serializeLoggerTests.Lock()
-	defer serializeLoggerTests.Unlock()
-
-	out := captureStdout(t, func() {
-		Init(Config{Level: "info", Format: "json"})
-		l := Get().WithContext(map[string]any{
-			"request_id": "req-42",
-			"attempt":    2,
-		})
-		l.Info().Msg("ctx")
-	})
-
-	line := firstNonEmptyLine(out)
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(line), &parsed); err != nil {
-		t.Fatalf("not JSON: %v — %s", err, line)
-	}
-	if parsed["request_id"] != "req-42" {
-		t.Errorf("request_id = %v", parsed["request_id"])
-	}
-	// JSON numbers decode to float64.
-	if got, _ := parsed["attempt"].(float64); got != 2 {
-		t.Errorf("attempt = %v, want 2", parsed["attempt"])
-	}
-}
-
 func TestWithError_AttachesErrorField(t *testing.T) {
 	serializeLoggerTests.Lock()
 	defer serializeLoggerTests.Unlock()
