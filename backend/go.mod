@@ -1,6 +1,6 @@
 module Mimic890/garage-ui
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/Noooste/azuretls-client v1.13.2
