@@ -120,6 +120,7 @@ func (s *GarageV1AdminService) CreateBucket(ctx context.Context, req models.Crea
 	if err := s.http.request(ctx, http.MethodPost, "/v1/bucket", req, &result); err != nil {
 		return nil, err
 	}
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -128,6 +129,7 @@ func (s *GarageV1AdminService) UpdateBucket(ctx context.Context, bucketID string
 	if err := s.http.request(ctx, http.MethodPut, fmt.Sprintf("/v1/bucket?id=%s", url.QueryEscape(bucketID)), req, &result); err != nil {
 		return nil, err
 	}
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -135,6 +137,7 @@ func (s *GarageV1AdminService) DeleteBucket(ctx context.Context, bucketID string
 	if err := s.http.request(ctx, http.MethodDelete, fmt.Sprintf("/v1/bucket?id=%s", url.QueryEscape(bucketID)), nil, nil); err != nil {
 		return err
 	}
+	s.http.invalidateBucketInfo(bucketID, nil)
 	return nil
 }
 
@@ -143,6 +146,7 @@ func (s *GarageV1AdminService) AllowBucketKey(ctx context.Context, req models.Bu
 	if err := s.http.request(ctx, http.MethodPost, "/v1/bucket/allow", req, &result); err != nil {
 		return nil, err
 	}
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -151,6 +155,7 @@ func (s *GarageV1AdminService) DenyBucketKey(ctx context.Context, req models.Buc
 	if err := s.http.request(ctx, http.MethodPost, "/v1/bucket/deny", req, &result); err != nil {
 		return nil, err
 	}
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 

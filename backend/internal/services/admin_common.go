@@ -141,6 +141,25 @@ func (h *adminHTTP) cachedBucketInfo(ctx context.Context, key string, fetch func
 	return info, nil
 }
 
+// invalidateBucketInfo drops any cached bucket-details entries for id and
+// its aliases. Every mutation that changes what GetBucketInfo/
+// GetBucketInfoByAlias would return (create, update, delete, or a
+// permission grant/revoke) must call this with the affected bucket's ID and
+// current aliases afterward — otherwise a reader can be served a
+// bucketInfoCacheTTL-stale value (e.g. a bucket looked up right after
+// granting a key permission would still show the pre-grant Keys list, so
+// getBucketCredentials in s3.go would fail to find the just-granted key).
+func (h *adminHTTP) invalidateBucketInfo(id string, aliases []string) {
+	if id != "" {
+		utils.GlobalCache.Delete(fmt.Sprintf("bucketinfo:%s|id:%s", h.baseURL, id))
+	}
+	for _, alias := range aliases {
+		if alias != "" {
+			utils.GlobalCache.Delete(fmt.Sprintf("bucketinfo:%s|alias:%s", h.baseURL, alias))
+		}
+	}
+}
+
 // HealthCheck checks if the Admin API is reachable.
 func (h *adminHTTP) HealthCheck(ctx context.Context) error {
 	resp, err := h.doRequest(ctx, http.MethodGet, "/health", nil)
