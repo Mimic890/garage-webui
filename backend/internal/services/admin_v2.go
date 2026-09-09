@@ -200,6 +200,7 @@ func (s *GarageV2AdminService) CreateBucket(ctx context.Context, req models.Crea
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Str("bucket_id", result.ID).Msg("bucket created")
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -227,6 +228,7 @@ func (s *GarageV2AdminService) UpdateBucket(ctx context.Context, bucketID string
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket updated")
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -253,6 +255,7 @@ func (s *GarageV2AdminService) DeleteBucket(ctx context.Context, bucketID string
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket deleted")
+	s.http.invalidateBucketInfo(bucketID, nil)
 	return nil
 }
 
@@ -284,6 +287,7 @@ func (s *GarageV2AdminService) AllowBucketKey(ctx context.Context, req models.Bu
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket key permissions granted")
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
@@ -293,6 +297,7 @@ func (s *GarageV2AdminService) DenyBucketKey(ctx context.Context, req models.Buc
 	if err := s.http.request(ctx, http.MethodPost, "/v2/DenyBucketKey", req, &result); err != nil {
 		return nil, err
 	}
+	s.http.invalidateBucketInfo(result.ID, result.GlobalAliases)
 	return &result, nil
 }
 
