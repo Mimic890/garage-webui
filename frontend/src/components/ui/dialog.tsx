@@ -52,10 +52,12 @@ const DialogTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttrib
 );
 DialogTrigger.displayName = 'DialogTrigger';
 
+// Mobile: full-screen sheet. sm+: viewport-relative box, capped so a wide screen
+// doesn't turn the dialog into mostly empty space.
 const widthClass: Record<DialogSize, string> = {
-  standard: 'max-w-[480px]',
-  form: 'max-w-[600px]',
-  destructive: 'max-w-[440px]',
+  standard: 'sm:max-w-[480px]',
+  form: 'sm:max-w-[600px]',
+  destructive: 'sm:max-w-[440px]',
 };
 
 const DialogOverlay: React.FC = () => {
@@ -126,14 +128,16 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2',
+            'fixed inset-0 z-50',
+            'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',
             widthClass[size],
           )}
         >
           <div
             ref={ref}
             className={cn(
-              'relative max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-[var(--border)]',
+              'relative flex h-full flex-col overflow-hidden border border-[var(--border)]',
+              'sm:h-auto sm:max-h-[min(88vh,760px)] sm:rounded-xl',
               'bg-[var(--card)] text-[var(--card-foreground)]',
               'shadow-[0_20px_40px_rgba(0,0,0,0.3)]',
               className,
@@ -161,7 +165,7 @@ DialogContent.displayName = 'DialogContent';
 const DialogHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
   <div
     className={cn(
-      'flex items-start gap-3 border-b border-[var(--border)] px-6 py-5',
+      'flex shrink-0 items-start gap-3 border-b border-[var(--border)] px-6 py-5',
       className,
     )}
     {...props}
@@ -170,14 +174,15 @@ const DialogHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ classNam
 DialogHeader.displayName = 'DialogHeader';
 
 const DialogBody: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
-  <div className={cn('px-6 py-5', className)} {...props} />
+  <div className={cn('min-h-0 flex-1 overflow-y-auto px-6 py-5', className)} {...props} />
 );
 DialogBody.displayName = 'DialogBody';
 
 const DialogFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
   <div
     className={cn(
-      'flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-sunken)] px-6 py-3.5',
+      'mt-auto flex shrink-0 justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-sunken)] px-6 py-3.5',
+      'pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:pb-3.5',
       className,
     )}
     {...props}

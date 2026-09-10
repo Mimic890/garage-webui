@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import {cn} from '@/lib/utils';
 import {ChevronDown, Check} from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
@@ -32,13 +33,33 @@ const useSelectContext = () => {
   return context;
 };
 
+// Menu geometry for a fixed-position list, so a scrolling/clipping ancestor
+// (Dialog is overflow-y-auto) cannot cut the options off. Exported for tests.
+export function computeMenuPosition(
+  rect: { top: number; bottom: number; left: number; width: number },
+  viewportHeight: number,
+  margin = 8
+) {
+  const below = viewportHeight - rect.bottom - margin;
+  const above = rect.top - margin;
+  const flip = below < 160 && above > below;
+  return {
+    left: rect.left,
+    width: rect.width,
+    maxHeight: Math.max(flip ? above : below, 120),
+    ...(flip ? { bottom: viewportHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+  };
+}
+
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
   ({ className, children, value, onChange, disabled, placeholder, ...props }, _ref) => {
     const { t } = useTranslation();
     const resolvedPlaceholder = placeholder ?? t('common.select.placeholder');
     const [open, setOpen] = React.useState(false);
     const [internalValue, setInternalValue] = React.useState(value);
-    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({});
+    const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const listRef = React.useRef<HTMLDivElement>(null);
     const listboxId = React.useId();
 
     const displayValue = React.useMemo(() => {
@@ -65,11 +86,34 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       setInternalValue(value);
     }, [value]);
 
+    React.useLayoutEffect(() => {
+      if (!open) return;
+
+      const update = () => {
+        const trigger = buttonRef.current;
+        if (!trigger) return;
+        setMenuStyle({
+          position: 'fixed',
+          backgroundColor: 'var(--popover)',
+          ...computeMenuPosition(trigger.getBoundingClientRect(), window.innerHeight),
+        });
+      };
+
+      update();
+      window.addEventListener('scroll', update, true);
+      window.addEventListener('resize', update);
+
+      return () => {
+        window.removeEventListener('scroll', update, true);
+        window.removeEventListener('resize', update);
+      };
+    }, [open]);
+
     React.useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-          setOpen(false);
-        }
+        const target = event.target as Node;
+        if (buttonRef.current?.contains(target) || listRef.current?.contains(target)) return;
+        setOpen(false);
       };
 
       if (open) {
@@ -89,9 +133,13 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
 
     return (
       <SelectContext.Provider value={{ value: value ?? internalValue, onChange: handleChange, open, setOpen }}>
-        <div ref={containerRef} className="relative">
+        <div className="relative">
           <button
-            ref={_ref}
+            ref={(node) => {
+              buttonRef.current = node;
+              if (typeof _ref === 'function') _ref(node);
+              else if (_ref) (_ref as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+            }}
             type="button"
             className={cn(
               'w-full h-10 px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground',
@@ -112,17 +160,20 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             <ChevronDown className={cn('h-4 w-4 opacity-50 transition-transform', open && 'transform rotate-180')} />
           </button>
 
-          {open && (
-            <div
-              role="listbox"
-              id={listboxId}
-              aria-label={resolvedPlaceholder}
-              className="absolute z-50 w-full mt-1 text-popover-foreground rounded-md border border-border shadow-lg max-h-60 overflow-auto"
-              style={{ backgroundColor: 'var(--popover)' }}
-            >
-              {children}
-            </div>
-          )}
+          {open &&
+            createPortal(
+              <div
+                role="listbox"
+                id={listboxId}
+                ref={listRef}
+                aria-label={resolvedPlaceholder}
+                className="z-[60] text-popover-foreground rounded-md border border-border shadow-lg overflow-y-auto overscroll-contain"
+                style={menuStyle}
+              >
+                {children}
+              </div>,
+              document.body
+            )}
         </div>
       </SelectContext.Provider>
     );
