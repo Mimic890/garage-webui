@@ -315,6 +315,7 @@ func SetupRoutes(
 			tel := api.Group("/telemetry")
 			tel.Get("/status", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Status)
 			tel.Get("/series", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Series)
+			tel.Get("/query", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Query)
 			tel.Post("/query", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Query)
 			tel.Post("/scrape", az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), th.Scrape)
 			tel.Delete("/history", az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), th.Purge)
