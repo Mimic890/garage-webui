@@ -1,5 +1,34 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+}
+
 @font-face {
   font-family: 'Geist Sans';
   src: url('/fonts/geist-sans-400.woff2') format('woff2');
@@ -492,14 +521,100 @@
     --chart-cyan: #7aa89f;
   }
 
+  /* ─── Graphite (default) — neutral, Grafana-like ─── */
+  .graphite {
+    --background: #f6f7f9;
+    --foreground: #16181d;
+    --card: #ffffff;
+    --card-foreground: #16181d;
+    --popover: #ffffff;
+    --popover-foreground: #16181d;
+    --primary: #e8660c;
+    --primary-foreground: #ffffff;
+    --secondary: #eef0f3;
+    --secondary-foreground: #16181d;
+    --muted: #eef0f3;
+    --muted-foreground: #5f6672;
+    --accent: #eceef2;
+    --accent-foreground: #16181d;
+    --destructive: #d9304c;
+    --destructive-foreground: #ffffff;
+    --border: #e1e4e8;
+    --input: #d6dae0;
+    --ring: #e8660c;
+    --accent-primary-soft: rgba(232, 102, 12, 0.10);
+    --accent-primary-border: rgba(232, 102, 12, 0.26);
+    --danger-soft: rgba(217, 48, 76, 0.10);
+    --danger-border: rgba(217, 48, 76, 0.28);
+    --success-soft: rgba(55, 135, 45, 0.10);
+    --surface-sunken: #eff1f4;
+    --chart-blue: #1f60c4;
+    --chart-orange: #fa6400;
+    --chart-green: #37872d;
+    --chart-red: #c4162a;
+    --chart-purple: #8f3bb8;
+    --chart-brown: #b35a00;
+    --chart-pink: #d63a74;
+    --chart-gray: #6e7079;
+    --chart-olive: #c79a00;
+    --chart-cyan: #0095b3;
+  }
+
+  .dark.graphite {
+    --background: #0e0f12;
+    --foreground: #e3e5e8;
+    --card: #15171b;
+    --card-foreground: #e3e5e8;
+    --popover: #1b1e23;
+    --popover-foreground: #e3e5e8;
+    --primary: #ff8a3d;
+    --primary-foreground: #111215;
+    --secondary: #1f2228;
+    --secondary-foreground: #e3e5e8;
+    --muted: #1f2228;
+    --muted-foreground: #8a909b;
+    --accent: #1f2228;
+    --accent-foreground: #e3e5e8;
+    --destructive: #f2495c;
+    --destructive-foreground: #111215;
+    --border: #24272d;
+    --input: #2c3037;
+    --ring: #ff8a3d;
+    --accent-primary-soft: rgba(255, 138, 61, 0.12);
+    --accent-primary-border: rgba(255, 138, 61, 0.28);
+    --danger-soft: rgba(242, 73, 92, 0.13);
+    --danger-border: rgba(242, 73, 92, 0.32);
+    --success-soft: rgba(115, 191, 105, 0.12);
+    --surface-sunken: #0b0c0e;
+    --chart-blue: #5794f2;
+    --chart-orange: #ff9830;
+    --chart-green: #73bf69;
+    --chart-red: #f2495c;
+    --chart-purple: #b877d9;
+    --chart-brown: #ffb357;
+    --chart-pink: #ff7383;
+    --chart-gray: #8e929b;
+    --chart-olive: #fade2a;
+    --chart-cyan: #6ed0e0;
+  }
+
+  :root {
+    --success: var(--chart-green);
+    --warning: var(--chart-olive);
+    --info: var(--chart-blue);
+    --surface: var(--card);
+    --grid: color-mix(in srgb, var(--foreground) 7%, transparent);
+    --app-font-sans: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+    --app-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  }
 
   * {
     border-color: var(--border);
   }
 
   html {
-    font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    font-size: 15px;
+    font-family: var(--app-font-sans);
+    font-size: var(--app-font-size, 15px);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -509,11 +624,31 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-feature-settings: 'rlig' 1, 'calt' 1, 'ss01' 1;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 
   code, pre, kbd, samp, .font-mono {
-    font-family: 'Geist Mono', ui-monospace, 'SF Mono', 'Menlo', Consolas, monospace;
+    font-family: var(--app-font-mono);
+  }
+
+  .tabular, table, input, [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

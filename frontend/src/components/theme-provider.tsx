@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
  * pair with the light/dark mode toggle; Warm is the brand default.
  */
 export type Palette =
+  | 'graphite'
   | 'warm'
   | 'catppuccin-latte'
   | 'catppuccin-frappe'
@@ -17,6 +18,7 @@ export type Palette =
 export type Mode = 'dark' | 'light';
 
 export const ALL_PALETTES: Palette[] = [
+  'graphite',
   'warm',
   'catppuccin-latte',
   'catppuccin-frappe',
@@ -55,7 +57,7 @@ interface ThemeProviderState {
 }
 
 const initialState: ThemeProviderState = {
-  palette: 'warm',
+  palette: 'graphite',
   mode: 'dark',
   setPalette: () => null,
   setMode: () => null,
@@ -67,7 +69,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
   children,
-  defaultPalette = 'warm',
+  defaultPalette = 'graphite',
   defaultMode = 'dark',
   storageKeyPrefix = 'garage-ui',
   ...props
@@ -88,6 +90,7 @@ export function ThemeProvider({
 
     // Clear current + legacy palette classes.
     root.classList.remove(
+      'graphite',
       'warm',
       'catppuccin-latte',
       'catppuccin-frappe',

@@ -109,7 +109,7 @@ export function BucketListView({
                   <TableCell className="hidden lg:table-cell">{formatDate(bucket.creationDate)}</TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="-m-3 top-1 relative" aria-label={t('buckets.list.actions_menu', { bucket: bucket.name })}>
                           <MoreVertical className="h-4 w-4" />
                         </Button>

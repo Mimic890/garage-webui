@@ -38,22 +38,13 @@ func Init(cfg Config) {
 		}
 	}
 
-	// Parse log level
-	level := zerolog.InfoLevel
-	switch cfg.Level {
-	case "debug":
-		level = zerolog.DebugLevel
-	case "info":
-		level = zerolog.InfoLevel
-	case "warn":
-		level = zerolog.WarnLevel
-	case "error":
-		level = zerolog.ErrorLevel
-	}
+	// The logger itself accepts everything; the process-wide level decides,
+	// so SetLevel can change verbosity at runtime from the web settings.
+	SetLevel(cfg.Level)
 
 	// Create logger
 	logger := zerolog.New(output).
-		Level(level).
+		Level(zerolog.TraceLevel).
 		With().
 		Timestamp().
 		Caller().
@@ -61,6 +52,27 @@ func Init(cfg Config) {
 
 	globalLogger = &Logger{logger}
 	log.Logger = logger
+}
+
+// ParseLevel maps a level name to zerolog, defaulting to info.
+func ParseLevel(name string) zerolog.Level {
+	switch name {
+	case "trace":
+		return zerolog.TraceLevel
+	case "debug":
+		return zerolog.DebugLevel
+	case "warn":
+		return zerolog.WarnLevel
+	case "error":
+		return zerolog.ErrorLevel
+	default:
+		return zerolog.InfoLevel
+	}
+}
+
+// SetLevel changes the process-wide log level.
+func SetLevel(name string) {
+	zerolog.SetGlobalLevel(ParseLevel(name))
 }
 
 // Get returns the global logger instance

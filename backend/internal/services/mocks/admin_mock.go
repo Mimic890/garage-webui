@@ -7,6 +7,7 @@ package mocks
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"Mimic890/garage-ui/internal/models"
 	"Mimic890/garage-ui/internal/services"
@@ -57,6 +58,10 @@ type AdminMock struct {
 	// Calls records every invocation in order. Tests can inspect this slice to
 	// assert call sequence, argument values, or call count.
 	Calls []Call
+
+	// mu guards Calls: collectors and fan-out handlers call the mock from
+	// several goroutines at once.
+	mu sync.Mutex
 }
 
 // Call captures a single invocation of an AdminMock method.
@@ -66,6 +71,8 @@ type Call struct {
 }
 
 func (m *AdminMock) record(method string, args ...any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.Calls = append(m.Calls, Call{Method: method, Args: args})
 }
 

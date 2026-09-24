@@ -1,321 +1,544 @@
-import { useEffect, useState } from 'react';
-import { AlertCircle, Database, FolderOpen, HardDrive, Server, Zap } from 'lucide-react';
+import * as React from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Activity, AlertTriangle, Info, Server } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
 import { PageHeader } from '@/components/ui/page-header';
-import { IconTile } from '@/components/ui/icon-tile';
 import { EmptyState } from '@/components/ui/empty-state';
-import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
-import { useDashboardData } from '@/hooks/useApi';
-import { formatBytes } from '@/lib/file-utils';
-import { getUniqueThemeColors } from '@/lib/chart-colors';
-import { useClusterStore } from '@/store/cluster-store';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
-import type { ClusterHealth } from '@/types';
+import { Badge } from '@/components/ui/badge';
+import { useClusterStore } from '@/store/cluster-store';
+import { useSettingsStore } from '@/store/settings-store';
 import { useTranslation } from '@/lib/i18n';
+import { garageApi } from '@/lib/api';
+import { useClusterHealth, useDashboardMetrics } from '@/hooks/useApi';
+import { refreshMs, telemetryKeys, useAppSettings, useTelemetryStatus, type TimeRange } from '@/hooks/useTelemetry';
+import type { MetricQuery } from '@/lib/telemetry';
+import { formatBytesValue, formatRelative, formatValue } from '@/lib/units';
+import { seriesColor } from '@/lib/chart-theme';
+import {
+  BarGauge,
+  DashboardContext,
+  DashboardRow,
+  DashboardTooltipProvider,
+  PanelFrame,
+  StatPanel,
+  TimeSeriesPanel,
+  type DashboardCtx,
+  type Tone,
+} from '@/components/dashboard/panels';
+import { RefreshPicker, TimeRangePicker } from '@/components/dashboard/time-controls';
+import type { ClusterNode } from '@/types';
 
-type StatTone = 'primary' | 'destructive' | 'neutral';
-type HealthLabel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+// Query definitions live at module scope so their identity (and the React
+// Query keys derived from them) stay stable across renders.
+const Q = {
+  s3Rate: { id: 's3', metric: 's3.requests', fn: 'rate' } as MetricQuery,
+  errorPct: { id: 'err', metric: 's3.errors', fn: 'ratio', denominator: 's3.requests', scale: 100 } as MetricQuery,
+  p95: { id: 'p95', metric: 's3.latency', match: { quantile: 'p95' }, scale: 1000 } as MetricQuery,
+  storageBytes: { id: 'bytes', metric: 'storage.bytes', fn: 'last' } as MetricQuery,
+  storageObjects: { id: 'objects', metric: 'storage.objects', fn: 'last' } as MetricQuery,
+  buckets: { id: 'buckets', metric: 'storage.buckets', fn: 'last' } as MetricQuery,
+  keys: { id: 'keys', metric: 'storage.keys', fn: 'last' } as MetricQuery,
+  diskUsed: { id: 'disk', metric: 'node.data_used_pct', fn: 'max', agg: 'max' } as MetricQuery,
+  nodesUp: { id: 'up', metric: 'cluster.storage_nodes_up', fn: 'min', agg: 'min' } as MetricQuery,
+  partitionsOk: { id: 'parts', metric: 'cluster.partitions_all_ok', fn: 'min', agg: 'min' } as MetricQuery,
+  ioRate: { id: 'io', metric: 'block.bytes_written', fn: 'rate' } as MetricQuery,
+  ioRead: { id: 'ior', metric: 'block.bytes_read', fn: 'rate' } as MetricQuery,
+  resync: { id: 'resync', metric: 'block.resync_queue', fn: 'last' } as MetricQuery,
+};
 
-function deriveHealth(health: ClusterHealth | null): { label: HealthLabel; tone: StatTone } {
-  if (!health) return { label: 'unknown', tone: 'neutral' };
-  if (
-    health.storageNodesUp === health.storageNodes &&
-    health.partitionsAllOk === health.partitions &&
-    health.connectedNodes === health.knownNodes
-  ) return { label: 'healthy', tone: 'primary' };
-  if (health.storageNodesUp > 0 && health.partitionsQuorum > 0) return { label: 'degraded', tone: 'primary' };
-  return { label: 'unhealthy', tone: 'destructive' };
+const P = {
+  requestsByEndpoint: [{ id: 'req', metric: 's3.requests', fn: 'rate', group_by: 'endpoint', top_k: 10 }] as MetricQuery[],
+  errorsByStatus: [{ id: 'err', metric: 's3.errors', fn: 'rate', group_by: 'status', top_k: 8 }] as MetricQuery[],
+  errorsByEndpoint: [{ id: 'err', metric: 's3.errors', fn: 'rate', group_by: 'endpoint', top_k: 8 }] as MetricQuery[],
+  latency: [{ id: 'lat', metric: 's3.latency', group_by: 'quantile', scale: 1000 }] as MetricQuery[],
+  latencyByEndpoint: [{ id: 'avg', metric: 's3.duration_sum', fn: 'ratio', denominator: 's3.requests', group_by: 'endpoint', scale: 1000, top_k: 8 }] as MetricQuery[],
+  errorRatio: [
+    { id: 'total', metric: 's3.errors', fn: 'ratio', denominator: 's3.requests', scale: 100 },
+    { id: '5xx', metric: 's3.errors', fn: 'ratio', denominator: 's3.requests', match: { class: '5xx' }, scale: 100 },
+  ] as MetricQuery[],
+  otherApis: [
+    { id: 'web', metric: 'web.requests', fn: 'rate' },
+    { id: 'k2v', metric: 'k2v.requests', fn: 'rate' },
+    { id: 'admin', metric: 'admin.requests', fn: 'rate' },
+  ] as MetricQuery[],
+  webLatency: [{ id: 'web', metric: 'web.latency', group_by: 'quantile', scale: 1000 }] as MetricQuery[],
+  storageBytes: [{ id: 'bytes', metric: 'storage.bytes' }] as MetricQuery[],
+  storageObjects: [{ id: 'objects', metric: 'storage.objects' }] as MetricQuery[],
+  bucketBytes: [{ id: 'b', metric: 'bucket.bytes', group_by: 'bucket', top_k: 8 }] as MetricQuery[],
+  bucketObjects: [{ id: 'o', metric: 'bucket.objects', group_by: 'bucket', top_k: 8 }] as MetricQuery[],
+  multipart: [
+    { id: 'mpu', metric: 'storage.multipart_uploads' },
+  ] as MetricQuery[],
+  diskUsedByNode: [{ id: 'used', metric: 'node.data_used_pct', group_by: 'node' }] as MetricQuery[],
+  dataAvail: [{ id: 'avail', metric: 'node.data_avail', group_by: 'node' }] as MetricQuery[],
+  metaAvail: [{ id: 'meta', metric: 'node.meta_avail', group_by: 'node' }] as MetricQuery[],
+  nodes: [
+    { id: 'known', metric: 'cluster.nodes_known' },
+    { id: 'connected', metric: 'cluster.nodes_connected' },
+    { id: 'storage', metric: 'cluster.storage_nodes' },
+    { id: 'storage_up', metric: 'cluster.storage_nodes_up' },
+  ] as MetricQuery[],
+  partitions: [
+    { id: 'total', metric: 'cluster.partitions' },
+    { id: 'quorum', metric: 'cluster.partitions_quorum' },
+    { id: 'ok', metric: 'cluster.partitions_all_ok' },
+  ] as MetricQuery[],
+  blockIo: [
+    { id: 'write', metric: 'block.bytes_written', fn: 'rate' },
+    { id: 'read', metric: 'block.bytes_read', fn: 'rate' },
+  ] as MetricQuery[],
+  blockOps: [
+    { id: 'writes', metric: 'block.writes', fn: 'rate' },
+    { id: 'reads', metric: 'block.reads', fn: 'rate' },
+  ] as MetricQuery[],
+  blockLatency: [
+    { id: 'write', metric: 'block.write_seconds', fn: 'ratio', denominator: 'block.writes', scale: 1000 },
+    { id: 'read', metric: 'block.read_seconds', fn: 'ratio', denominator: 'block.reads', scale: 1000 },
+  ] as MetricQuery[],
+  resync: [
+    { id: 'queue', metric: 'block.resync_queue' },
+    { id: 'errored', metric: 'block.resync_errored' },
+  ] as MetricQuery[],
+  tableQueues: [
+    { id: 'gc', metric: 'table.gc_queue' },
+    { id: 'merkle', metric: 'table.merkle_queue' },
+    { id: 'insert', metric: 'table.insert_queue' },
+  ] as MetricQuery[],
+  tableOps: [
+    { id: 'gets', metric: 'table.gets', fn: 'rate' },
+    { id: 'puts', metric: 'table.puts', fn: 'rate' },
+    { id: 'updates', metric: 'table.updates', fn: 'rate' },
+  ] as MetricQuery[],
+  tableItems: [{ id: 'items', metric: 'table.items', group_by: 'table', top_k: 8 }] as MetricQuery[],
+  rpc: [
+    { id: 'rpc', metric: 'rpc.requests', fn: 'rate' },
+    { id: 'errors', metric: 'rpc.errors', fn: 'rate' },
+  ] as MetricQuery[],
+  rpcLatency: [{ id: 'rpc', metric: 'rpc.latency', group_by: 'quantile', scale: 1000 }] as MetricQuery[],
+  blockMemory: [
+    { id: 'ram', metric: 'block.ram_buffer_free' },
+  ] as MetricQuery[],
+  collector: [{ id: 'scrape', metric: 'collector.scrape_seconds', scale: 1000 }] as MetricQuery[],
+};
+
+const QUANTILE_STYLES = {
+  p50: { color: 'var(--chart-green)', label: 'p50' },
+  p95: { color: 'var(--chart-olive)', label: 'p95' },
+  p99: { color: 'var(--chart-red)', label: 'p99' },
+};
+
+function useNodeNames(enabled: boolean) {
+  const clusterId = useClusterStore((s) => s.activeClusterId);
+  return useQuery({
+    queryKey: ['cluster', 'status', clusterId ?? 'none'],
+    queryFn: () => garageApi.getClusterStatus(),
+    enabled: enabled && !!clusterId,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
+function Grid({ className, children }: { className: string; children: React.ReactNode }) {
+  return <div className={`grid gap-2 ${className}`}>{children}</div>;
+}
+
+function StatusBanner({ tone, icon, children }: { tone: 'info' | 'warn'; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-[0.8125rem]"
+      style={{
+        borderColor: `color-mix(in srgb, ${tone === 'warn' ? 'var(--warning)' : 'var(--info)'} 35%, transparent)`,
+        background: `color-mix(in srgb, ${tone === 'warn' ? 'var(--warning)' : 'var(--info)'} 8%, transparent)`,
+      }}
+    >
+      <span className="mt-0.5 shrink-0" style={{ color: tone === 'warn' ? 'var(--warning)' : 'var(--info)' }}>{icon}</span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
 }
 
 export function Dashboard() {
-  const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading, isError } = useDashboardData();
-  const metrics = metricsQuery.data;
-  const buckets = bucketsQuery.data ?? [];
-  const clusterHealth = healthQuery.data ?? null;
-  const health = deriveHealth(clusterHealth);
-
-  const bucketCount = metrics?.usageByBucket?.length ?? 0;
-  const [themeColors, setThemeColors] = useState<string[]>([]);
-
-  useEffect(() => {
-    const updateThemeColors = () => {
-      setThemeColors(getUniqueThemeColors(bucketCount));
-    };
-
-    updateThemeColors();
-
-    const observer = new MutationObserver(updateThemeColors);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    return () => observer.disconnect();
-  }, [bucketCount]);
-
-  const { clusters } = useClusterStore();
-  const navigate = useNavigate();
   const { t, language } = useTranslation();
-  const number = new Intl.NumberFormat(language);
-  const formatLocalizedBytes = (bytes: number) => formatBytes(bytes).replace(/^[\d.]+/, (value) => number.format(Number(value)));
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { clusters, activeClusterId } = useClusterStore();
+  const { dashboardRange, setDashboardRange, dashboardRefresh, setDashboardRefresh } = useSettingsStore();
+  const [params, setParams] = useSearchParams();
+  const hasCluster = clusters.length > 0 && !!activeClusterId;
+
+  const settingsQ = useAppSettings(hasCluster);
+  const statusQ = useTelemetryStatus(hasCluster ? 15_000 : false);
+  const healthQ = useClusterHealth(hasCluster);
+  const metricsQ = useDashboardMetrics(hasCluster);
+  const nodesQ = useNodeNames(hasCluster);
+
+  const interval = settingsQ.data?.settings.monitoring.interval_seconds ?? statusQ.data?.monitoring.interval_seconds;
+  const thresholds = settingsQ.data?.settings.thresholds ?? { disk_warn_pct: 80, disk_crit_pct: 90, error_rate_warn_pct: 5, latency_warn_ms: 500 };
+
+  const absFrom = Number(params.get('from'));
+  const absTo = Number(params.get('to'));
+  const range: TimeRange = React.useMemo(
+    () => (absFrom > 0 && absTo > absFrom ? { kind: 'absolute', from: absFrom, to: absTo } : { kind: 'relative', key: dashboardRange }),
+    [absFrom, absTo, dashboardRange],
+  );
+  const setRange = React.useCallback(
+    (r: TimeRange) => {
+      if (r.kind === 'absolute') {
+        setParams({ from: String(r.from), to: String(r.to) }, { replace: false });
+      } else {
+        setDashboardRange(r.key);
+        if (params.has('from')) setParams({}, { replace: false });
+      }
+    },
+    [params, setParams, setDashboardRange],
+  );
+
+  const nodeNames = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const n of nodesQ.data?.nodes ?? []) map.set(n.id.slice(0, 16), n.hostname || n.id.slice(0, 8));
+    return map;
+  }, [nodesQ.data]);
+
+  const seriesLabel = React.useCallback((_q: string, name: string) => nodeNames.get(name) ?? name, [nodeNames]);
+  const ctx: DashboardCtx = React.useMemo(
+    () => ({
+      range,
+      refetchInterval: refreshMs(dashboardRefresh, interval),
+      onZoom: (from: number, to: number) => setRange({ kind: 'absolute', from, to }),
+      seriesLabel,
+    }),
+    [range, dashboardRefresh, interval, setRange, seriesLabel],
+  );
+
+  const refreshing = queryClient.isFetching({ queryKey: telemetryKeys.all }) > 0;
+  const refreshAll = () => {
+    void queryClient.invalidateQueries({ queryKey: telemetryKeys.all });
+    void healthQ.refetch();
+    void metricsQ.refetch();
+    void nodesQ.refetch();
+  };
 
   if (clusters.length === 0) {
     return (
       <div>
         <PageHeader title={t('nav.dashboard')} subtitle={t('dashboard.welcome_subtitle')} />
-        <div className="px-6 py-12 flex items-center justify-center">
+        <div className="flex items-center justify-center px-6 py-12">
           <EmptyState
             icon={<Server />}
             title={t('dashboard.no_clusters')}
             description={t('dashboard.no_clusters.desc')}
             tone="primary"
-            action={
-              <Button onClick={() => navigate('/connections', { state: { addCluster: true } })}>
-                {t('dashboard.add_btn')}
-              </Button>
+            action={<Button onClick={() => navigate('/connections', { state: { addCluster: true } })}>{t('dashboard.add_btn')}</Button>}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const health = healthQ.data;
+  const collector = statusQ.data?.collector;
+  const monitoring = statusQ.data?.monitoring;
+  const clusterName = clusters.find((c) => c.id === activeClusterId)?.name ?? '';
+  const healthTone: Tone = !health ? 'neutral' : health.status === 'healthy' ? 'ok' : health.status === 'degraded' ? 'warn' : 'crit';
+  const number = new Intl.NumberFormat(language);
+
+  const diskTone = (v: number | null): Tone => (v === null ? 'neutral' : v >= thresholds.disk_crit_pct ? 'crit' : v >= thresholds.disk_warn_pct ? 'warn' : 'ok');
+  const errTone = (v: number | null): Tone => (v === null ? 'neutral' : v >= thresholds.error_rate_warn_pct ? 'crit' : v > 0 ? 'warn' : 'ok');
+  const latTone = (v: number | null): Tone => (v === null ? 'neutral' : v >= thresholds.latency_warn_ms ? 'warn' : 'ok');
+
+  const usage = metricsQ.data?.usageByBucket ?? [];
+  const sortedUsage = [...usage].sort((a, b) => b.size - a.size);
+  const totalSize = metricsQ.data?.totalSize ?? 0;
+  const donut = sortedUsage.slice(0, 7).map((b, i) => ({ name: b.bucketName, value: b.size, color: seriesColor(i) }));
+  const rest = sortedUsage.slice(7).reduce((a, b) => a + b.size, 0);
+  if (rest > 0) donut.push({ name: t('dashboard.other'), value: rest, color: 'var(--chart-gray)' });
+
+  const nodes: ClusterNode[] = nodesQ.data?.nodes ?? [];
+
+  return (
+    <DashboardTooltipProvider>
+      <DashboardContext.Provider value={ctx}>
+        <div className="pb-8">
+          <PageHeader
+            title={t('nav.dashboard')}
+            subtitle={
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-medium text-[var(--foreground)]">{clusterName}</span>
+                {health && (
+                  <Badge variant={healthTone === 'ok' ? 'success' : healthTone === 'warn' ? 'warning' : 'danger'} className="px-1.5 py-0 text-[0.6875rem]">
+                    {t(`dashboard.health_${health.status === 'healthy' ? 'healthy' : health.status === 'degraded' ? 'degraded' : 'unhealthy'}`)}
+                  </Badge>
+                )}
+                {monitoring?.enabled && collector?.last_scrape && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--success)] opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--success)]" />
+                    </span>
+                    {t('dashboard.collector.live', { interval: monitoring.interval_seconds, ago: formatRelative(collector.last_scrape) })}
+                  </span>
+                )}
+              </span>
+            }
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <TimeRangePicker range={range} onChange={setRange} />
+                <RefreshPicker value={dashboardRefresh} onChange={setDashboardRefresh} onRefresh={refreshAll} refreshing={refreshing} autoSeconds={interval} />
+              </div>
             }
           />
-        </div>
-      </div>
-    );
-  }
 
-  if (isError) {
-    return (
-      <div>
-        <PageHeader title={t('nav.dashboard')} subtitle={t('dashboard.unavailable_subtitle')} />
-        <div className="px-6 py-12">
-          <EmptyState
-            icon={<AlertCircle />}
-            title={t('dashboard.load_error_title')}
-            description={t('dashboard.load_error_description')}
-            tone="destructive"
-            action={<Button onClick={() => void Promise.all([metricsQuery.refetch(), bucketsQuery.refetch(), healthQuery.refetch()])}>{t('common.retry')}</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <PageHeader
-        title={t('nav.dashboard')}
-        subtitle={
-          clusterHealth
-            ? t('dashboard.nodes_connected_count')
-              .replace('{{connected}}', number.format(clusterHealth.connectedNodes))
-              .replace('{{total}}', number.format(clusterHealth.knownNodes))
-            : t('dashboard.loading')
-        }
-      />
-
-      {isLoading ? (
-        <div className="flex min-h-[360px] items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[var(--primary)] border-r-transparent" />
-            <p className="mt-3 text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.loading')}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6 px-6 py-5">
-          {/* KPI row */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label={t('dashboard.total_storage')}
-              value={metrics ? formatLocalizedBytes(metrics.totalSize) : '—'}
-              sub={t(metrics?.bucketCount === 1 ? 'dashboard.storage_across_one_bucket' : 'dashboard.storage_across_buckets')
-                .replace('{{count}}', number.format(metrics?.bucketCount ?? 0))}
-              icon={<HardDrive />}
-            />
-            <StatCard
-              label={t('dashboard.objects')}
-              value={number.format(metrics?.objectCount ?? 0)}
-              sub={t('dashboard.files_folders')}
-              icon={<FolderOpen />}
-            />
-            <StatCard
-              label={t('nav.buckets')}
-              value={number.format(metrics?.bucketCount ?? 0)}
-              sub={t('dashboard.active_buckets')}
-              icon={<Database />}
-            />
-            <StatCard
-              label={t('nav.cluster')}
-              value={t(`dashboard.health_${health.label}`)}
-              valueTone={health.tone}
-              sub={
-                clusterHealth
-                   ? t('dashboard.storage_nodes_count')
-                     .replace('{{healthy}}', number.format(clusterHealth.storageNodesUp))
-                     .replace('{{total}}', number.format(clusterHealth.storageNodes))
-                  : '—'
-              }
-              icon={health.label === 'unhealthy' ? <AlertCircle /> : <Zap />}
-              iconTone={health.tone}
-            />
-          </div>
-
-          {/* Cluster row */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard
-              label={t('dashboard.storage_nodes')}
-               value={clusterHealth ? `${number.format(clusterHealth.storageNodesUp)}/${number.format(clusterHealth.storageNodes)}` : '—'}
-              sub={t('dashboard.healthy')}
-              icon={<Server />}
-            />
-            <StatCard
-              label={t('dashboard.partitions')}
-               value={clusterHealth ? `${number.format(clusterHealth.partitionsAllOk)}/${number.format(clusterHealth.partitions)}` : '—'}
-              sub={t('dashboard.healthy')}
-              icon={<Zap />}
-            />
-            <StatCard
-              label={t('dashboard.connected_nodes')}
-               value={clusterHealth ? `${number.format(clusterHealth.connectedNodes)}/${number.format(clusterHealth.knownNodes)}` : '—'}
-              sub={t('dashboard.cluster_membership')}
-              icon={<Server />}
-            />
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Card title={t('dashboard.usage_by_bucket')} description={t('dashboard.usage_desc')}>
-              {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
-                <BucketUsageChart data={metrics.usageByBucket} />
-              ) : (
-                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.no_data')}</div>
-              )}
-            </Card>
-
-            <Card title={t('dashboard.breakdown')} description={t('dashboard.breakdown_desc')}>
-              {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
-                <div className="space-y-4">
-                  {metrics.usageByBucket.map((bucket, idx) => {
-                    const color = themeColors[idx] || 'var(--primary)';
-                    return (
-                      <div key={bucket.bucketName} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-[13.5px]">
-                          <span className="truncate font-medium flex items-center gap-2">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                              style={{ backgroundColor: color }}
-                            />
-                            {bucket.bucketName}
-                          </span>
-                          <div className="flex items-center gap-3 text-[13px] text-[var(--muted-foreground)]">
-                            <span>{t(bucket.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count')
-                              .replace('{{count}}', number.format(bucket.objectCount ?? 0))}</span>
-                            <span className="font-medium text-[var(--foreground)]">{formatLocalizedBytes(bucket.size)}</span>
-                            <span className="w-10 text-right">{new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 1 }).format((bucket.percentage ?? 0) / 100)}</span>
-                          </div>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
-                          <div
-                            className="h-full transition-all rounded-full"
-                            style={{
-                              width: `${bucket.percentage ?? 0}%`,
-                              backgroundColor: color,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">{t('dashboard.no_buckets')}</div>
-              )}
-            </Card>
-          </div>
-
-          {/* Recent buckets */}
-          <Card title={t('dashboard.recent_buckets')} description={t('dashboard.recent_desc')}>
-            {buckets.length === 0 ? (
-              <EmptyState
-                icon={<Database />}
-                title={t('dashboard.no_buckets_yet')}
-                description={t('dashboard.no_buckets_yet_desc')}
-                tone="neutral"
-              />
-            ) : (
-              <ul className="divide-y divide-[var(--border)]">
-                {buckets.slice(0, 5).map((bucket) => (
-                  <li key={bucket.name} className="flex items-center gap-3 py-3">
-                    <IconTile icon={<Database />} tone="primary" size="md" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium">{bucket.name}</p>
-                      <p className="truncate text-[12.5px] text-[var(--muted-foreground)]">
-                        {t('dashboard.created_date').replace('{{date}}', new Intl.DateTimeFormat(language).format(new Date(bucket.creationDate)))}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[14px] font-medium">{bucket.objectCount == null ? '—' : t(bucket.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count').replace('{{count}}', number.format(bucket.objectCount))}</p>
-                      <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                        {bucket.size ? formatLocalizedBytes(bucket.size) : '—'}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+          <div className="space-y-5 px-3 pt-3 md:px-4">
+            {monitoring && !monitoring.enabled && (
+              <StatusBanner tone="info" icon={<Info className="h-4 w-4" />}>
+                {t('dashboard.collector.disabled')}{' '}
+                <Link to="/settings?section=monitoring" className="font-medium text-[var(--primary)] hover:underline">{t('dashboard.collector.enable')}</Link>
+              </StatusBanner>
             )}
-          </Card>
+            {monitoring?.enabled && collector && !collector.metrics_available && (
+              <StatusBanner tone="warn" icon={<AlertTriangle className="h-4 w-4" />}>
+                <div className="font-medium">{t('dashboard.collector.noMetrics')}</div>
+                <div className="mt-0.5 text-[0.75rem] text-[var(--muted-foreground)]">{t('dashboard.collector.noMetricsHint')}</div>
+              </StatusBanner>
+            )}
+            {monitoring?.enabled && collector?.last_error && collector.metrics_available && (
+              <StatusBanner tone="warn" icon={<AlertTriangle className="h-4 w-4" />}>
+                <div className="font-medium">{t('dashboard.collector.partial')}</div>
+                <div className="mt-0.5 break-all font-mono text-[0.6875rem] text-[var(--muted-foreground)]">{collector.last_error}</div>
+              </StatusBanner>
+            )}
+            {monitoring?.enabled && statusQ.data && statusQ.data.cluster.raw_samples === 0 && (
+              <StatusBanner tone="info" icon={<Activity className="h-4 w-4" />}>
+                {t('dashboard.collector.warming', { interval: monitoring.interval_seconds })}
+              </StatusBanner>
+            )}
+
+            <DashboardRow id="overview" title={t('dashboard.row.overview')}>
+              <Grid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+                <StatPanel
+                  title={t('dashboard.stat.health')}
+                  unit="short"
+                  value={health ? t(`dashboard.health_${health.status === 'healthy' ? 'healthy' : health.status === 'degraded' ? 'degraded' : 'unhealthy'}`) : '—'}
+                  tone={() => healthTone}
+                  query={Q.nodesUp}
+                  sub={health ? t('dashboard.stat.nodesSub', { up: number.format(health.storageNodesUp), total: number.format(health.storageNodes), connected: number.format(health.connectedNodes), known: number.format(health.knownNodes) }) : undefined}
+                />
+                <StatPanel
+                  title={t('dashboard.stat.partitions')}
+                  unit="count"
+                  query={Q.partitionsOk}
+                  value={health ? `${number.format(health.partitionsAllOk)}/${number.format(health.partitions)}` : undefined}
+                  tone={() => (!health ? 'neutral' : health.partitionsAllOk === health.partitions ? 'ok' : health.partitionsQuorum === health.partitions ? 'warn' : 'crit')}
+                  sub={health ? t('dashboard.stat.quorumSub', { quorum: number.format(health.partitionsQuorum) }) : undefined}
+                />
+                <StatPanel title={t('dashboard.stat.stored')} unit="bytes" query={Q.storageBytes} value={metricsQ.data ? formatBytesValue(metricsQ.data.totalSize) : undefined} sub={metricsQ.data ? t('dashboard.stat.bucketsSub', { count: number.format(metricsQ.data.bucketCount) }) : undefined} />
+                <StatPanel title={t('dashboard.stat.objects')} unit="count" query={Q.storageObjects} value={metricsQ.data ? number.format(metricsQ.data.objectCount) : undefined} />
+                <StatPanel title={t('dashboard.stat.requests')} unit="reqps" query={Q.s3Rate} tone={() => 'info'} sub={t('dashboard.stat.s3Sub')} />
+                <StatPanel title={t('dashboard.stat.errorRate')} unit="percent" query={Q.errorPct} tone={errTone} sub={t('dashboard.stat.errorSub', { pct: thresholds.error_rate_warn_pct })} />
+                <StatPanel title={t('dashboard.stat.p95')} unit="ms" query={Q.p95} tone={latTone} reduce="last" sub={t('dashboard.stat.latencySub', { ms: thresholds.latency_warn_ms })} />
+                <StatPanel title={t('dashboard.stat.write')} unit="bytesPerSec" query={Q.ioRate} tone={() => 'info'} sub={t('dashboard.stat.writeSub')} />
+                <StatPanel title={t('dashboard.stat.read')} unit="bytesPerSec" query={Q.ioRead} tone={() => 'info'} sub={t('dashboard.stat.readSub')} />
+                <StatPanel title={t('dashboard.stat.disk')} unit="percent" query={Q.diskUsed} tone={diskTone} sub={t('dashboard.stat.diskSub', { warn: thresholds.disk_warn_pct, crit: thresholds.disk_crit_pct })} />
+                <StatPanel title={t('dashboard.stat.keys')} unit="count" query={Q.keys} />
+                <StatPanel title={t('dashboard.stat.resync')} unit="count" query={Q.resync} tone={(v) => (v === null ? 'neutral' : v > 1000 ? 'warn' : 'ok')} sub={t('dashboard.stat.resyncSub')} />
+              </Grid>
+            </DashboardRow>
+
+            <DashboardRow id="s3" title={t('dashboard.row.s3')}>
+              <Grid className="grid-cols-1 xl:grid-cols-2">
+                <TimeSeriesPanel title={t('dashboard.panel.requestsByEndpoint')} description={t('dashboard.panel.requestsByEndpoint.desc')} queries={P.requestsByEndpoint} unit="reqps" stacked legend="table" height={230} />
+                <TimeSeriesPanel title={t('dashboard.panel.latency')} description={t('dashboard.panel.latency.desc')} queries={P.latency} unit="ms" styles={QUANTILE_STYLES} thresholds={[{ value: thresholds.latency_warn_ms, color: 'var(--warning)' }]} fillOpacity={0.08} height={230} />
+              </Grid>
+              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
+                <TimeSeriesPanel title={t('dashboard.panel.errorsByStatus')} queries={P.errorsByStatus} unit="reqps" bars height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.errorRatio')} queries={P.errorRatio} unit="percent" labels={{ total: t('dashboard.series.allErrors'), '5xx': '5xx' }} styles={{ total: { color: 'var(--chart-orange)' }, '5xx': { color: 'var(--chart-red)' } }} thresholds={[{ value: thresholds.error_rate_warn_pct, color: 'var(--destructive)' }]} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.latencyByEndpoint')} queries={P.latencyByEndpoint} unit="ms" fillOpacity={0} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.errorsByEndpoint')} queries={P.errorsByEndpoint} unit="reqps" stacked height={170} />
+              </Grid>
+              <Grid className="grid-cols-1 lg:grid-cols-2">
+                <TimeSeriesPanel title={t('dashboard.panel.otherApis')} description={t('dashboard.panel.otherApis.desc')} queries={P.otherApis} unit="reqps" labels={{ web: t('dashboard.series.web'), k2v: 'K2V', admin: t('dashboard.series.admin') }} height={160} />
+                <TimeSeriesPanel title={t('dashboard.panel.webLatency')} queries={P.webLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.06} height={160} />
+              </Grid>
+            </DashboardRow>
+
+            <DashboardRow id="storage" title={t('dashboard.row.storage')}>
+              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
+                <TimeSeriesPanel title={t('dashboard.panel.storedData')} queries={P.storageBytes} unit="bytes" labels={{ bytes: t('dashboard.series.stored') }} styles={{ bytes: { color: 'var(--chart-blue)' } }} height={180} />
+                <TimeSeriesPanel title={t('dashboard.panel.objectCount')} queries={P.storageObjects} unit="count" labels={{ objects: t('dashboard.series.objects') }} styles={{ objects: { color: 'var(--chart-purple)' } }} height={180} />
+                <TimeSeriesPanel title={t('dashboard.panel.bucketGrowth')} queries={P.bucketBytes} unit="bytes" fillOpacity={0.04} height={180} />
+                <TimeSeriesPanel title={t('dashboard.panel.bucketObjects')} queries={P.bucketObjects} unit="count" fillOpacity={0.04} height={180} />
+              </Grid>
+              <Grid className="grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
+                <PanelFrame title={t('dashboard.panel.distribution')} loading={metricsQ.isFetching}>
+                  {donut.length === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
+                  ) : (
+                    <div className="relative h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={donut} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={1.5} stroke="none" isAnimationActive={false}>
+                            {donut.map((d) => <Cell key={d.name} fill={d.color} />)}
+                          </Pie>
+                          <ReTooltip
+                            contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
+                            itemStyle={{ color: 'var(--foreground)' }}
+                            formatter={(v) => formatBytesValue(Number(v))}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="text-[1.125rem] font-semibold tabular">{formatBytesValue(totalSize)}</div>
+                        <div className="text-[0.6875rem] text-[var(--muted-foreground)]">{t('dashboard.stat.bucketsSub', { count: number.format(usage.length) })}</div>
+                      </div>
+                    </div>
+                  )}
+                </PanelFrame>
+                <PanelFrame title={t('dashboard.panel.topBuckets')} loading={metricsQ.isFetching}>
+                  {sortedUsage.length === 0 ? (
+                    <div className="flex h-[220px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
+                  ) : (
+                    <div className="max-h-[236px] overflow-y-auto pr-1 scrollbar-thin">
+                      <BarGauge
+                        items={sortedUsage.slice(0, 12).map((b, i) => ({
+                          key: b.bucketName,
+                          label: <Link to={`/buckets/${encodeURIComponent(b.bucketName)}/objects`} className="hover:text-[var(--primary)] hover:underline">{b.bucketName}</Link>,
+                          value: b.size,
+                          max: sortedUsage[0].size || 1,
+                          detail: t(b.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count', { count: number.format(b.objectCount) }),
+                          tone: i === 0 ? 'info' : 'info',
+                        }))}
+                        format={(v) => formatBytesValue(v)}
+                      />
+                    </div>
+                  )}
+                </PanelFrame>
+                <TimeSeriesPanel className="lg:col-span-2 2xl:col-span-1" title={t('dashboard.panel.multipart')} description={t('dashboard.panel.multipart.desc')} queries={P.multipart} unit="count" labels={{ mpu: t('dashboard.series.uploads') }} styles={{ mpu: { color: 'var(--chart-orange)' } }} height={200} />
+              </Grid>
+            </DashboardRow>
+
+            <DashboardRow id="nodes" title={t('dashboard.row.nodes')} extra={<span className="text-[0.75rem] text-[var(--muted-foreground)]">{nodes.length > 0 && t('dashboard.nodesCount', { count: nodes.length })}</span>}>
+              <Grid className="grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <PanelFrame title={t('dashboard.panel.diskUsage')} description={t('dashboard.panel.diskUsage.desc')} loading={nodesQ.isFetching}>
+                  {nodes.filter((n) => n.dataPartition).length === 0 ? (
+                    <div className="flex h-[140px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
+                  ) : (
+                    <BarGauge
+                      items={nodes
+                        .filter((n) => n.dataPartition)
+                        .map((n) => {
+                          const used = n.dataPartition!.total - n.dataPartition!.available;
+                          const pct = (used / n.dataPartition!.total) * 100;
+                          return {
+                            key: n.id,
+                            label: (
+                              <span className="flex items-center gap-1.5">
+                                <span className={`h-1.5 w-1.5 rounded-full ${n.isUp ? 'bg-[var(--success)]' : 'bg-[var(--destructive)]'}`} />
+                                {n.hostname || n.id.slice(0, 12)}
+                                {n.role?.zone && <span className="text-[var(--muted-foreground)]">· {n.role.zone}</span>}
+                              </span>
+                            ),
+                            value: pct,
+                            max: 100,
+                            detail: `${formatBytesValue(used)} / ${formatBytesValue(n.dataPartition!.total)}`,
+                            tone: diskTone(pct),
+                          };
+                        })}
+                      format={(v) => formatValue(v, 'percent')}
+                    />
+                  )}
+                </PanelFrame>
+                <TimeSeriesPanel title={t('dashboard.panel.diskUsedTrend')} queries={P.diskUsedByNode} unit="percent" yMax={100} thresholds={[{ value: thresholds.disk_warn_pct, color: 'var(--warning)' }, { value: thresholds.disk_crit_pct, color: 'var(--destructive)' }]} fillOpacity={0.06} height={170} />
+              </Grid>
+              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
+                <TimeSeriesPanel title={t('dashboard.panel.dataAvail')} queries={P.dataAvail} unit="bytes" fillOpacity={0.06} height={160} />
+                <TimeSeriesPanel title={t('dashboard.panel.metaAvail')} queries={P.metaAvail} unit="bytes" fillOpacity={0.06} height={160} />
+                <TimeSeriesPanel
+                  title={t('dashboard.panel.nodes')}
+                  queries={P.nodes}
+                  unit="count"
+                  labels={{ known: t('dashboard.series.known'), connected: t('dashboard.series.connected'), storage: t('dashboard.series.storageNodes'), storage_up: t('dashboard.series.storageUp') }}
+                  styles={{ known: { color: 'var(--chart-gray)', dashed: true }, connected: { color: 'var(--chart-blue)' }, storage: { color: 'var(--chart-gray)', dashed: true }, storage_up: { color: 'var(--chart-green)' } }}
+                  fillOpacity={0}
+                  height={160}
+                />
+                <TimeSeriesPanel
+                  title={t('dashboard.panel.partitions')}
+                  queries={P.partitions}
+                  unit="count"
+                  labels={{ total: t('dashboard.series.total'), quorum: t('dashboard.series.quorum'), ok: t('dashboard.series.allOk') }}
+                  styles={{ total: { color: 'var(--chart-gray)', dashed: true }, quorum: { color: 'var(--chart-olive)' }, ok: { color: 'var(--chart-green)' } }}
+                  fillOpacity={0}
+                  height={160}
+                />
+              </Grid>
+              {nodes.length > 0 && (
+                <PanelFrame title={t('dashboard.panel.nodeTable')}>
+                  <div className="overflow-x-auto scrollbar-thin">
+                    <table className="w-full min-w-[720px] text-[0.75rem]">
+                      <thead>
+                        <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.host')}</th>
+                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.id')}</th>
+                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.zone')}</th>
+                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.address')}</th>
+                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.version')}</th>
+                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.capacity')}</th>
+                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.data')}</th>
+                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.meta')}</th>
+                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nodes.map((n) => {
+                          const pct = (p?: { available: number; total: number }) => (p && p.total ? ((p.total - p.available) / p.total) * 100 : null);
+                          const dp = pct(n.dataPartition);
+                          const mp = pct(n.metadataPartition);
+                          return (
+                            <tr key={n.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)]/50">
+                              <td className="px-2 py-1.5 font-medium">{n.hostname || '—'}</td>
+                              <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.id.slice(0, 16)}</td>
+                              <td className="px-2 py-1.5">{n.role?.zone || '—'}</td>
+                              <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.addr || '—'}</td>
+                              <td className="px-2 py-1.5">{n.garageVersion || '—'}</td>
+                              <td className="px-2 py-1.5 text-right tabular">{n.role?.capacity ? formatBytesValue(n.role.capacity) : t('dashboard.node.gateway')}</td>
+                              <td className="px-2 py-1.5 text-right tabular" style={{ color: dp === null ? undefined : `var(--${diskTone(dp) === 'ok' ? 'foreground' : diskTone(dp) === 'warn' ? 'warning' : 'destructive'})` }}>{formatValue(dp, 'percent')}</td>
+                              <td className="px-2 py-1.5 text-right tabular">{formatValue(mp, 'percent')}</td>
+                              <td className="px-2 py-1.5 text-right">
+                                <Badge variant={n.isUp ? (n.draining ? 'warning' : 'success') : 'danger'} className="px-1.5 py-0 text-[0.6875rem]">
+                                  {n.isUp ? (n.draining ? t('dashboard.node.draining') : t('dashboard.node.up')) : t('dashboard.node.down')}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </PanelFrame>
+              )}
+            </DashboardRow>
+
+            <DashboardRow id="internals" title={t('dashboard.row.internals')}>
+              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
+                <TimeSeriesPanel title={t('dashboard.panel.blockIo')} description={t('dashboard.panel.blockIo.desc')} queries={P.blockIo} unit="bytesPerSec" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.blockOps')} queries={P.blockOps} unit="opsps" labels={{ writes: t('dashboard.series.write'), reads: t('dashboard.series.read') }} styles={{ writes: { color: 'var(--chart-orange)' }, reads: { color: 'var(--chart-blue)' } }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.blockLatency')} queries={P.blockLatency} unit="ms" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} fillOpacity={0.05} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.resync')} description={t('dashboard.panel.resync.desc')} queries={P.resync} unit="count" labels={{ queue: t('dashboard.series.queue'), errored: t('dashboard.series.errored') }} styles={{ queue: { color: 'var(--chart-purple)' }, errored: { color: 'var(--chart-red)' } }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.tableQueues')} description={t('dashboard.panel.tableQueues.desc')} queries={P.tableQueues} unit="count" labels={{ gc: 'GC', merkle: 'Merkle', insert: t('dashboard.series.insert') }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.tableOps')} queries={P.tableOps} unit="opsps" labels={{ gets: 'get', puts: 'put', updates: t('dashboard.series.updates') }} stacked height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.tableItems')} queries={P.tableItems} unit="count" fillOpacity={0} legend="table" height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.rpc')} queries={P.rpc} unit="reqps" labels={{ rpc: t('dashboard.series.requests'), errors: t('dashboard.series.errors') }} styles={{ rpc: { color: 'var(--chart-cyan)' }, errors: { color: 'var(--chart-red)' } }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.rpcLatency')} queries={P.rpcLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.05} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.ramBuffer')} description={t('dashboard.panel.ramBuffer.desc')} queries={P.blockMemory} unit="bytes" labels={{ ram: t('dashboard.series.free') }} styles={{ ram: { color: 'var(--chart-green)' } }} height={170} />
+                <TimeSeriesPanel title={t('dashboard.panel.collector')} description={t('dashboard.panel.collector.desc')} queries={P.collector} unit="ms" labels={{ scrape: t('dashboard.series.scrape') }} styles={{ scrape: { color: 'var(--chart-gray)' } }} height={170} />
+              </Grid>
+            </DashboardRow>
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  icon,
-  iconTone = 'primary',
-  valueTone = 'neutral',
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  icon: React.ReactNode;
-  iconTone?: StatTone;
-  valueTone?: StatTone;
-}) {
-  const valueColor =
-    valueTone === 'primary'
-      ? 'text-[var(--primary)]'
-      : valueTone === 'destructive'
-      ? 'text-[var(--destructive)]'
-      : 'text-[var(--foreground)]';
-  return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-          {label}
-        </span>
-        <IconTile icon={icon} tone={iconTone} size="sm" />
-      </div>
-      <div className={`mt-2 text-[26px] font-semibold tracking-[-0.02em] leading-none ${valueColor}`}>
-        {value}
-      </div>
-      {sub && <div className="mt-1.5 text-[13px] text-[var(--muted-foreground)]">{sub}</div>}
-    </div>
-  );
-}
-
-function Card({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
-      <header className="border-b border-[var(--border)] px-5 py-3">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        {description && <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">{description}</p>}
-      </header>
-      <div className="px-5 py-5">{children}</div>
-    </section>
+      </DashboardContext.Provider>
+    </DashboardTooltipProvider>
   );
 }

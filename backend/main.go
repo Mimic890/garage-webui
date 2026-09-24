@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"Mimic890/garage-ui/internal/appsettings"
 	"Mimic890/garage-ui/internal/auth"
 	"Mimic890/garage-ui/internal/authz"
 	"Mimic890/garage-ui/internal/config"
@@ -20,6 +21,7 @@ import (
 	"Mimic890/garage-ui/internal/routes"
 	"Mimic890/garage-ui/internal/services"
 	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/telemetry"
 	"Mimic890/garage-ui/pkg/logger"
 
 	"github.com/gofiber/fiber/v3"
@@ -163,6 +165,38 @@ func main() {
 		}
 	}
 
+	// SQLite database for web-editable settings and the metrics history.
+	dbPath := filepath.Join(dataDir, "garage-ui.db")
+	logger.Info().Str("path", dbPath).Msg("Opening settings and metrics database")
+	db, err := telemetry.OpenDB(dbPath)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to open database")
+	}
+	defer db.Close()
+	settingsManager, err := appsettings.NewManager(db, appsettings.EnvDefaults{
+		LogLevel:                 cfg.Logging.Level,
+		AllowedIPs:               cfg.Server.AllowedIPs,
+		ClusterEndpointAllowlist: cfg.Server.ClusterEndpointAllowlist,
+	})
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to load runtime settings")
+	}
+	handlers.ApplyRuntime(settingsManager)
+	metricsStore, err := telemetry.NewStore(db, dbPath)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to initialize metrics store")
+	}
+	collector := telemetry.NewCollector(metricsStore, settingsManager, stateManager, func(c state.ClusterConfig) (services.AdminService, error) {
+		res, err := services.NewAdminService(&c, cfg.Logging.Level, cfg.Server.Environment)
+		if err != nil {
+			return nil, err
+		}
+		return res.Service, nil
+	})
+	collectorCtx, stopCollector := context.WithCancel(context.Background())
+	defer stopCollector()
+	collector.Start(collectorCtx)
+
 	// Determine enabled auth methods for logging
 	authMethods := []string{}
 	if cfg.Auth.Admin.Enabled {
@@ -280,6 +314,7 @@ func main() {
 		capabilitiesHandler,
 		azMiddleware,
 		stateManager,
+		routes.WithExtras(routes.Extras{Settings: settingsManager, Store: metricsStore, Collector: collector, Version: version}),
 	)
 
 	if err := authz.VerifyRouteCoverage(app); err != nil {
@@ -313,6 +348,7 @@ func main() {
 	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
 		logger.Fatal().Err(err).Msg("Server shutdown failed")
 	}
+	collector.Stop()
 
 	logger.Info().
 		Dur("shutdown_duration", time.Since(shutdownStart)).

@@ -114,7 +114,7 @@ export function DeleteBucketDialog({
               }}
               className="mt-0.5"
             />
-            <span className="text-[13.5px] select-none">
+            <span className="text-[0.8438rem] select-none">
               {t('buckets.delete_dialog.confirm_data')}
               <span className="text-[var(--muted-foreground)]">
                 {' '}{t('buckets.delete_dialog.reported_objects', { count: objectCount.toLocaleString(language) })}
@@ -122,16 +122,16 @@ export function DeleteBucketDialog({
             </span>
           </label>
           {highlight && !confirmed && (
-            <p className="text-[13px] text-[var(--destructive)]">
+            <p className="text-[0.8125rem] text-[var(--destructive)]">
               {t('buckets.delete_dialog.errors.confirm_data_first')}
             </p>
           )}
 
           {/* Confirmation text input */}
           <div className="space-y-2">
-            <p className="text-[13.5px] text-[var(--muted-foreground)]">
+            <p className="text-[0.8438rem] text-[var(--muted-foreground)]">
               {t('buckets.delete_dialog.type_to_confirm')}{' '}
-              <code className="rounded bg-[var(--surface-sunken)] px-1 py-0.5 font-mono text-[13px] text-[var(--foreground)]">
+              <code className="rounded bg-[var(--surface-sunken)] px-1 py-0.5 font-mono text-[0.8125rem] text-[var(--foreground)]">
                 {bucketName}
               </code>{' '}
               {t('buckets.delete_dialog.below')}
@@ -147,7 +147,7 @@ export function DeleteBucketDialog({
           </div>
 
           {error && (
-            <p className="text-[13px] text-[var(--destructive)]">{error}</p>
+            <p className="text-[0.8125rem] text-[var(--destructive)]">{error}</p>
           )}
         </DialogBody>
         <DialogFooter>
