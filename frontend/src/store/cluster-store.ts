@@ -23,7 +23,8 @@ interface ClusterStore {
 
   // Actions
   fetchClusters: () => Promise<void>;
-  addCluster: (config: Omit<ClusterConfig, 'id'> & { admin_token: string }) => Promise<void>;
+  addCluster: (config: Omit<ClusterConfig, 'id'> & { admin_token: string }) => Promise<ClusterConfig>;
+  updateCluster: (id: string, config: Omit<ClusterConfig, 'id'>) => Promise<ClusterConfig>;
   deleteCluster: (id: string) => Promise<void>;
   setActiveCluster: (id: string | null) => void;
 }
@@ -55,21 +56,23 @@ export const useClusterStore = create<ClusterStore>()(
         }
       },
 
+      // Errors are rendered by the form, so these calls are silent and do not
+      // touch isLoading (that would swap the page for a spinner and lose input).
       addCluster: async (config) => {
-        try {
-          set({ isLoading: true, error: null });
-          const response = await api.post<{ cluster: ClusterConfig }>('/v1/panel/clusters', config);
-          const newCluster = response.data.cluster;
-          const clusters = [...get().clusters, newCluster];
-          set({ clusters, isLoading: false });
-          
-          if (!get().activeClusterId) {
-            get().setActiveCluster(newCluster.id);
-          }
-        } catch (err: any) {
-          set({ error: err.message || translate('clusters.errors.addFailed'), isLoading: false });
-          throw err;
+        const response = await api.post<{ cluster: ClusterConfig }>('/v1/panel/clusters', config, { silent: true });
+        const newCluster = response.data.cluster;
+        set({ clusters: [...get().clusters, newCluster] });
+        if (!get().activeClusterId) {
+          get().setActiveCluster(newCluster.id);
         }
+        return newCluster;
+      },
+
+      updateCluster: async (id, config) => {
+        const response = await api.put<{ cluster: ClusterConfig }>(`/v1/panel/clusters/${id}`, config, { silent: true });
+        const updated = response.data.cluster;
+        set({ clusters: get().clusters.map((c) => (c.id === id ? updated : c)) });
+        return updated;
       },
 
       deleteCluster: async (id) => {
