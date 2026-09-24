@@ -97,6 +97,11 @@ export function formatTime(ts: number, withSeconds: boolean, withDate: boolean):
   }).format(new Date(ts * 1000));
 }
 
+export function formatDate(ts: number): string {
+  const { timezone, language } = useSettingsStore.getState();
+  return new Intl.DateTimeFormat(language, { timeZone: timezone, month: 'short', day: 'numeric' }).format(new Date(ts * 1000));
+}
+
 export function formatRelative(date: Date | string | number | undefined): string {
   if (date === undefined) return '—';
   const d = typeof date === 'number' ? new Date(date * 1000) : new Date(date);

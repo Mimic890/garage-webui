@@ -419,7 +419,7 @@ export function ObjectsTable({
               <TableCell>
                 {obj.isFolder ? (
                   <DropdownMenu>
-                    <DropdownMenuTrigger>
+                    <DropdownMenuTrigger asChild>
                        <Button variant="ghost" size="icon" className="-m-6 top-1 relative" aria-label={t('buckets.objects.folder_actions_aria', { key: obj.key })}>
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -445,7 +445,7 @@ export function ObjectsTable({
                   </DropdownMenu>
                 ) : (
                   <DropdownMenu>
-                    <DropdownMenuTrigger>
+                    <DropdownMenuTrigger asChild>
                        <Button variant="ghost" size="icon" className="-m-6 top-1 relative" aria-label={t('buckets.objects.object_actions_aria', { key: obj.key })}>
                         <MoreVertical className="h-4 w-4" />
                       </Button>

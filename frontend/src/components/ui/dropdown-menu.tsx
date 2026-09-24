@@ -41,22 +41,36 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ children, open: controlledO
 
 const DropdownMenuTrigger = React.forwardRef<
   HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ onClick, ...props }, ref) => {
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ onClick, asChild, children, ...props }, ref) => {
   const { open, setOpen, triggerRef } = useDropdownMenu();
 
   // Merge the forwarded ref with the context triggerRef
   React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
 
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setOpen(!open);
+    onClick?.(e);
+  };
+
+  // asChild wraps an existing button in a non-interactive span so we never
+  // render an invalid <button> inside <button>.
+  if (asChild) {
+    return (
+      <span
+        ref={triggerRef as unknown as React.Ref<HTMLSpanElement>}
+        className="inline-flex"
+        onClick={handleClick as unknown as React.MouseEventHandler<HTMLSpanElement>}
+      >
+        {children}
+      </span>
+    );
+  }
+
   return (
-    <button
-      ref={triggerRef}
-      onClick={(e) => {
-        setOpen(!open);
-        onClick?.(e);
-      }}
-      {...props}
-    />
+    <button ref={triggerRef} onClick={handleClick} {...props}>
+      {children}
+    </button>
   );
 });
 DropdownMenuTrigger.displayName = 'DropdownMenuTrigger';
@@ -66,9 +80,10 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 }
 
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, children, align = 'start', ...props }, _ref) => {
+  ({ className, children, align = 'start', ...props }, ref) => {
     const { open, setOpen, triggerRef } = useDropdownMenu();
     const contentRef = React.useRef<HTMLDivElement>(null);
+    React.useImperativeHandle(ref, () => contentRef.current as HTMLDivElement);
     const [position, setPosition] = React.useState({ top: 0, left: 0 });
 
     // Fixed positioning relative to the trigger, measured after render so

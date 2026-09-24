@@ -36,6 +36,8 @@ export const navGroups: NavGroup[] = [
 
 export const settingsNavItem: NavItem = { title: 'nav.settings', href: '/settings', icon: Settings, shortcut: 'G S' };
 
+export const SETTINGS_SECTIONS = ['appearance', 'region', 'dashboard', 'monitoring', 'security', 'about'] as const;
+
 export function isActivePath(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
 }
