@@ -50,6 +50,13 @@ function authPayload<T>(payload: T | { data: T }): T {
     : payload as T;
 }
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** Skip the global error toast; the caller shows the error inline. */
+    silent?: boolean;
+  }
+}
+
 api.interceptors.request.use((config) => {
   // NOTE: authentication is cookie-based (httpOnly session cookie). The token
   // is never stored in localStorage or read from it; that branch was removed
@@ -97,6 +104,11 @@ api.interceptors.response.use(
   (error) => {
     // Superseded requests (React Query aborts them on key changes) are not errors.
     if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
+    // Callers that render the error themselves (forms) opt out of the toast.
+    if (error.config?.silent && error.response?.status !== 401) {
       return Promise.reject(error);
     }
 

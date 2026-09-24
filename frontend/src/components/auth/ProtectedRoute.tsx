@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, config, isSetup } = useAuthStore();
-  const { fetchClusters, isInitialized, isLoading: clustersLoading } = useClusterStore();
+  const { fetchClusters, isInitialized } = useClusterStore();
   const location = useLocation();
 
   useEffect(() => {
@@ -27,7 +27,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/setup" state={{ from: location }} replace />;
   }
 
-  if (isAuthenticated && (!isInitialized || clustersLoading)) {
+  // Only the first load blocks the page; later refetches must not unmount it.
+  if (isAuthenticated && !isInitialized) {
     return <LoadingSpinner />;
   }
 
