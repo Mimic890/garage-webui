@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -183,6 +184,13 @@ func TestExtras_Telemetry(t *testing.T) {
 	}
 	if code, _ = f.do(t, http.MethodPost, "/api/v1/telemetry/query", `nope`, cluster); code != 400 {
 		t.Errorf("bad body: %d", code)
+	}
+	code, body = f.do(t, http.MethodGet, "/api/v1/telemetry/query?q="+url.QueryEscape(q), "", cluster)
+	if code != 200 || len(body["data"].(map[string]any)["series"].([]any)) != 1 {
+		t.Fatalf("GET query = %d %v", code, body)
+	}
+	if code, _ = f.do(t, http.MethodGet, "/api/v1/telemetry/query?q=nope", "", cluster); code != 400 {
+		t.Errorf("bad GET query: %d", code)
 	}
 	if code, _ = f.do(t, http.MethodDelete, "/api/v1/telemetry/history", "", cluster); code != 200 {
 		t.Errorf("purge cluster: %d", code)
