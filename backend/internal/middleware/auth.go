@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/url"
 	"strings"
+	"time"
 
 	"Mimic890/garage-ui/internal/auth"
 	"Mimic890/garage-ui/internal/config"
@@ -104,6 +105,10 @@ func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service, stateMana
 			} else {
 				failureReason = "security_version_mismatch"
 			}
+			// Drop the dead cookie. Left in place it keeps the Origin check
+			// armed, so a later sign-in from an address that differs from
+			// ROOT_URL is rejected before it can replace the session.
+			c.Cookie(&fiber.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(0, 0), HTTPOnly: true})
 		}
 
 		// Auth failed — log at warn without exposing token material.
