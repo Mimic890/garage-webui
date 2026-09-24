@@ -321,3 +321,25 @@ func TestForwardFill(t *testing.T) {
 		t.Errorf("forwardFill = %v", vals)
 	}
 }
+
+func TestSpreadDelta(t *testing.T) {
+	cells := make([]cell, 4)
+	// 30 over 15s starting mid-bucket: 10s step buckets [0,10) [10,20) [20,30).
+	spreadDelta(cells, 0, 10, 5, 20, 30, false)
+	if cells[0].num != 10 || cells[1].num != 20 || cells[2].n != 0 {
+		t.Fatalf("spread = %+v", cells)
+	}
+	if r := cells[1].num / cells[1].dt; r != 2 {
+		t.Errorf("rate = %v", r)
+	}
+	gap := make([]cell, 100)
+	spreadDelta(gap, 0, 10, 0, 900, 900, false)
+	if gap[0].n != 0 || gap[89].n != 1 || gap[89].num/gap[89].dt != 1 {
+		t.Errorf("gap spread = %+v", gap[89])
+	}
+	den := make([]cell, 2)
+	spreadDelta(den, 0, 10, 0, 10, 4, true)
+	if den[0].den != 4 || den[0].num != 0 {
+		t.Errorf("den = %+v", den[0])
+	}
+}

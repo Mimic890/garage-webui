@@ -10,7 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useBuckets } from '@/hooks/useApi';
 import { useTheme } from '@/components/theme-provider';
 import { useTranslation } from '@/lib/i18n';
-import { navGroups, settingsNavItem } from './nav';
+import { navGroups, settingsNavItem, SETTINGS_SECTIONS } from './nav';
 
 interface Command {
   id: string;
@@ -21,8 +21,6 @@ interface Command {
   keywords?: string;
   run: () => void;
 }
-
-export const SETTINGS_SECTIONS = ['appearance', 'region', 'dashboard', 'monitoring', 'security', 'about'] as const;
 
 function fuzzyScore(text: string, query: string): number {
   const t = text.toLowerCase();
@@ -144,7 +142,6 @@ export function CommandPalette() {
     }
   };
 
-  let lastGroup = '';
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label={t('palette.title')}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
@@ -166,8 +163,7 @@ export function CommandPalette() {
           )}
           {results.map((c, i) => {
             const Icon = c.icon;
-            const header = c.group !== lastGroup ? c.group : null;
-            lastGroup = c.group;
+            const header = i === 0 || results[i - 1].group !== c.group ? c.group : null;
             return (
               <React.Fragment key={c.id}>
                 {header && <div className="px-2.5 pb-1 pt-2 text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{header}</div>}

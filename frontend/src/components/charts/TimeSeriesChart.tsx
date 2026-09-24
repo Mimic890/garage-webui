@@ -2,7 +2,7 @@ import * as React from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { cn } from '@/lib/utils';
-import { formatAxis, formatTime, formatValue, type Unit } from '@/lib/units';
+import { formatAxis, formatDate, formatTime, formatValue, type Unit } from '@/lib/units';
 import { useThemeVersion, resolveCssColor, withAlpha } from '@/lib/chart-theme';
 import { useTranslation } from '@/lib/i18n';
 
@@ -174,7 +174,8 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
           ticks: { show: false },
           gap: 6,
           size: 28,
-          values: (_u, splits) => splits.map((s) => formatTime(s, span <= 900, span > 2 * 86400)),
+          space: span > 2 * 86400 ? 70 : 60,
+          values: (_u, splits) => splits.map((s) => (span > 2 * 86400 ? formatDate(s) : formatTime(s, span <= 900, false))),
         },
         {
           stroke: muted,

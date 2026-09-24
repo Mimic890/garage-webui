@@ -233,24 +233,14 @@ func (s *Store) evalQuery(ctx context.Context, cluster string, q Query, tier Tie
 			if counter {
 				for i := 1; i < len(pts); i++ {
 					prev, cur := pts[i-1], pts[i]
-					if cur.ts < start {
+					if cur.ts <= start || cur.ts <= prev.ts {
 						continue
 					}
 					d := cur.last - prev.last
 					if d < 0 {
 						d = cur.last
 					}
-					idx := int((cur.ts - start) / step)
-					if idx < 0 || idx >= n {
-						continue
-					}
-					if isDen {
-						cells[idx].den += d
-					} else {
-						cells[idx].num += d
-						cells[idx].dt += float64(cur.ts - prev.ts)
-					}
-					cells[idx].n++
+					spreadDelta(cells, start, step, prev.ts, cur.ts, d, isDen)
 				}
 			} else {
 				for _, p := range pts {
@@ -319,6 +309,50 @@ func (s *Store) evalQuery(ctx context.Context, cluster string, q Query, tier Tie
 		out[i] = r.out
 	}
 	return out, nil
+}
+
+// spreadDelta distributes a counter increase over every step bucket the
+// interval (t0, t1] overlaps, proportionally to the overlap. Rates then stay
+// continuous whatever the relation between scrape interval and step. Gaps
+// longer than staleness (collector or Garage down) are attributed to the
+// closing bucket only, so outages are not painted over.
+func spreadDelta(cells []cell, start, step, t0, t1 int64, d float64, isDen bool) {
+	n := int64(len(cells))
+	// The increase always spreads at its true average rate; a long gap only
+	// limits which buckets receive it.
+	span := float64(t1 - t0)
+	if t1-t0 > staleness {
+		t0 = t1 - step
+	}
+	for b := (t0 - start) / step; b < n; b++ {
+		if b < 0 {
+			continue
+		}
+		bs, be := start+b*step, start+(b+1)*step
+		if bs >= t1 {
+			break
+		}
+		lo, hi := maxInt64(bs, t0), minInt64(be, t1)
+		if hi <= lo {
+			continue
+		}
+		frac := float64(hi-lo) / span
+		c := &cells[b]
+		if isDen {
+			c.den += d * frac
+		} else {
+			c.num += d * frac
+			c.dt += float64(hi - lo)
+		}
+		c.n++
+	}
+}
+
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // mergeCells folds one series' cells into its group.

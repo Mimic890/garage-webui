@@ -12,11 +12,15 @@ A modern, fast, and highly customizable web interface to manage your <a href="ht
 
 ## 🌟 Features
 
-- **Centralized Dashboard** - Get a bird's-eye view of your entire Garage S3 infrastructure.
+- **Grafana-style Dashboard** - Stat tiles with sparklines and time-series panels for S3 traffic, latency percentiles, errors, storage growth, per-node disks, block I/O, resync, metadata queues and RPC. Synced crosshair, drag-to-zoom, time range and auto-refresh pickers.
+- **Built-in Metrics History** - A background collector polls every cluster (10s–5m, configurable) and stores the history in SQLite with automatic 5-minute and hourly rollups. No Prometheus or Grafana required.
+- **Web Settings** - Monitoring interval and retention, dashboard thresholds, log level, IP allowlist and cluster endpoint allowlist are edited in the UI and apply without a restart.
 - **Multi-Cluster Support** - Easily switch between multiple Garage clusters right from the top navigation bar.
 - **Bucket & Object Management** - Create, configure, and browse buckets. Upload, download, and delete objects natively.
 - **Access Control** - Manage S3 access keys and assign granular permissions for different buckets.
-- **Dynamic Theming** - Warm (brand), full Catppuccin (Latte / Frappé / Macchiato / Mocha), GitHub, and Kanagawa — with Dark/Light mode where it applies.
+- **Dynamic Theming** - Graphite (default), Warm, full Catppuccin (Latte / Frappé / Macchiato / Mocha), GitHub, and Kanagawa — with Dark/Light mode where it applies.
+- **Typography** - JetBrains Mono everywhere by default; switch interface and code fonts (Fira Code, IBM Plex, Inter, Geist, system) and text size in Settings. Fonts are bundled.
+- **Command Palette** - `Ctrl+K` to jump to any page, bucket, setting or action; `G` + `D/B/K/C/S` shortcuts.
 - **Internationalization (i18n)** - Interface fully translated into English and Russian.
 - **Timezone Awareness** - Configure your timezone for accurate chart metrics and logs.
 - **Admin Security** - Secure, password-based local authentication protecting your cluster.
@@ -68,8 +72,21 @@ You can configure the application behavior using environment variables. These ca
 | `GARAGE_UI_SERVER_HOST` | `0.0.0.0` | The host interface the web server binds to. Use `0.0.0.0` for all interfaces. |
 | `GARAGE_UI_SERVER_PORT` | `8080` | The port the web server listens on. |
 | `GARAGE_UI_SERVER_CLUSTER_ENDPOINT_ALLOWLIST` | (empty) | Comma-separated IP/CIDR entries exempted from the private-range block applied when an **already-logged-in admin adds a cluster at runtime** through the "Add Cluster" panel (e.g. `10.0.0.0/8,192.168.1.10`). Loopback, link-local, and cloud metadata addresses are always rejected there, regardless of this setting. It does **not** apply to `GARAGE_UI_GARAGE_ENDPOINT`/`GARAGE_UI_GARAGE_ADMIN_ENDPOINT` below — those are deploy-time configuration you control directly (e.g. `garage:3900` on the same docker-compose network), so they're trusted the same way `GARAGE_UI_GARAGE_ADMIN_TOKEN` is and are never subject to this check. Set this only if you plan to use the "Add Cluster" UI to point at additional clusters on a private network. |
-| `GARAGE_UI_DATA_DIR` | `data` (`/app/data` in Docker) | Directory for persistent state (`state.json`: admin account + clusters). |
+| `GARAGE_UI_DATA_DIR` | `data` (`/app/data` in Docker) | Directory for persistent state: `state.json` (admin account + clusters) and `garage-ui.db` (SQLite: web settings + metrics history). |
 | `GARAGE_UI_LOGGING_LEVEL` | `info` | The severity level of backend logs. Supported values: `trace`, `debug`, `info`, `warn`, `error`. |
+
+### Settings managed from the web UI
+
+Everything that can change at runtime lives in **Settings** and is stored in `garage-ui.db`, so `docker-compose.yml` only needs the basics (host, port, root URL, data dir, bootstrap/auth):
+
+| Setting | Where | Notes |
+|---|---|---|
+| Metrics collection on/off, polling interval (10s, 15s, 30s, 1m, 5m), retention (1 hour – 365 days), bucket statistics interval | Settings → Monitoring | Full resolution is kept up to 3 days, 5-minute averages up to 35 days, hourly averages for the whole retention. |
+| Disk, error-rate and latency thresholds | Settings → Dashboard | Shared by all users. |
+| Log level, allowed client IPs, cluster endpoint allowlist | Settings → Security & server | Override the matching environment variables; "reset" returns to the env value. A client IP allowlist that excludes your own address is rejected. |
+| Theme, fonts, text size, density, language, time zone, clock | Settings → Appearance / Language & region | Per browser. |
+
+S3, block and RPC charts read Garage's `/metrics` endpoint with the admin token. If `metrics_token` in `garage.toml` differs from `admin_token`, set it to the same value (or remove it) — the dashboard shows a hint when metrics are unreachable. Cluster, disk and bucket charts work either way.
 
 ### Default Credentials
 On the first startup, if no configuration is provided, the application will initialize with default security policies. Be sure to configure your admin password via the UI upon first login or check your console logs.

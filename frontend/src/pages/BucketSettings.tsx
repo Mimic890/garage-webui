@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { BucketHistory } from '@/components/buckets/BucketHistory';
 import { AlertTriangle, Gauge, Info } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -152,6 +153,7 @@ export function BucketSettings() {
 
   return (
     <div className="space-y-6 px-7 py-6">
+      <BucketHistory bucket={bucket.name} />
       {/* Info */}
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
