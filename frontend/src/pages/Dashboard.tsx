@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Activity, AlertTriangle, Info, Server } from 'lucide-react';
+import { Activity, AlertTriangle, Check, Info, LayoutGrid, RotateCcw, Server } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -28,6 +28,9 @@ import {
   type Tone,
 } from '@/components/dashboard/panels';
 import { RefreshPicker, TimeRangePicker } from '@/components/dashboard/time-controls';
+import { PanelGrid } from '@/components/dashboard/panel-grid';
+import { QueryBatchProvider } from '@/components/dashboard/batch';
+import { useDashboardLayout, type PanelSize } from '@/store/dashboard-layout-store';
 import type { ClusterNode } from '@/types';
 
 // Query definitions live at module scope so their identity (and the React
@@ -141,10 +144,6 @@ function useNodeNames(enabled: boolean) {
   });
 }
 
-function Grid({ className, children }: { className: string; children: React.ReactNode }) {
-  return <div className={`grid gap-2 ${className}`}>{children}</div>;
-}
-
 function StatusBanner({ tone, icon, children }: { tone: 'info' | 'warn'; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div
@@ -167,6 +166,8 @@ export function Dashboard() {
   const { clusters, activeClusterId } = useClusterStore();
   const { dashboardRange, setDashboardRange, dashboardRefresh, setDashboardRefresh } = useSettingsStore();
   const [params, setParams] = useSearchParams();
+  const [editing, setEditing] = React.useState(false);
+  const resetLayout = useDashboardLayout((s) => s.reset);
   const hasCluster = clusters.length > 0 && !!activeClusterId;
 
   const settingsQ = useAppSettings(hasCluster);
@@ -261,6 +262,7 @@ export function Dashboard() {
   return (
     <DashboardTooltipProvider>
       <DashboardContext.Provider value={ctx}>
+        <QueryBatchProvider range={range} refetchInterval={ctx.refetchInterval}>
         <div className="pb-8">
           <PageHeader
             title={t('nav.dashboard')}
@@ -285,6 +287,23 @@ export function Dashboard() {
             }
             actions={
               <div className="flex flex-wrap items-center gap-2">
+                {editing ? (
+                  <>
+                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => resetLayout()} title={t('dashboard.edit.resetHint')}>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      {t('dashboard.edit.reset')}
+                    </Button>
+                    <Button size="sm" className="gap-1.5" onClick={() => setEditing(false)}>
+                      <Check className="h-3.5 w-3.5" />
+                      {t('dashboard.edit.done')}
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => setEditing(true)}>
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    {t('dashboard.edit.start')}
+                  </Button>
+                )}
                 <TimeRangePicker range={range} onChange={setRange} />
                 <RefreshPicker value={dashboardRefresh} onChange={setDashboardRefresh} onRefresh={refreshAll} refreshing={refreshing} autoSeconds={interval} />
               </div>
@@ -316,228 +335,329 @@ export function Dashboard() {
               </StatusBanner>
             )}
 
-            <DashboardRow id="overview" title={t('dashboard.row.overview')}>
-              <Grid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
-                <StatPanel
-                  title={t('dashboard.stat.health')}
-                  unit="short"
-                  value={health ? t(`dashboard.health_${health.status === 'healthy' ? 'healthy' : health.status === 'degraded' ? 'degraded' : 'unhealthy'}`) : '—'}
-                  tone={() => healthTone}
-                  query={Q.nodesUp}
-                  sub={health ? t('dashboard.stat.nodesSub', { up: number.format(health.storageNodesUp), total: number.format(health.storageNodes), connected: number.format(health.connectedNodes), known: number.format(health.knownNodes) }) : undefined}
-                />
-                <StatPanel
-                  title={t('dashboard.stat.partitions')}
-                  unit="count"
-                  query={Q.partitionsOk}
-                  value={health ? `${number.format(health.partitionsAllOk)}/${number.format(health.partitions)}` : undefined}
-                  tone={() => (!health ? 'neutral' : health.partitionsAllOk === health.partitions ? 'ok' : health.partitionsQuorum === health.partitions ? 'warn' : 'crit')}
-                  sub={health ? t('dashboard.stat.quorumSub', { quorum: number.format(health.partitionsQuorum) }) : undefined}
-                />
-                <StatPanel title={t('dashboard.stat.stored')} unit="bytes" query={Q.storageBytes} value={metricsQ.data ? formatBytesValue(metricsQ.data.totalSize) : undefined} sub={metricsQ.data ? t('dashboard.stat.bucketsSub', { count: number.format(metricsQ.data.bucketCount) }) : undefined} />
-                <StatPanel title={t('dashboard.stat.objects')} unit="count" query={Q.storageObjects} value={metricsQ.data ? number.format(metricsQ.data.objectCount) : undefined} />
-                <StatPanel title={t('dashboard.stat.requests')} unit="reqps" query={Q.s3Rate} tone={() => 'info'} sub={t('dashboard.stat.s3Sub')} />
-                <StatPanel title={t('dashboard.stat.errorRate')} unit="percent" query={Q.errorPct} tone={errTone} sub={t('dashboard.stat.errorSub', { pct: thresholds.error_rate_warn_pct })} />
-                <StatPanel title={t('dashboard.stat.p95')} unit="ms" query={Q.p95} tone={latTone} reduce="last" sub={t('dashboard.stat.latencySub', { ms: thresholds.latency_warn_ms })} />
-                <StatPanel title={t('dashboard.stat.write')} unit="bytesPerSec" query={Q.ioRate} tone={() => 'info'} sub={t('dashboard.stat.writeSub')} />
-                <StatPanel title={t('dashboard.stat.read')} unit="bytesPerSec" query={Q.ioRead} tone={() => 'info'} sub={t('dashboard.stat.readSub')} />
-                <StatPanel title={t('dashboard.stat.disk')} unit="percent" query={Q.diskUsed} tone={diskTone} sub={t('dashboard.stat.diskSub', { warn: thresholds.disk_warn_pct, crit: thresholds.disk_crit_pct })} />
-                <StatPanel title={t('dashboard.stat.keys')} unit="count" query={Q.keys} />
-                <StatPanel title={t('dashboard.stat.resync')} unit="count" query={Q.resync} tone={(v) => (v === null ? 'neutral' : v > 1000 ? 'warn' : 'ok')} sub={t('dashboard.stat.resyncSub')} />
-              </Grid>
-            </DashboardRow>
-
-            <DashboardRow id="s3" title={t('dashboard.row.s3')}>
-              <Grid className="grid-cols-1 xl:grid-cols-2">
-                <TimeSeriesPanel title={t('dashboard.panel.requestsByEndpoint')} description={t('dashboard.panel.requestsByEndpoint.desc')} queries={P.requestsByEndpoint} unit="reqps" stacked legend="table" height={230} />
-                <TimeSeriesPanel title={t('dashboard.panel.latency')} description={t('dashboard.panel.latency.desc')} queries={P.latency} unit="ms" styles={QUANTILE_STYLES} thresholds={[{ value: thresholds.latency_warn_ms, color: 'var(--warning)' }]} fillOpacity={0.08} height={230} />
-              </Grid>
-              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
-                <TimeSeriesPanel title={t('dashboard.panel.errorsByStatus')} queries={P.errorsByStatus} unit="reqps" bars height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.errorRatio')} queries={P.errorRatio} unit="percent" labels={{ total: t('dashboard.series.allErrors'), '5xx': '5xx' }} styles={{ total: { color: 'var(--chart-orange)' }, '5xx': { color: 'var(--chart-red)' } }} thresholds={[{ value: thresholds.error_rate_warn_pct, color: 'var(--destructive)' }]} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.latencyByEndpoint')} queries={P.latencyByEndpoint} unit="ms" fillOpacity={0} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.errorsByEndpoint')} queries={P.errorsByEndpoint} unit="reqps" stacked height={170} />
-              </Grid>
-              <Grid className="grid-cols-1 lg:grid-cols-2">
-                <TimeSeriesPanel title={t('dashboard.panel.otherApis')} description={t('dashboard.panel.otherApis.desc')} queries={P.otherApis} unit="reqps" labels={{ web: t('dashboard.series.web'), k2v: 'K2V', admin: t('dashboard.series.admin') }} height={160} />
-                <TimeSeriesPanel title={t('dashboard.panel.webLatency')} queries={P.webLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.06} height={160} />
-              </Grid>
-            </DashboardRow>
-
-            <DashboardRow id="storage" title={t('dashboard.row.storage')}>
-              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
-                <TimeSeriesPanel title={t('dashboard.panel.storedData')} queries={P.storageBytes} unit="bytes" labels={{ bytes: t('dashboard.series.stored') }} styles={{ bytes: { color: 'var(--chart-blue)' } }} height={180} />
-                <TimeSeriesPanel title={t('dashboard.panel.objectCount')} queries={P.storageObjects} unit="count" labels={{ objects: t('dashboard.series.objects') }} styles={{ objects: { color: 'var(--chart-purple)' } }} height={180} />
-                <TimeSeriesPanel title={t('dashboard.panel.bucketGrowth')} queries={P.bucketBytes} unit="bytes" fillOpacity={0.04} height={180} />
-                <TimeSeriesPanel title={t('dashboard.panel.bucketObjects')} queries={P.bucketObjects} unit="count" fillOpacity={0.04} height={180} />
-              </Grid>
-              <Grid className="grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
-                <PanelFrame title={t('dashboard.panel.distribution')} loading={metricsQ.isFetching}>
-                  {donut.length === 0 ? (
-                    <div className="flex h-[220px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
-                  ) : (
-                    <div className="relative h-[220px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={donut} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={1.5} stroke="none" isAnimationActive={false}>
-                            {donut.map((d) => <Cell key={d.name} fill={d.color} />)}
-                          </Pie>
-                          <ReTooltip
-                            contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-                            itemStyle={{ color: 'var(--foreground)' }}
-                            formatter={(v) => formatBytesValue(Number(v))}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-[1.125rem] font-semibold tabular">{formatBytesValue(totalSize)}</div>
-                        <div className="text-[0.6875rem] text-[var(--muted-foreground)]">{t('dashboard.stat.bucketsSub', { count: number.format(usage.length) })}</div>
-                      </div>
-                    </div>
-                  )}
-                </PanelFrame>
-                <PanelFrame title={t('dashboard.panel.topBuckets')} loading={metricsQ.isFetching}>
-                  {sortedUsage.length === 0 ? (
-                    <div className="flex h-[220px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
-                  ) : (
-                    <div className="max-h-[236px] overflow-y-auto pr-1 scrollbar-thin">
-                      <BarGauge
-                        items={sortedUsage.slice(0, 12).map((b, i) => ({
-                          key: b.bucketName,
-                          label: <Link to={`/buckets/${encodeURIComponent(b.bucketName)}/objects`} className="hover:text-[var(--primary)] hover:underline">{b.bucketName}</Link>,
-                          value: b.size,
-                          max: sortedUsage[0].size || 1,
-                          detail: t(b.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count', { count: number.format(b.objectCount) }),
-                          tone: i === 0 ? 'info' : 'info',
-                        }))}
-                        format={(v) => formatBytesValue(v)}
-                      />
-                    </div>
-                  )}
-                </PanelFrame>
-                <TimeSeriesPanel className="lg:col-span-2 2xl:col-span-1" title={t('dashboard.panel.multipart')} description={t('dashboard.panel.multipart.desc')} queries={P.multipart} unit="count" labels={{ mpu: t('dashboard.series.uploads') }} styles={{ mpu: { color: 'var(--chart-orange)' } }} height={200} />
-              </Grid>
-            </DashboardRow>
-
-            <DashboardRow id="nodes" title={t('dashboard.row.nodes')} extra={<span className="text-[0.75rem] text-[var(--muted-foreground)]">{nodes.length > 0 && t('dashboard.nodesCount', { count: nodes.length })}</span>}>
-              <Grid className="grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <PanelFrame title={t('dashboard.panel.diskUsage')} description={t('dashboard.panel.diskUsage.desc')} loading={nodesQ.isFetching}>
-                  {nodes.filter((n) => n.dataPartition).length === 0 ? (
-                    <div className="flex h-[140px] items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]">{t('charts.noData')}</div>
-                  ) : (
-                    <BarGauge
-                      items={nodes
-                        .filter((n) => n.dataPartition)
-                        .map((n) => {
-                          const used = n.dataPartition!.total - n.dataPartition!.available;
-                          const pct = (used / n.dataPartition!.total) * 100;
-                          return {
-                            key: n.id,
-                            label: (
-                              <span className="flex items-center gap-1.5">
-                                <span className={`h-1.5 w-1.5 rounded-full ${n.isUp ? 'bg-[var(--success)]' : 'bg-[var(--destructive)]'}`} />
-                                {n.hostname || n.id.slice(0, 12)}
-                                {n.role?.zone && <span className="text-[var(--muted-foreground)]">· {n.role.zone}</span>}
-                              </span>
-                            ),
-                            value: pct,
-                            max: 100,
-                            detail: `${formatBytesValue(used)} / ${formatBytesValue(n.dataPartition!.total)}`,
-                            tone: diskTone(pct),
-                          };
-                        })}
-                      format={(v) => formatValue(v, 'percent')}
+            <DashboardRow editing={editing} id="overview" title={t('dashboard.row.overview')}>
+              <PanelGrid
+                row="overview"
+                editing={editing}
+                panels={[
+                  { id: 'overview.health', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel
+                      title={t('dashboard.stat.health')}
+                      unit="short"
+                      value={health ? t(`dashboard.health_${health.status === 'healthy' ? 'healthy' : health.status === 'degraded' ? 'degraded' : 'unhealthy'}`) : '—'}
+                      tone={() => healthTone}
+                      query={Q.nodesUp}
+                      sub={health ? t('dashboard.stat.nodesSub', { up: number.format(health.storageNodesUp), total: number.format(health.storageNodes), connected: number.format(health.connectedNodes), known: number.format(health.knownNodes) }) : undefined}
                     />
-                  )}
-                </PanelFrame>
-                <TimeSeriesPanel title={t('dashboard.panel.diskUsedTrend')} queries={P.diskUsedByNode} unit="percent" yMax={100} thresholds={[{ value: thresholds.disk_warn_pct, color: 'var(--warning)' }, { value: thresholds.disk_crit_pct, color: 'var(--destructive)' }]} fillOpacity={0.06} height={170} />
-              </Grid>
-              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4">
-                <TimeSeriesPanel title={t('dashboard.panel.dataAvail')} queries={P.dataAvail} unit="bytes" fillOpacity={0.06} height={160} />
-                <TimeSeriesPanel title={t('dashboard.panel.metaAvail')} queries={P.metaAvail} unit="bytes" fillOpacity={0.06} height={160} />
-                <TimeSeriesPanel
-                  title={t('dashboard.panel.nodes')}
-                  queries={P.nodes}
-                  unit="count"
-                  labels={{ known: t('dashboard.series.known'), connected: t('dashboard.series.connected'), storage: t('dashboard.series.storageNodes'), storage_up: t('dashboard.series.storageUp') }}
-                  styles={{ known: { color: 'var(--chart-gray)', dashed: true }, connected: { color: 'var(--chart-blue)' }, storage: { color: 'var(--chart-gray)', dashed: true }, storage_up: { color: 'var(--chart-green)' } }}
-                  fillOpacity={0}
-                  height={160}
-                />
-                <TimeSeriesPanel
-                  title={t('dashboard.panel.partitions')}
-                  queries={P.partitions}
-                  unit="count"
-                  labels={{ total: t('dashboard.series.total'), quorum: t('dashboard.series.quorum'), ok: t('dashboard.series.allOk') }}
-                  styles={{ total: { color: 'var(--chart-gray)', dashed: true }, quorum: { color: 'var(--chart-olive)' }, ok: { color: 'var(--chart-green)' } }}
-                  fillOpacity={0}
-                  height={160}
-                />
-              </Grid>
-              {nodes.length > 0 && (
-                <PanelFrame title={t('dashboard.panel.nodeTable')}>
-                  <div className="overflow-x-auto scrollbar-thin">
-                    <table className="w-full min-w-[720px] text-[0.75rem]">
-                      <thead>
-                        <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
-                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.host')}</th>
-                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.id')}</th>
-                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.zone')}</th>
-                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.address')}</th>
-                          <th className="px-2 py-1.5 font-normal">{t('dashboard.node.version')}</th>
-                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.capacity')}</th>
-                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.data')}</th>
-                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.meta')}</th>
-                          <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.status')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {nodes.map((n) => {
-                          const pct = (p?: { available: number; total: number }) => (p && p.total ? ((p.total - p.available) / p.total) * 100 : null);
-                          const dp = pct(n.dataPartition);
-                          const mp = pct(n.metadataPartition);
-                          return (
-                            <tr key={n.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)]/50">
-                              <td className="px-2 py-1.5 font-medium">{n.hostname || '—'}</td>
-                              <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.id.slice(0, 16)}</td>
-                              <td className="px-2 py-1.5">{n.role?.zone || '—'}</td>
-                              <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.addr || '—'}</td>
-                              <td className="px-2 py-1.5">{n.garageVersion || '—'}</td>
-                              <td className="px-2 py-1.5 text-right tabular">{n.role?.capacity ? formatBytesValue(n.role.capacity) : t('dashboard.node.gateway')}</td>
-                              <td className="px-2 py-1.5 text-right tabular" style={{ color: dp === null ? undefined : `var(--${diskTone(dp) === 'ok' ? 'foreground' : diskTone(dp) === 'warn' ? 'warning' : 'destructive'})` }}>{formatValue(dp, 'percent')}</td>
-                              <td className="px-2 py-1.5 text-right tabular">{formatValue(mp, 'percent')}</td>
-                              <td className="px-2 py-1.5 text-right">
-                                <Badge variant={n.isUp ? (n.draining ? 'warning' : 'success') : 'danger'} className="px-1.5 py-0 text-[0.6875rem]">
-                                  {n.isUp ? (n.draining ? t('dashboard.node.draining') : t('dashboard.node.up')) : t('dashboard.node.down')}
-                                </Badge>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </PanelFrame>
-              )}
+                  ) },
+                  { id: 'overview.partitions', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel
+                      title={t('dashboard.stat.partitions')}
+                      unit="count"
+                      query={Q.partitionsOk}
+                      value={health ? `${number.format(health.partitionsAllOk)}/${number.format(health.partitions)}` : undefined}
+                      tone={() => (!health ? 'neutral' : health.partitionsAllOk === health.partitions ? 'ok' : health.partitionsQuorum === health.partitions ? 'warn' : 'crit')}
+                      sub={health ? t('dashboard.stat.quorumSub', { quorum: number.format(health.partitionsQuorum) }) : undefined}
+                    />
+                  ) },
+                  { id: 'overview.stored', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.stored')} unit="bytes" query={Q.storageBytes} value={metricsQ.data ? formatBytesValue(metricsQ.data.totalSize) : undefined} sub={metricsQ.data ? t('dashboard.stat.bucketsSub', { count: number.format(metricsQ.data.bucketCount) }) : undefined} />
+                  ) },
+                  { id: 'overview.objects', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.objects')} unit="count" query={Q.storageObjects} value={metricsQ.data ? number.format(metricsQ.data.objectCount) : undefined} />
+                  ) },
+                  { id: 'overview.requests', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.requests')} unit="reqps" query={Q.s3Rate} tone={() => 'info'} sub={t('dashboard.stat.s3Sub')} />
+                  ) },
+                  { id: 'overview.errorRate', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.errorRate')} unit="percent" query={Q.errorPct} tone={errTone} sub={t('dashboard.stat.errorSub', { pct: thresholds.error_rate_warn_pct })} />
+                  ) },
+                  { id: 'overview.p95', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.p95')} unit="ms" query={Q.p95} tone={latTone} reduce="last" sub={t('dashboard.stat.latencySub', { ms: thresholds.latency_warn_ms })} />
+                  ) },
+                  { id: 'overview.write', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.write')} unit="bytesPerSec" query={Q.ioRate} tone={() => 'info'} sub={t('dashboard.stat.writeSub')} />
+                  ) },
+                  { id: 'overview.read', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.read')} unit="bytesPerSec" query={Q.ioRead} tone={() => 'info'} sub={t('dashboard.stat.readSub')} />
+                  ) },
+                  { id: 'overview.disk', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.disk')} unit="percent" query={Q.diskUsed} tone={diskTone} sub={t('dashboard.stat.diskSub', { warn: thresholds.disk_warn_pct, crit: thresholds.disk_crit_pct })} />
+                  ) },
+                  { id: 'overview.keys', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.keys')} unit="count" query={Q.keys} />
+                  ) },
+                  { id: 'overview.resync', w: 2, h: 84, compact: true, minH: 50, render: () => (
+                    <StatPanel title={t('dashboard.stat.resync')} unit="count" query={Q.resync} tone={(v) => (v === null ? 'neutral' : v > 1000 ? 'warn' : 'ok')} sub={t('dashboard.stat.resyncSub')} />
+                  ) },
+                ]}
+              />
             </DashboardRow>
-
-            <DashboardRow id="internals" title={t('dashboard.row.internals')}>
-              <Grid className="grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
-                <TimeSeriesPanel title={t('dashboard.panel.blockIo')} description={t('dashboard.panel.blockIo.desc')} queries={P.blockIo} unit="bytesPerSec" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.blockOps')} queries={P.blockOps} unit="opsps" labels={{ writes: t('dashboard.series.write'), reads: t('dashboard.series.read') }} styles={{ writes: { color: 'var(--chart-orange)' }, reads: { color: 'var(--chart-blue)' } }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.blockLatency')} queries={P.blockLatency} unit="ms" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} fillOpacity={0.05} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.resync')} description={t('dashboard.panel.resync.desc')} queries={P.resync} unit="count" labels={{ queue: t('dashboard.series.queue'), errored: t('dashboard.series.errored') }} styles={{ queue: { color: 'var(--chart-purple)' }, errored: { color: 'var(--chart-red)' } }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.tableQueues')} description={t('dashboard.panel.tableQueues.desc')} queries={P.tableQueues} unit="count" labels={{ gc: 'GC', merkle: 'Merkle', insert: t('dashboard.series.insert') }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.tableOps')} queries={P.tableOps} unit="opsps" labels={{ gets: 'get', puts: 'put', updates: t('dashboard.series.updates') }} stacked height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.tableItems')} queries={P.tableItems} unit="count" fillOpacity={0} legend="table" height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.rpc')} queries={P.rpc} unit="reqps" labels={{ rpc: t('dashboard.series.requests'), errors: t('dashboard.series.errors') }} styles={{ rpc: { color: 'var(--chart-cyan)' }, errors: { color: 'var(--chart-red)' } }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.rpcLatency')} queries={P.rpcLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.05} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.ramBuffer')} description={t('dashboard.panel.ramBuffer.desc')} queries={P.blockMemory} unit="bytes" labels={{ ram: t('dashboard.series.free') }} styles={{ ram: { color: 'var(--chart-green)' } }} height={170} />
-                <TimeSeriesPanel title={t('dashboard.panel.collector')} description={t('dashboard.panel.collector.desc')} queries={P.collector} unit="ms" labels={{ scrape: t('dashboard.series.scrape') }} styles={{ scrape: { color: 'var(--chart-gray)' } }} height={170} />
-              </Grid>
+            <DashboardRow editing={editing} id="s3" title={t('dashboard.row.s3')}>
+              <PanelGrid
+                row="s3"
+                editing={editing}
+                panels={[
+                  { id: 's3.requestsByEndpoint', w: 6, h: 230, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.requestsByEndpoint')} description={t('dashboard.panel.requestsByEndpoint.desc')} queries={P.requestsByEndpoint} unit="reqps" stacked legend="table" height={230} />
+                  ) },
+                  { id: 's3.latency', w: 6, h: 230, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.latency')} description={t('dashboard.panel.latency.desc')} queries={P.latency} unit="ms" styles={QUANTILE_STYLES} thresholds={[{ value: thresholds.latency_warn_ms, color: 'var(--warning)' }]} fillOpacity={0.08} height={230} />
+                  ) },
+                  { id: 's3.errorsByStatus', w: 3, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.errorsByStatus')} queries={P.errorsByStatus} unit="reqps" bars height={170} />
+                  ) },
+                  { id: 's3.errorRatio', w: 3, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.errorRatio')} queries={P.errorRatio} unit="percent" labels={{ total: t('dashboard.series.allErrors'), '5xx': '5xx' }} styles={{ total: { color: 'var(--chart-orange)' }, '5xx': { color: 'var(--chart-red)' } }} thresholds={[{ value: thresholds.error_rate_warn_pct, color: 'var(--destructive)' }]} height={170} />
+                  ) },
+                  { id: 's3.latencyByEndpoint', w: 3, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.latencyByEndpoint')} queries={P.latencyByEndpoint} unit="ms" fillOpacity={0} height={170} />
+                  ) },
+                  { id: 's3.errorsByEndpoint', w: 3, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.errorsByEndpoint')} queries={P.errorsByEndpoint} unit="reqps" stacked height={170} />
+                  ) },
+                  { id: 's3.otherApis', w: 6, h: 160, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.otherApis')} description={t('dashboard.panel.otherApis.desc')} queries={P.otherApis} unit="reqps" labels={{ web: t('dashboard.series.web'), k2v: 'K2V', admin: t('dashboard.series.admin') }} height={160} />
+                  ) },
+                  { id: 's3.webLatency', w: 6, h: 160, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.webLatency')} queries={P.webLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.06} height={160} />
+                  ) },
+                ]}
+              />
+            </DashboardRow>
+            <DashboardRow editing={editing} id="storage" title={t('dashboard.row.storage')}>
+              <PanelGrid
+                row="storage"
+                editing={editing}
+                panels={[
+                  { id: 'storage.storedData', w: 3, h: 180, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.storedData')} queries={P.storageBytes} unit="bytes" labels={{ bytes: t('dashboard.series.stored') }} styles={{ bytes: { color: 'var(--chart-blue)' } }} height={180} />
+                  ) },
+                  { id: 'storage.objectCount', w: 3, h: 180, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.objectCount')} queries={P.storageObjects} unit="count" labels={{ objects: t('dashboard.series.objects') }} styles={{ objects: { color: 'var(--chart-purple)' } }} height={180} />
+                  ) },
+                  { id: 'storage.bucketGrowth', w: 3, h: 180, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.bucketGrowth')} queries={P.bucketBytes} unit="bytes" fillOpacity={0.04} height={180} />
+                  ) },
+                  { id: 'storage.bucketObjects', w: 3, h: 180, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.bucketObjects')} queries={P.bucketObjects} unit="count" fillOpacity={0.04} height={180} />
+                  ) },
+                  { id: 'storage.distribution', w: 3, h: 220, render: (size) => (
+                    <PanelFrame title={t('dashboard.panel.distribution')} loading={metricsQ.isFetching}>
+                      {donut.length === 0 ? (
+                        <div className="flex items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]" style={{ height: size.h }}>{t('charts.noData')}</div>
+                      ) : (
+                        <div className="relative" style={{ height: size.h }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={donut} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="88%" paddingAngle={1.5} stroke="none" isAnimationActive={false}>
+                                {donut.map((d) => <Cell key={d.name} fill={d.color} />)}
+                              </Pie>
+                              <ReTooltip
+                                contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
+                                itemStyle={{ color: 'var(--foreground)' }}
+                                formatter={(v) => formatBytesValue(Number(v))}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                            <div className="text-[1.125rem] font-semibold tabular">{formatBytesValue(totalSize)}</div>
+                            <div className="text-[0.6875rem] text-[var(--muted-foreground)]">{t('dashboard.stat.bucketsSub', { count: number.format(usage.length) })}</div>
+                          </div>
+                        </div>
+                      )}
+                    </PanelFrame>
+                  ) },
+                  { id: 'storage.topBuckets', w: 5, h: 220, render: (size) => (
+                    <PanelFrame title={t('dashboard.panel.topBuckets')} loading={metricsQ.isFetching}>
+                      {sortedUsage.length === 0 ? (
+                        <div className="flex items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]" style={{ height: size.h }}>{t('charts.noData')}</div>
+                      ) : (
+                        <div className="overflow-y-auto pr-1 scrollbar-thin" style={{ maxHeight: size.h }}>
+                          <BarGauge
+                            items={sortedUsage.slice(0, 12).map((b, i) => ({
+                              key: b.bucketName,
+                              label: <Link to={`/buckets/${encodeURIComponent(b.bucketName)}/objects`} className="hover:text-[var(--primary)] hover:underline">{b.bucketName}</Link>,
+                              value: b.size,
+                              max: sortedUsage[0].size || 1,
+                              detail: t(b.objectCount === 1 ? 'dashboard.one_object_count' : 'dashboard.objects_count', { count: number.format(b.objectCount) }),
+                              tone: i === 0 ? 'info' : 'info',
+                            }))}
+                            format={(v) => formatBytesValue(v)}
+                          />
+                        </div>
+                      )}
+                    </PanelFrame>
+                  ) },
+                  { id: 'storage.multipart', w: 4, h: 200, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.multipart')} description={t('dashboard.panel.multipart.desc')} queries={P.multipart} unit="count" labels={{ mpu: t('dashboard.series.uploads') }} styles={{ mpu: { color: 'var(--chart-orange)' } }} height={200} />
+                  ) },
+                ]}
+              />
+            </DashboardRow>
+            <DashboardRow editing={editing} id="nodes" title={t('dashboard.row.nodes')} extra={<span className="text-[0.75rem] text-[var(--muted-foreground)]">{nodes.length > 0 && t('dashboard.nodesCount', { count: nodes.length })}</span>}>
+              <PanelGrid
+                row="nodes"
+                editing={editing}
+                panels={[
+                  { id: 'nodes.diskUsage', w: 6, h: 170, render: (size) => (
+                    <PanelFrame title={t('dashboard.panel.diskUsage')} description={t('dashboard.panel.diskUsage.desc')} loading={nodesQ.isFetching}>
+                      {nodes.filter((n) => n.dataPartition).length === 0 ? (
+                        <div className="flex items-center justify-center text-[0.75rem] text-[var(--muted-foreground)]" style={{ height: size.h }}>{t('charts.noData')}</div>
+                      ) : (
+                        <div className="overflow-y-auto pr-1 scrollbar-thin" style={{ maxHeight: size.h }}>
+                        <BarGauge
+                          items={nodes
+                            .filter((n) => n.dataPartition)
+                            .map((n) => {
+                              const used = n.dataPartition!.total - n.dataPartition!.available;
+                              const pct = (used / n.dataPartition!.total) * 100;
+                              return {
+                                key: n.id,
+                                label: (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className={`h-1.5 w-1.5 rounded-full ${n.isUp ? 'bg-[var(--success)]' : 'bg-[var(--destructive)]'}`} />
+                                    {n.hostname || n.id.slice(0, 12)}
+                                    {n.role?.zone && <span className="text-[var(--muted-foreground)]">· {n.role.zone}</span>}
+                                  </span>
+                                ),
+                                value: pct,
+                                max: 100,
+                                detail: `${formatBytesValue(used)} / ${formatBytesValue(n.dataPartition!.total)}`,
+                                tone: diskTone(pct),
+                              };
+                            })}
+                          format={(v) => formatValue(v, 'percent')}
+                        />
+                        </div>
+                      )}
+                    </PanelFrame>
+                  ) },
+                  { id: 'nodes.diskUsedTrend', w: 6, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.diskUsedTrend')} queries={P.diskUsedByNode} unit="percent" yMax={100} thresholds={[{ value: thresholds.disk_warn_pct, color: 'var(--warning)' }, { value: thresholds.disk_crit_pct, color: 'var(--destructive)' }]} fillOpacity={0.06} height={170} />
+                  ) },
+                  { id: 'nodes.dataAvail', w: 3, h: 160, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.dataAvail')} queries={P.dataAvail} unit="bytes" fillOpacity={0.06} height={160} />
+                  ) },
+                  { id: 'nodes.metaAvail', w: 3, h: 160, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.metaAvail')} queries={P.metaAvail} unit="bytes" fillOpacity={0.06} height={160} />
+                  ) },
+                  { id: 'nodes.nodes', w: 3, h: 160, render: () => (
+                    <TimeSeriesPanel
+                      title={t('dashboard.panel.nodes')}
+                      queries={P.nodes}
+                      unit="count"
+                      labels={{ known: t('dashboard.series.known'), connected: t('dashboard.series.connected'), storage: t('dashboard.series.storageNodes'), storage_up: t('dashboard.series.storageUp') }}
+                      styles={{ known: { color: 'var(--chart-gray)', dashed: true }, connected: { color: 'var(--chart-blue)' }, storage: { color: 'var(--chart-gray)', dashed: true }, storage_up: { color: 'var(--chart-green)' } }}
+                      fillOpacity={0}
+                      height={160}
+                    />
+                  ) },
+                  { id: 'nodes.partitions', w: 3, h: 160, render: () => (
+                    <TimeSeriesPanel
+                      title={t('dashboard.panel.partitions')}
+                      queries={P.partitions}
+                      unit="count"
+                      labels={{ total: t('dashboard.series.total'), quorum: t('dashboard.series.quorum'), ok: t('dashboard.series.allOk') }}
+                      styles={{ total: { color: 'var(--chart-gray)', dashed: true }, quorum: { color: 'var(--chart-olive)' }, ok: { color: 'var(--chart-green)' } }}
+                      fillOpacity={0}
+                      height={160}
+                    />
+                  ) },
+                  ...(nodes.length > 0
+                    ? [{ id: 'nodes.nodeTable', w: 12, h: 220, minH: 80, render: (size: PanelSize) => (
+                    <PanelFrame title={t('dashboard.panel.nodeTable')}>
+                      <div className="overflow-auto scrollbar-thin" style={{ maxHeight: size.h }}>
+                        <table className="w-full min-w-[720px] text-[0.75rem]">
+                          <thead>
+                            <tr className="border-b border-[var(--border)] text-left text-[var(--muted-foreground)]">
+                              <th className="px-2 py-1.5 font-normal">{t('dashboard.node.host')}</th>
+                              <th className="px-2 py-1.5 font-normal">{t('dashboard.node.id')}</th>
+                              <th className="px-2 py-1.5 font-normal">{t('dashboard.node.zone')}</th>
+                              <th className="px-2 py-1.5 font-normal">{t('dashboard.node.address')}</th>
+                              <th className="px-2 py-1.5 font-normal">{t('dashboard.node.version')}</th>
+                              <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.capacity')}</th>
+                              <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.data')}</th>
+                              <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.meta')}</th>
+                              <th className="px-2 py-1.5 text-right font-normal">{t('dashboard.node.status')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {nodes.map((n) => {
+                              const pct = (p?: { available: number; total: number }) => (p && p.total ? ((p.total - p.available) / p.total) * 100 : null);
+                              const dp = pct(n.dataPartition);
+                              const mp = pct(n.metadataPartition);
+                              return (
+                                <tr key={n.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--accent)]/50">
+                                  <td className="px-2 py-1.5 font-medium">{n.hostname || '—'}</td>
+                                  <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.id.slice(0, 16)}</td>
+                                  <td className="px-2 py-1.5">{n.role?.zone || '—'}</td>
+                                  <td className="px-2 py-1.5 font-mono text-[var(--muted-foreground)]">{n.addr || '—'}</td>
+                                  <td className="px-2 py-1.5">{n.garageVersion || '—'}</td>
+                                  <td className="px-2 py-1.5 text-right tabular">{n.role?.capacity ? formatBytesValue(n.role.capacity) : t('dashboard.node.gateway')}</td>
+                                  <td className="px-2 py-1.5 text-right tabular" style={{ color: dp === null ? undefined : `var(--${diskTone(dp) === 'ok' ? 'foreground' : diskTone(dp) === 'warn' ? 'warning' : 'destructive'})` }}>{formatValue(dp, 'percent')}</td>
+                                  <td className="px-2 py-1.5 text-right tabular">{formatValue(mp, 'percent')}</td>
+                                  <td className="px-2 py-1.5 text-right">
+                                    <Badge variant={n.isUp ? (n.draining ? 'warning' : 'success') : 'danger'} className="px-1.5 py-0 text-[0.6875rem]">
+                                      {n.isUp ? (n.draining ? t('dashboard.node.draining') : t('dashboard.node.up')) : t('dashboard.node.down')}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </PanelFrame>
+                  ) }]
+                    : []),
+                ]}
+              />
+            </DashboardRow>
+            <DashboardRow editing={editing} id="internals" title={t('dashboard.row.internals')}>
+              <PanelGrid
+                row="internals"
+                editing={editing}
+                panels={[
+                  { id: 'internals.blockIo', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.blockIo')} description={t('dashboard.panel.blockIo.desc')} queries={P.blockIo} unit="bytesPerSec" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} height={170} />
+                  ) },
+                  { id: 'internals.blockOps', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.blockOps')} queries={P.blockOps} unit="opsps" labels={{ writes: t('dashboard.series.write'), reads: t('dashboard.series.read') }} styles={{ writes: { color: 'var(--chart-orange)' }, reads: { color: 'var(--chart-blue)' } }} height={170} />
+                  ) },
+                  { id: 'internals.blockLatency', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.blockLatency')} queries={P.blockLatency} unit="ms" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} fillOpacity={0.05} height={170} />
+                  ) },
+                  { id: 'internals.resync', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.resync')} description={t('dashboard.panel.resync.desc')} queries={P.resync} unit="count" labels={{ queue: t('dashboard.series.queue'), errored: t('dashboard.series.errored') }} styles={{ queue: { color: 'var(--chart-purple)' }, errored: { color: 'var(--chart-red)' } }} height={170} />
+                  ) },
+                  { id: 'internals.tableQueues', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.tableQueues')} description={t('dashboard.panel.tableQueues.desc')} queries={P.tableQueues} unit="count" labels={{ gc: 'GC', merkle: 'Merkle', insert: t('dashboard.series.insert') }} height={170} />
+                  ) },
+                  { id: 'internals.tableOps', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.tableOps')} queries={P.tableOps} unit="opsps" labels={{ gets: 'get', puts: 'put', updates: t('dashboard.series.updates') }} stacked height={170} />
+                  ) },
+                  { id: 'internals.tableItems', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.tableItems')} queries={P.tableItems} unit="count" fillOpacity={0} legend="table" height={170} />
+                  ) },
+                  { id: 'internals.rpc', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.rpc')} queries={P.rpc} unit="reqps" labels={{ rpc: t('dashboard.series.requests'), errors: t('dashboard.series.errors') }} styles={{ rpc: { color: 'var(--chart-cyan)' }, errors: { color: 'var(--chart-red)' } }} height={170} />
+                  ) },
+                  { id: 'internals.rpcLatency', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.rpcLatency')} queries={P.rpcLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.05} height={170} />
+                  ) },
+                  { id: 'internals.ramBuffer', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.ramBuffer')} description={t('dashboard.panel.ramBuffer.desc')} queries={P.blockMemory} unit="bytes" labels={{ ram: t('dashboard.series.free') }} styles={{ ram: { color: 'var(--chart-green)' } }} height={170} />
+                  ) },
+                  { id: 'internals.collector', w: 4, h: 170, render: () => (
+                    <TimeSeriesPanel title={t('dashboard.panel.collector')} description={t('dashboard.panel.collector.desc')} queries={P.collector} unit="ms" labels={{ scrape: t('dashboard.series.scrape') }} styles={{ scrape: { color: 'var(--chart-gray)' } }} height={170} />
+                  ) },
+                ]}
+              />
             </DashboardRow>
           </div>
         </div>
+        </QueryBatchProvider>
       </DashboardContext.Provider>
     </DashboardTooltipProvider>
   );
