@@ -386,7 +386,8 @@ func (s *Store) ListSeries(ctx context.Context, cluster, name string) ([]SeriesI
 
 // point is one stored value; for rollups v is the bucket average.
 type point struct {
-	ts                  int64
+	ts                  int64 // last sample time
+	start               int64 // rollup bucket start (raw: same as ts)
 	avg, min, max, last float64
 }
 
@@ -394,9 +395,9 @@ func (s *Store) points(ctx context.Context, t Tier, seriesID, from, to int64) ([
 	var rows *sql.Rows
 	var err error
 	if t.Resolution == 0 {
-		rows, err = s.db.QueryContext(ctx, `SELECT ts, v, v, v, v FROM samples_raw WHERE series_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`, seriesID, from, to)
+		rows, err = s.db.QueryContext(ctx, `SELECT ts, ts, v, v, v, v FROM samples_raw WHERE series_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`, seriesID, from, to)
 	} else {
-		rows, err = s.db.QueryContext(ctx, `SELECT last_ts, sum / cnt, min, max, last FROM `+t.Table+` WHERE series_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`, seriesID, from, to)
+		rows, err = s.db.QueryContext(ctx, `SELECT last_ts, ts, sum / cnt, min, max, last FROM `+t.Table+` WHERE series_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`, seriesID, from, to)
 	}
 	if err != nil {
 		return nil, err
@@ -405,7 +406,7 @@ func (s *Store) points(ctx context.Context, t Tier, seriesID, from, to int64) ([
 	var out []point
 	for rows.Next() {
 		var p point
-		if err := rows.Scan(&p.ts, &p.avg, &p.min, &p.max, &p.last); err != nil {
+		if err := rows.Scan(&p.ts, &p.start, &p.avg, &p.min, &p.max, &p.last); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
