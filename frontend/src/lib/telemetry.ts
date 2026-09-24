@@ -108,7 +108,7 @@ export interface SettingsResponse {
 
 export const telemetryApi = {
   query: async (req: { from: number; to: number; step?: number; queries: MetricQuery[] }, signal?: AbortSignal): Promise<RangeResult> => {
-    const response = await api.post('/v1/telemetry/query', req, { signal });
+    const response = await api.get('/v1/telemetry/query', { params: { q: JSON.stringify(req) }, signal });
     return response.data.data;
   },
   status: async (): Promise<TelemetryStatus> => {

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+
 	"Mimic890/garage-ui/internal/appsettings"
 	"Mimic890/garage-ui/internal/models"
 	"Mimic890/garage-ui/internal/state"
@@ -77,16 +79,26 @@ func (h *TelemetryHandler) Status(c fiber.Ctx) error {
 //	@Tags		Monitoring
 //	@Accept		json
 //	@Produce	json
-//	@Param		request	body		telemetry.RangeRequest	true	"Range queries"
+//	@Param		q		query		string					false	"RangeRequest as JSON (GET)"
+//	@Param		request	body		telemetry.RangeRequest	false	"Range queries (POST)"
 //	@Success	200		{object}	models.APIResponse{data=telemetry.RangeResponse}
+//	@Router		/api/v1/telemetry/query [get]
 //	@Router		/api/v1/telemetry/query [post]
 func (h *TelemetryHandler) Query(c fiber.Ctx) error {
 	id, err := h.clusterID(c)
 	if id == "" {
 		return err
 	}
+	// GET with the request as JSON in ?q= is what the UI uses: the query is
+	// read-only, so it should not depend on the Origin check that guards writes.
 	var req telemetry.RangeRequest
-	if err := c.Bind().JSON(&req); err != nil {
+	var bindErr error
+	if c.Method() == fiber.MethodGet {
+		bindErr = json.Unmarshal([]byte(c.Query("q")), &req)
+	} else {
+		bindErr = c.Bind().JSON(&req)
+	}
+	if bindErr != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
 	}
 	interval := int64(h.settings.Get().Monitoring.IntervalSeconds)
