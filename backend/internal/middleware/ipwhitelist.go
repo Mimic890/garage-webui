@@ -41,6 +41,14 @@ func IPAllowed(clientIP string, allowedIPs []string) bool {
 	return false
 }
 
+// DynamicIPWhitelistMiddleware is IPWhitelistMiddleware with the list read on
+// every request, so web settings apply without a restart.
+func DynamicIPWhitelistMiddleware(allowed func() []string) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		return IPWhitelistMiddleware(&config.ServerConfig{AllowedIPs: allowed()})(c)
+	}
+}
+
 // IPWhitelistMiddleware blocks requests from IPs not in the configured AllowedIPs list
 func IPWhitelistMiddleware(cfg *config.ServerConfig) fiber.Handler {
 	return func(c fiber.Ctx) error {

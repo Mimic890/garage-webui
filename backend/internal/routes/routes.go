@@ -1,12 +1,14 @@
 package routes
 
 import (
+	"Mimic890/garage-ui/internal/appsettings"
 	"Mimic890/garage-ui/internal/auth"
 	"Mimic890/garage-ui/internal/authz"
 	"Mimic890/garage-ui/internal/config"
 	"Mimic890/garage-ui/internal/handlers"
 	"Mimic890/garage-ui/internal/middleware"
 	"Mimic890/garage-ui/internal/state"
+	"Mimic890/garage-ui/internal/telemetry"
 	"Mimic890/garage-ui/pkg/logger"
 	cryptorand "crypto/rand"
 	"crypto/subtle"
@@ -26,6 +28,23 @@ import (
 // setupOptions holds optional overrides for SetupRoutes (primarily for tests).
 type setupOptions struct {
 	clusterMW fiber.Handler
+	extras    *Extras
+}
+
+// Extras carries the optional runtime-settings and metrics-history services.
+// Without them the corresponding routes are simply not registered.
+type Extras struct {
+	Settings  *appsettings.Manager
+	Store     *telemetry.Store
+	Collector *telemetry.Collector
+	Version   string
+}
+
+// WithExtras enables the settings and metrics-history routes.
+func WithExtras(e Extras) SetupOption {
+	return func(o *setupOptions) {
+		o.extras = &e
+	}
 }
 
 // SetupOption configures optional SetupRoutes behaviour.
@@ -70,7 +89,12 @@ func SetupRoutes(
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
 
 	// Apply IP Whitelist middleware globally
-	app.Use(middleware.IPWhitelistMiddleware(&cfg.Server))
+	if so.extras != nil && so.extras.Settings != nil {
+		settings := so.extras.Settings
+		app.Use(middleware.DynamicIPWhitelistMiddleware(func() []string { return settings.Effective().AllowedIPs }))
+	} else {
+		app.Use(middleware.IPWhitelistMiddleware(&cfg.Server))
+	}
 
 	// Health check endpoint (no auth required)
 	app.Get("/health", healthHandler.Check)
@@ -82,6 +106,10 @@ func SetupRoutes(
 	// Create auth and panel handlers
 	authHandler := handlers.NewAuthHandler(cfg, authService, stateManager)
 	panelHandler := handlers.NewPanelHandler(stateManager, cfg.Server.ClusterEndpointAllowlist)
+	if so.extras != nil && so.extras.Settings != nil {
+		settings := so.extras.Settings
+		panelHandler.SetAllowlistProvider(func() []string { return settings.Effective().ClusterEndpointAllowlist })
+	}
 
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
@@ -275,6 +303,22 @@ func SetupRoutes(
 		monitoring.Get("/metrics", az.Require(authz.ScopeNone, authz.PermClusterStatistics), monitoringHandler.GetMetrics)            // Get Prometheus metrics
 		monitoring.Get("/admin-health", az.Require(authz.ScopeNone, authz.PermClusterHealth), monitoringHandler.CheckAdminHealth)     // Check Admin API health
 		monitoring.Get("/dashboard", az.Require(authz.ScopeNone, authz.PermClusterStatistics), monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
+	}
+
+	if ex := so.extras; ex != nil && ex.Settings != nil {
+		settingsHandler := handlers.NewSettingsHandler(ex.Settings, cfg, ex.Version)
+		api.Get("/settings", az.Require(authz.ScopeNone, authz.PermClusterHealth), settingsHandler.GetSettings)
+		api.Put("/settings", az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), settingsHandler.UpdateSettings)
+
+		if ex.Store != nil && ex.Collector != nil {
+			th := handlers.NewTelemetryHandler(ex.Store, ex.Collector, ex.Settings, stateManager)
+			tel := api.Group("/telemetry")
+			tel.Get("/status", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Status)
+			tel.Get("/series", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Series)
+			tel.Post("/query", az.Require(authz.ScopeNone, authz.PermClusterStatistics), th.Query)
+			tel.Post("/scrape", az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), th.Scrape)
+			tel.Delete("/history", az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), th.Purge)
+		}
 	}
 
 	// Admin auth login endpoint
