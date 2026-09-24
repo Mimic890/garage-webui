@@ -636,3 +636,30 @@ func TestPreviewObjectKey(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthMiddleware_InvalidSessionCookie_IsCleared(t *testing.T) {
+	authCfg := newAdminCfg()
+	svc := newAuthSvc(t, authCfg)
+
+	var buf bytes.Buffer
+	app := newAuthTestApp(t, &buf, authCfg, svc)
+
+	req := httptest.NewRequest("GET", "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "garage_session", Value: "stale"})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 401 {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+	var cleared bool
+	for _, ck := range resp.Cookies() {
+		if ck.Name == "garage_session" && ck.Value == "" && ck.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Errorf("stale session cookie not cleared: %v", resp.Header.Values("Set-Cookie"))
+	}
+}
