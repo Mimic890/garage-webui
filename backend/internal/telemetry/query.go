@@ -231,6 +231,16 @@ func (s *Store) evalQuery(ctx context.Context, cluster string, q Query, tier Tie
 			}
 			cells := make([]cell, n)
 			if counter {
+				// A rollup bucket also knows how far the counter moved inside
+				// it (last - min). Use that for the first bucket, which has no
+				// predecessor; otherwise a window holding a single bucket
+				// (e.g. 90 days of 1h data collected for less than an hour)
+				// would show no rate at all.
+				if tier.Resolution > 0 && len(pts) > 0 {
+					if f := pts[0]; f.ts > start && f.last > f.min {
+						spreadDelta(cells, start, step, maxInt64(f.start, start), f.ts, f.last-f.min, isDen)
+					}
+				}
 				for i := 1; i < len(pts); i++ {
 					prev, cur := pts[i-1], pts[i]
 					if cur.ts <= start || cur.ts <= prev.ts {
@@ -322,7 +332,7 @@ func spreadDelta(cells []cell, start, step, t0, t1 int64, d float64, isDen bool)
 	// limits which buckets receive it.
 	span := float64(t1 - t0)
 	if t1-t0 > staleness {
-		t0 = t1 - step
+		t0 = maxInt64(t0, t1-step)
 	}
 	for b := (t0 - start) / step; b < n; b++ {
 		if b < 0 {
@@ -429,10 +439,9 @@ func finalize(c cell, q Query, step int64) (float64, bool) {
 		}
 		return c.num / c.dt, true
 	case FnIncrease:
-		if c.dt <= 0 {
-			return 0, false
-		}
-		return c.num / c.dt * float64(step), true
+		// The observed increase, not rate×step: a step only partly covered
+		// by history must not be extrapolated to its full width.
+		return c.num, true
 	case FnRatio:
 		if c.den <= 0 {
 			return 0, false

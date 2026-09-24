@@ -343,3 +343,39 @@ func TestSpreadDelta(t *testing.T) {
 		t.Errorf("den = %+v", den[0])
 	}
 }
+
+// A long range served from the 1h tier while history is shorter than an hour
+// holds a single bucket per series; the rate must still come from inside it.
+func TestRangeCounterSingleRollupBucket(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	base := now.Truncate(time.Hour).Add(time.Minute)
+	if base.After(now.Add(-6 * time.Minute)) {
+		base = base.Add(-time.Hour)
+	}
+	for i := 0; i < 20; i++ {
+		ts := base.Add(time.Duration(i*15) * time.Second)
+		if err := s.Write(ctx, "c1", ts, []Sample{{Name: "s3.requests", Kind: KindCounter, Value: float64(i * 30)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err := s.Range(ctx, "c1", RangeRequest{From: now.Add(-90 * 24 * time.Hour).Unix(), To: now.Unix(), Queries: []Query{
+		{ID: "inc", Metric: "s3.requests", Fn: FnIncrease},
+	}}, 15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Tier != "1h" || len(resp.Series) != 1 {
+		t.Fatalf("tier=%s series=%+v", resp.Tier, resp.Series)
+	}
+	var total float64
+	for _, v := range resp.Series[0].Values {
+		if v != nil {
+			total += *v
+		}
+	}
+	if math.Abs(total-19*30) > 1e-6 {
+		t.Errorf("total increase = %v, want %v", total, 19*30)
+	}
+}
