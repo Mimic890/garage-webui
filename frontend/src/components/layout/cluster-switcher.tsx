@@ -19,7 +19,7 @@ export function ClusterSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-md px-2.5 text-[14px] font-medium transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+      <DropdownMenuTrigger className="flex h-8 items-center gap-2 rounded-md px-2.5 text-[0.875rem] font-medium transition-colors hover:bg-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
         <Globe className="h-4 w-4 text-[var(--muted-foreground)]" />
         <span className="truncate max-w-[150px]">
           {activeCluster ? activeCluster.name : t('clusters.switcher.selectCluster')}

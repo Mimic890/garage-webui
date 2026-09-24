@@ -70,11 +70,11 @@ export function Settings() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
                 <div>
-                  <div className="flex items-center gap-2 font-medium text-[14px]">
+                  <div className="flex items-center gap-2 font-medium text-[0.875rem]">
                     <Globe className="h-4 w-4 text-[var(--muted-foreground)]" />
                     {t('settings.timezone')}
                   </div>
-                  <div className="text-[13px] text-[var(--muted-foreground)] mt-0.5">
+                  <div className="text-[0.8125rem] text-[var(--muted-foreground)] mt-0.5">
                     {t('settings.timezone.desc')}
                   </div>
                 </div>
@@ -98,11 +98,11 @@ export function Settings() {
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
                 <div>
-                  <div className="flex items-center gap-2 font-medium text-[14px]">
+                  <div className="flex items-center gap-2 font-medium text-[0.875rem]">
                     <Languages className="h-4 w-4 text-[var(--muted-foreground)]" />
                     {t('settings.language')}
                   </div>
-                  <div className="text-[13px] text-[var(--muted-foreground)] mt-0.5">
+                  <div className="text-[0.8125rem] text-[var(--muted-foreground)] mt-0.5">
                     {t('settings.language.desc')}
                   </div>
                 </div>
@@ -136,26 +136,26 @@ export function Settings() {
             {config ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.bindingHost')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{config.server.host === '::' || config.server.host === '' ? t('settings.network.allInterfaces', { address: '0.0.0.0' }) : config.server.host}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.network.bindingHost')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{config.server.host === '::' || config.server.host === '' ? t('settings.network.allInterfaces', { address: '0.0.0.0' }) : config.server.host}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.port')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{config.server.port}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.network.port')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{config.server.port}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.protocol')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{config.server.protocol || t('settings.network.autoProtocol')}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.network.protocol')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{config.server.protocol || t('settings.network.autoProtocol')}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.rootUrl')}</span>
-                  <span className="text-[14px] mt-1 font-mono">
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.network.rootUrl')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">
                     {config.server.root_url || <span className="text-[var(--muted-foreground)] italic">{t('settings.network.autoDetected', { value: detectedRootUrl })}</span>}
                   </span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] sm:col-span-2">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.network.allowedIps')}</span>
-                  <span className="text-[14px] mt-1 font-mono break-all">
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.network.allowedIps')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono break-all">
                     {config.server.allowed_ips && config.server.allowed_ips.length > 0 
                       ? config.server.allowed_ips.join(', ')
                       : <span className="text-[var(--muted-foreground)] italic">{t('settings.network.allIpsAllowed')}</span>}
@@ -163,7 +163,7 @@ export function Settings() {
                 </div>
               </div>
             ) : (
-              <div className="text-[14px] text-[var(--muted-foreground)]">
+              <div className="text-[0.875rem] text-[var(--muted-foreground)]">
                 {t('settings.status.loadingConfiguration')}
               </div>
             )}
@@ -184,27 +184,27 @@ export function Settings() {
             {config ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxBodySize')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_body_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxBodySize')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{formatBytes(config.server.max_body_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxHeaderSize')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.max_header_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.limits.maxHeaderSize')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{formatBytes(config.server.max_header_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.readBufferSize')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.read_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.limits.readBufferSize')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{formatBytes(config.server.read_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
                 
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.limits.writeBufferSize')}</span>
-                  <span className="text-[14px] mt-1 font-mono">{formatBytes(config.server.write_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.limits.writeBufferSize')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono">{formatBytes(config.server.write_buffer_size, 'MB', t('common.value.unavailable'), interfaceLanguage)}</span>
                 </div>
               </div>
             ) : (
-              <div className="text-[14px] text-[var(--muted-foreground)]">
+              <div className="text-[0.875rem] text-[var(--muted-foreground)]">
                 {t('settings.status.loadingConfiguration')}
               </div>
             )}
@@ -225,16 +225,16 @@ export function Settings() {
             {config?.logging ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.logging.level')}</span>
-                  <span className="text-[14px] mt-1 font-mono uppercase">{config.logging.level}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.logging.level')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono uppercase">{config.logging.level}</span>
                 </div>
                 <div className="flex flex-col p-4 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-                  <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{t('settings.logging.format')}</span>
-                  <span className="text-[14px] mt-1 font-mono uppercase">{config.logging.format}</span>
+                  <span className="text-[0.75rem] font-medium text-[var(--muted-foreground)]">{t('settings.logging.format')}</span>
+                  <span className="text-[0.875rem] mt-1 font-mono uppercase">{config.logging.format}</span>
                 </div>
               </div>
             ) : (
-              <div className="text-[14px] text-[var(--muted-foreground)]">
+              <div className="text-[0.875rem] text-[var(--muted-foreground)]">
                 {t('settings.status.loadingConfiguration')}
               </div>
             )}

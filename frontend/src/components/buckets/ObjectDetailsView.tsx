@@ -20,7 +20,7 @@ function CardSection({ title, children }: { title: string; children: React.React
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
       <div className="border-b border-[var(--border)] px-5 py-3.5">
-        <h3 className="text-[14px] font-semibold tracking-[-0.01em]">{title}</h3>
+        <h3 className="text-[0.875rem] font-semibold tracking-[-0.01em]">{title}</h3>
       </div>
       {children}
     </section>
@@ -30,8 +30,8 @@ function CardSection({ title, children }: { title: string; children: React.React
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 gap-1 px-5 py-3.5 sm:grid-cols-[200px_1fr] sm:gap-4">
-      <dt className="text-[12.5px] font-medium text-[var(--muted-foreground)]">{label}</dt>
-      <dd className="text-[13.5px] text-[var(--foreground)] break-words">{children}</dd>
+      <dt className="text-[0.7812rem] font-medium text-[var(--muted-foreground)]">{label}</dt>
+      <dd className="text-[0.8438rem] text-[var(--foreground)] break-words">{children}</dd>
     </div>
   );
 }
@@ -120,7 +120,7 @@ export function ObjectDetailsView() {
         <Button variant="secondary" onClick={() => navigate(backHref)} className="mb-4">
           <ArrowLeft className="h-4 w-4" /> {t('buckets.actions.back')}
         </Button>
-        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-soft)] px-5 py-4 text-[13.5px] text-[var(--destructive)]">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-soft)] px-5 py-4 text-[0.8438rem] text-[var(--destructive)]">
           {error ? t(error) : t('buckets.object_details.errors.not_found')}
         </div>
       </div>
@@ -130,7 +130,7 @@ export function ObjectDetailsView() {
   return (
     <div className="px-7 py-6 space-y-6">
       {/* Back + breadcrumb */}
-      <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
+      <div className="flex items-center gap-2 text-[0.8125rem] text-[var(--muted-foreground)]">
         <Link
           to={backHref}
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
@@ -153,12 +153,12 @@ export function ObjectDetailsView() {
         <div className="flex min-w-0 items-start gap-3">
           <IconTile icon={<File />} tone="primary" size="lg" />
           <div className="min-w-0">
-            <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em]">{fileName}</h1>
+            <h1 className="truncate text-[1.375rem] font-semibold tracking-[-0.02em]">{fileName}</h1>
             <button
               type="button"
               onClick={() => copy(metadata.key, t('buckets.toast.object_key_copied'))}
               title={t('buckets.actions.copy_key')}
-              className="group mt-1 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[13px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              className="group mt-1 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[0.8125rem] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
               <span className="truncate">{metadata.key}</span>
               <Copy className="h-3 w-3 flex-shrink-0 opacity-60 group-hover:opacity-100" />
@@ -193,7 +193,7 @@ export function ObjectDetailsView() {
             <button
               type="button"
               onClick={() => copy(metadata.etag, t('buckets.toast.etag_copied'))}
-              className="inline-flex max-w-full items-center gap-1.5 truncate rounded-md bg-[var(--surface-sunken)] px-2 py-0.5 font-mono text-[12.5px] hover:bg-[var(--accent)]"
+              className="inline-flex max-w-full items-center gap-1.5 truncate rounded-md bg-[var(--surface-sunken)] px-2 py-0.5 font-mono text-[0.7812rem] hover:bg-[var(--accent)]"
             >
               <span className="truncate">{metadata.etag}</span>
               <Copy className="h-3 w-3 flex-shrink-0 opacity-60" />
@@ -201,7 +201,7 @@ export function ObjectDetailsView() {
           </DetailRow>
           {metadata.versionId && (
             <DetailRow label={t('buckets.fields.version_id')}>
-              <span className="font-mono text-[12.5px]">{metadata.versionId}</span>
+              <span className="font-mono text-[0.7812rem]">{metadata.versionId}</span>
             </DetailRow>
           )}
         </dl>
@@ -213,7 +213,7 @@ export function ObjectDetailsView() {
           <dl className="divide-y divide-[var(--border)]">
             {Object.entries(metadata.metadata).map(([key, value]) => (
               <DetailRow key={key} label={key}>
-                <span className="font-mono text-[12.5px]">{value}</span>
+                <span className="font-mono text-[0.7812rem]">{value}</span>
               </DetailRow>
             ))}
           </dl>
@@ -231,7 +231,7 @@ export function ObjectDetailsView() {
             onDownload={handleDownload}
           />
         ) : (
-          <div className="px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
+          <div className="px-5 py-10 text-center text-[0.8125rem] text-[var(--muted-foreground)]">
             {t('buckets.preview.unavailable')}
           </div>
         )}

@@ -68,6 +68,28 @@ type RangeResponse struct {
 
 const maxPoints = 480
 
+// staleness is how long a gauge value stays valid without a new sample, like
+// Prometheus' lookback delta. It bridges series scraped less often than the
+// query step (bucket statistics) without hiding real outages.
+const staleness = 300
+
+// forwardFill copies each value into following empty steps, at most limit.
+func forwardFill(values []*float64, limit int) {
+	var last *float64
+	gap := 0
+	for i, v := range values {
+		if v != nil {
+			last, gap = v, 0
+			continue
+		}
+		gap++
+		if last != nil && gap <= limit {
+			c := *last
+			values[i] = &c
+		}
+	}
+}
+
 var niceSteps = []int64{5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400}
 
 // PickStep returns a step that keeps at most maxPoints points per series and
@@ -126,7 +148,7 @@ func (s *Store) Range(ctx context.Context, cluster string, req RangeRequest, scr
 	}
 	start := req.From - req.From%step
 	n := int((req.To-start)/step) + 1
-	resp := &RangeResponse{From: start, To: req.To, Step: step, Tier: tier.Name, Timestamps: make([]int64, n)}
+	resp := &RangeResponse{From: start, To: req.To, Step: step, Tier: tier.Name, Timestamps: make([]int64, n), Series: []SeriesOut{}}
 	for i := range resp.Timestamps {
 		resp.Timestamps[i] = start + int64(i)*step
 	}
@@ -273,6 +295,9 @@ func (s *Store) evalQuery(ctx context.Context, cluster string, q Query, tier Tie
 		}
 		if cnt == 0 {
 			continue
+		}
+		if !counter {
+			forwardFill(values, int(staleness/step))
 		}
 		name := key
 		if name == "" {

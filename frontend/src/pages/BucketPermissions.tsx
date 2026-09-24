@@ -65,11 +65,11 @@ export function BucketPermissions() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <ShieldCheck className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">{t('bucket_permissions.grant_access_title')}</h2>
+          <h2 className="text-[0.9375rem] font-semibold">{t('bucket_permissions.grant_access_title')}</h2>
         </header>
         <div className="space-y-5 px-5 py-5">
           <div className="space-y-1.5">
-            <label className="text-[13.5px] font-medium">{t('bucket_permissions.access_key_label')}</label>
+            <label className="text-[0.8438rem] font-medium">{t('bucket_permissions.access_key_label')}</label>
             <Select value={selectedKey} onChange={(v) => setSelectedKey(v)}>
               <SelectOption value="">{t('bucket_permissions.select_access_key_placeholder')}</SelectOption>
               {availableKeys.map((k) => (
@@ -78,13 +78,13 @@ export function BucketPermissions() {
                 </SelectOption>
               ))}
             </Select>
-            <p className="text-[12.5px] text-[var(--muted-foreground)]">
+            <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
               {t('bucket_permissions.access_key_help')}
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <div className="text-[13.5px] font-medium">{t('bucket_permissions.permissions_label')}</div>
+            <div className="text-[0.8438rem] font-medium">{t('bucket_permissions.permissions_label')}</div>
             <div className="space-y-3 rounded-lg border border-[var(--border)] p-4">
               <PermRow
                 id="perm-read"
@@ -121,7 +121,7 @@ export function BucketPermissions() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <KeyRound className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">{t('bucket_permissions.granted_title')}</h2>
+          <h2 className="text-[0.9375rem] font-semibold">{t('bucket_permissions.granted_title')}</h2>
         </header>
         {granted.length === 0 ? (
           <div className="p-5">
@@ -137,8 +137,8 @@ export function BucketPermissions() {
             {granted.map(({ key, perm }) => (
               <li key={key.accessKeyId} className="flex items-center gap-4 px-5 py-3">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-medium">{key.name}</div>
-                  <div className="truncate font-mono text-[12.5px] text-[var(--muted-foreground)]">
+                  <div className="truncate text-[0.875rem] font-medium">{key.name}</div>
+                  <div className="truncate font-mono text-[0.7812rem] text-[var(--muted-foreground)]">
                     {key.accessKeyId}
                   </div>
                 </div>
@@ -173,10 +173,10 @@ function PermRow({
     <div className="flex items-start gap-3">
       <Checkbox id={id} checked={checked} onCheckedChange={(c) => onChange(c as boolean)} />
       <div className="flex-1">
-        <label htmlFor={id} className="text-[14px] font-medium leading-none cursor-pointer">
+        <label htmlFor={id} className="text-[0.875rem] font-medium leading-none cursor-pointer">
           {title}
         </label>
-        <p className="mt-1 text-[12.5px] text-[var(--muted-foreground)]">{description}</p>
+        <p className="mt-1 text-[0.7812rem] text-[var(--muted-foreground)]">{description}</p>
       </div>
     </div>
   );

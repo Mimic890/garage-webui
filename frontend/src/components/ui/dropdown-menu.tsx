@@ -20,10 +20,17 @@ function useDropdownMenu() {
 
 interface DropdownMenuProps {
   children: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-const DropdownMenu: React.FC<DropdownMenuProps> = ({ children }) => {
-  const [open, setOpen] = React.useState(false);
+const DropdownMenu: React.FC<DropdownMenuProps> = ({ children, open: controlledOpen, onOpenChange }) => {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = React.useCallback((next: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }, [controlledOpen, onOpenChange]);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   return (
     <DropdownMenuContext.Provider value={{ open, setOpen, triggerRef }}>
@@ -59,31 +66,26 @@ interface DropdownMenuContentProps extends React.HTMLAttributes<HTMLDivElement> 
 }
 
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, children, align = 'start', ...props }) => {
+  ({ className, children, align = 'start', ...props }, _ref) => {
     const { open, setOpen, triggerRef } = useDropdownMenu();
     const contentRef = React.useRef<HTMLDivElement>(null);
     const [position, setPosition] = React.useState({ top: 0, left: 0 });
 
-    // Calculate position based on trigger element
-    React.useEffect(() => {
+    // Fixed positioning relative to the trigger, measured after render so
+    // wide menus align correctly and never leave the viewport.
+    React.useLayoutEffect(() => {
       const updatePosition = () => {
-        if (open && triggerRef.current) {
-          const rect = triggerRef.current.getBoundingClientRect();
-          const scrollY = window.scrollY || document.documentElement.scrollTop;
-          const scrollX = window.scrollX || document.documentElement.scrollLeft;
-
-          let left = rect.left + scrollX;
-          const top = rect.bottom + scrollY + 8; // 8px gap (mt-2)
-
-          // Adjust horizontal alignment
-          if (align === 'end') {
-            left = rect.right + scrollX - 224; // 224px = w-56
-          } else if (align === 'center') {
-            left = rect.left + scrollX + (rect.width / 2) - 112; // 112px = half of w-56
-          }
-
-          setPosition({ top, left });
-        }
+        if (!open || !triggerRef.current) return;
+        const rect = triggerRef.current.getBoundingClientRect();
+        const width = contentRef.current?.offsetWidth ?? 224;
+        const height = contentRef.current?.offsetHeight ?? 0;
+        let left = rect.left;
+        if (align === 'end') left = rect.right - width;
+        else if (align === 'center') left = rect.left + rect.width / 2 - width / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+        let top = rect.bottom + 6;
+        if (height && top + height > window.innerHeight - 8 && rect.top - height - 6 > 8) top = rect.top - height - 6;
+        setPosition({ top, left });
       };
 
       updatePosition();
@@ -98,6 +100,15 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
         window.removeEventListener('resize', updatePosition);
       };
     }, [open, align, triggerRef]);
+
+    React.useEffect(() => {
+      if (!open) return;
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setOpen(false);
+      };
+      document.addEventListener('keydown', onKey);
+      return () => document.removeEventListener('keydown', onKey);
+    }, [open, setOpen]);
 
     React.useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -130,7 +141,7 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
           left: `${position.left}px`,
         }}
         className={cn(
-          'z-50 w-56 origin-top-right rounded-md text-popover-foreground shadow-lg ring-1 ring-border border border-border focus:outline-none',
+          'z-50 w-56 origin-top-right rounded-lg text-popover-foreground shadow-xl border border-border focus:outline-none',
           className
         )}
         {...props}
