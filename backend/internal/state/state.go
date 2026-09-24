@@ -326,11 +326,27 @@ func ValidateClusterEndpointsAllowlist(allowlistCIDRs []string, endpoints ...str
 		}
 		for _, ip := range ips {
 			if isBlockedClusterTarget(ip, allowlist) {
-				return fmt.Errorf("cluster endpoint targets a local, private, or metadata address")
+				return &BlockedEndpointError{Host: u.Hostname(), IP: ip.String(), Private: ip.IsPrivate()}
 			}
 		}
 	}
 	return nil
+}
+
+// BlockedEndpointError says which address a cluster endpoint was refused for.
+// Private addresses can be opted into through the endpoint allowlist; the
+// others (loopback, link-local, metadata) never can.
+type BlockedEndpointError struct {
+	Host    string
+	IP      string
+	Private bool
+}
+
+func (e *BlockedEndpointError) Error() string {
+	if e.Private {
+		return fmt.Sprintf("cluster endpoint %s resolves to private address %s, which is not in the cluster endpoint allowlist (Settings → Security)", e.Host, e.IP)
+	}
+	return fmt.Sprintf("cluster endpoint %s resolves to %s, a loopback, link-local or metadata address, which is never allowed", e.Host, e.IP)
 }
 
 // isBlockedClusterTarget reports whether ip is a target the control plane

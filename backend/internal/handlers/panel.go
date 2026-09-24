@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"errors"
+
 	"Mimic890/garage-ui/internal/auth"
 	"Mimic890/garage-ui/internal/models"
+	"Mimic890/garage-ui/internal/services"
 	"Mimic890/garage-ui/internal/state"
 
 	"github.com/gofiber/fiber/v3"
@@ -94,22 +97,43 @@ func (h *PanelHandler) GetClusters(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "clusters": clusters})
 }
 
-// AddCluster adds a new Garage cluster
-func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
-	var req state.ClusterConfig
-	if err := c.Bind().JSON(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
-	}
+func clusterJSON(c state.ClusterConfig) fiber.Map {
+	return fiber.Map{"id": c.ID, "name": c.Name, "endpoint": c.Endpoint, "region": c.Region, "use_ssl": c.UseSSL, "force_path_style": c.ForcePathStyle, "admin_endpoint": c.AdminEndpoint}
+}
 
+// validateCluster checks the required fields and the SSRF policy. On failure
+// it writes the response and returns false. A blocked private address is
+// reported with its IP so the UI can offer to add it to the allowlist.
+func (h *PanelHandler) validateCluster(c fiber.Ctx, req state.ClusterConfig) bool {
 	if req.Name == "" || req.Endpoint == "" || req.AdminEndpoint == "" || req.AdminToken == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
+		_ = c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
+		return false
 	}
 	allowlist := h.endpointAllowlist
 	if h.allowlistProvider != nil {
 		allowlist = h.allowlistProvider()
 	}
 	if err := state.ValidateClusterEndpointsAllowlist(allowlist, req.Endpoint, req.AdminEndpoint); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, err.Error()))
+		body := fiber.Map{"success": false, "error": models.APIError{Code: models.ErrCodeBadRequest, Message: err.Error()}}
+		var blocked *state.BlockedEndpointError
+		if errors.As(err, &blocked) {
+			body["blocked"] = fiber.Map{"host": blocked.Host, "ip": blocked.IP, "private": blocked.Private}
+		}
+		_ = c.Status(fiber.StatusBadRequest).JSON(body)
+		return false
+	}
+	return true
+}
+
+// AddCluster adds a new Garage cluster. It is saved even when Garage is not
+// reachable yet, so it can be edited until it works.
+func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
+	var req state.ClusterConfig
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
+	}
+	if !h.validateCluster(c, req) {
+		return nil
 	}
 
 	req.ID = uuid.New().String()
@@ -118,7 +142,60 @@ func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to add cluster"))
 	}
 
-	return c.JSON(fiber.Map{"success": true, "cluster": fiber.Map{"id": req.ID, "name": req.Name, "endpoint": req.Endpoint, "region": req.Region, "use_ssl": req.UseSSL, "force_path_style": req.ForcePathStyle, "admin_endpoint": req.AdminEndpoint}})
+	return c.JSON(fiber.Map{"success": true, "cluster": clusterJSON(req)})
+}
+
+// UpdateCluster edits an existing cluster. An empty admin_token keeps the
+// stored one, so the token never has to be sent back to the browser.
+func (h *PanelHandler) UpdateCluster(c fiber.Ctx) error {
+	existing, ok := h.stateManager.GetCluster(c.Params("id"))
+	if !ok {
+		return c.Status(fiber.StatusNotFound).JSON(models.ErrorResponse(models.ErrCodeNotFound, "Cluster not found"))
+	}
+	var req state.ClusterConfig
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
+	}
+	req.ID = existing.ID
+	if req.AdminToken == "" {
+		req.AdminToken = existing.AdminToken
+	}
+	if !h.validateCluster(c, req) {
+		return nil
+	}
+	if err := h.stateManager.UpdateCluster(req); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse(models.ErrCodeInternalError, "Failed to update cluster"))
+	}
+	return c.JSON(fiber.Map{"success": true, "cluster": clusterJSON(req)})
+}
+
+// TestCluster checks that the admin API and S3 endpoint answer, without
+// saving anything. Pass "id" to reuse a stored token when admin_token is empty.
+func (h *PanelHandler) TestCluster(c fiber.Ctx) error {
+	var req state.ClusterConfig
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"))
+	}
+	stored := false
+	if req.ID != "" {
+		if existing, ok := h.stateManager.GetCluster(req.ID); ok {
+			if req.AdminToken == "" {
+				req.AdminToken = existing.AdminToken
+			}
+			// A saved cluster is already contacted by the app (it may come from
+			// env bootstrap, which the allowlist does not cover), so checking
+			// its unchanged endpoints does not widen what the server can reach.
+			stored = req.Endpoint == existing.Endpoint && req.AdminEndpoint == existing.AdminEndpoint
+		}
+	}
+	if stored {
+		if req.AdminToken == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
+		}
+	} else if !h.validateCluster(c, req) {
+		return nil
+	}
+	return c.JSON(models.SuccessResponse(services.CheckConnection(c.Context(), req)))
 }
 
 // DeleteCluster removes a Garage cluster

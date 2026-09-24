@@ -186,6 +186,8 @@ func SetupRoutes(
 			return c.Next()
 		}, middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.GetClusters)
 		panel.Post("/clusters", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.AddCluster)
+		panel.Post("/clusters/test", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.TestCluster)
+		panel.Put("/clusters/:id", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.UpdateCluster)
 		panel.Delete("/clusters/:id", middleware.AuthMiddleware(&cfg.Auth, authService, stateManager), az.Require(authz.ScopeNone, authz.PermClusterManage), authz.RequireClusterAdmin(authService), panelHandler.DeleteCluster)
 	}
 
