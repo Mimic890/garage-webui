@@ -19,6 +19,8 @@ import { mergeOrder, useDashboardLayout, type PanelSize } from '@/store/dashboar
 
 export interface PanelDef {
   id: string;
+  /** Shown on the compact stub that stands in for a hidden panel in edit mode. */
+  title: string;
   /** Default width in columns of 12 (wide screens). */
   w: number;
   /** Default body height in pixels. */
@@ -178,6 +180,24 @@ function SortablePanel({ def, size, hidden, editing, wide, gridRef }: {
     zIndex: isDragging ? 30 : undefined,
     gridColumn: wide || expanded ? `span ${span} / span ${span}` : undefined,
   };
+
+  // A hidden panel is never rendered: in edit mode a title-only stub stands
+  // in for it, so it neither fetches nor re-renders on refresh.
+  if (hidden) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 30 : undefined }}
+        data-panel={def.id}
+        className={cn('col-span-6 min-w-0 sm:col-span-4 xl:col-span-3', isDragging && 'opacity-80 shadow-lg')}
+      >
+        <div className="flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[var(--input)] bg-[var(--card)]/60 pl-3 pr-1.5 text-[var(--muted-foreground)]">
+          <span className="min-w-0 flex-1 truncate text-[0.8125rem]">{def.title}</span>
+          {slot.controls}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
