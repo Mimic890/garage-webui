@@ -66,7 +66,7 @@ function CredentialField({
   const display = loading ? '' : revealed || !maskable ? value : '•'.repeat(Math.min(40, value.length || 40));
   return (
     <div className="space-y-1.5">
-      <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+      <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
         {label}
       </label>
       <div className="flex items-stretch gap-2">
@@ -77,7 +77,7 @@ function CredentialField({
           title={t('access_control.click_to_copy_title')}
           className={cn(
             'flex-1 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-sunken)]',
-            'px-3 py-2 text-left text-[13.5px] transition-colors hover:bg-[var(--accent)]',
+            'px-3 py-2 text-left text-[0.8438rem] transition-colors hover:bg-[var(--accent)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
             'disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-[var(--surface-sunken)]',
             mono && 'font-mono',
@@ -619,7 +619,7 @@ export function AccessControl() {
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
-                            <DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
@@ -688,10 +688,10 @@ export function AccessControl() {
               </DialogHeader>
               <DialogBody className="space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                  <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                      {t('access_control.key_name_label')}
                   </label>
-                  <div className="text-[14px] font-medium">{newlyCreatedKey.name}</div>
+                  <div className="text-[0.875rem] font-medium">{newlyCreatedKey.name}</div>
                 </div>
                  <CredentialField label={t('access_control.access_key_id_label')} value={newlyCreatedKey.accessKeyId} />
                 <CredentialField
@@ -702,10 +702,10 @@ export function AccessControl() {
                 <div className="flex gap-3 rounded-lg border border-[var(--accent-primary-border)] bg-[var(--accent-primary-soft)] px-3.5 py-3">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0 text-[var(--primary)] mt-0.5" />
                   <div className="space-y-0.5">
-                    <p className="text-[13.5px] font-medium text-[var(--foreground)]">
+                    <p className="text-[0.8438rem] font-medium text-[var(--foreground)]">
                        {t('access_control.save_key_warning_title')}
                     </p>
-                    <p className="text-[12.5px] leading-[1.5] text-[var(--muted-foreground)]">
+                    <p className="text-[0.7812rem] leading-[1.5] text-[var(--muted-foreground)]">
                        {t('access_control.save_key_warning_description')}
                     </p>
                   </div>
@@ -728,7 +728,7 @@ export function AccessControl() {
               </DialogHeader>
               <DialogBody className="space-y-6">
                 <div className="space-y-1.5">
-                  <label htmlFor="new-key-name" className="text-[13px] font-medium">
+                  <label htmlFor="new-key-name" className="text-[0.8125rem] font-medium">
                      {t('access_control.key_name_label')}
                   </label>
                   <Input
@@ -738,7 +738,7 @@ export function AccessControl() {
                     onChange={(e) => setNewKeyName(e.target.value)}
                     autoFocus
                   />
-                  <p className="text-[12.5px] text-[var(--muted-foreground)]">
+                  <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
                      {t('access_control.key_name_help')}
                   </p>
                 </div>
@@ -760,8 +760,8 @@ export function AccessControl() {
                       }}
                     />
                     <div className="flex-1">
-                       <div className="text-[13.5px] font-medium">{t('access_control.grant_permissions_now')}</div>
-                      <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
+                       <div className="text-[0.8438rem] font-medium">{t('access_control.grant_permissions_now')}</div>
+                      <p className="mt-0.5 text-[0.7812rem] text-[var(--muted-foreground)]">
                          {t('access_control.grant_permissions_help')}
                       </p>
                     </div>
@@ -770,7 +770,7 @@ export function AccessControl() {
                   {createGrantPermissions && (
                     <div className="space-y-4 border-t border-[var(--border)] pt-4">
                       <div className="space-y-1.5">
-                         <label className="text-[13px] font-medium">{t('access_control.bucket_label')}</label>
+                         <label className="text-[0.8125rem] font-medium">{t('access_control.bucket_label')}</label>
                         <Select
                           value={createSelectedBucket}
                           onChange={(value) => setCreateSelectedBucket(value)}
@@ -786,7 +786,7 @@ export function AccessControl() {
 
                       {createSelectedBucket && (
                         <div className="space-y-1.5">
-                           <label className="text-[13px] font-medium">{t('access_control.permissions_label')}</label>
+                           <label className="text-[0.8125rem] font-medium">{t('access_control.permissions_label')}</label>
                           <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
                             {[
                               {
@@ -823,8 +823,8 @@ export function AccessControl() {
                                   onCheckedChange={(checked) => p.setChecked(checked as boolean)}
                                 />
                                 <div className="flex-1">
-                                  <div className="text-[13.5px] font-medium">{p.label}</div>
-                                  <p className="mt-0.5 font-mono text-[12px] text-[var(--muted-foreground)]">
+                                  <div className="text-[0.8438rem] font-medium">{p.label}</div>
+                                  <p className="mt-0.5 font-mono text-[0.75rem] text-[var(--muted-foreground)]">
                                     {p.desc}
                                   </p>
                                 </div>
@@ -904,7 +904,7 @@ export function AccessControl() {
           </DialogHeader>
           <DialogBody className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+              <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                  {t('access_control.status_label')}
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -916,7 +916,7 @@ export function AccessControl() {
                       type="button"
                       onClick={() => setKeyStatus(s)}
                       className={cn(
-                        'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-[13.5px] font-medium transition-colors',
+                        'flex items-center justify-center gap-2 rounded-md border px-3 py-2.5 text-[0.8438rem] font-medium transition-colors',
                         selected
                           ? 'border-[var(--primary)] bg-[var(--accent-primary-soft)] text-[var(--foreground)]'
                           : 'border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]',
@@ -928,7 +928,7 @@ export function AccessControl() {
                   );
                 })}
               </div>
-              <p className="text-[12.5px] text-[var(--muted-foreground)]">
+              <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
                  {t('access_control.inactive_help')}
               </p>
             </div>
@@ -942,8 +942,8 @@ export function AccessControl() {
                   onCheckedChange={(checked) => setNeverExpires(checked as boolean)}
                 />
                 <div className="flex-1">
-                   <div className="text-[13.5px] font-medium">{t('access_control.never_expires_label')}</div>
-                  <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
+                   <div className="text-[0.8438rem] font-medium">{t('access_control.never_expires_label')}</div>
+                  <p className="mt-0.5 text-[0.7812rem] text-[var(--muted-foreground)]">
                      {t('access_control.never_expires_help')}
                   </p>
                 </div>
@@ -951,14 +951,14 @@ export function AccessControl() {
 
               {!neverExpires && (
                 <div className="space-y-1.5 border-t border-[var(--border)] pt-4">
-                   <label className="text-[13px] font-medium">{t('access_control.expiration_datetime_label')}</label>
+                   <label className="text-[0.8125rem] font-medium">{t('access_control.expiration_datetime_label')}</label>
                   <Input
                     type="datetime-local"
                     value={expirationDate}
                     onChange={(e) => setExpirationDate(e.target.value)}
                     className="w-full"
                   />
-                  <p className="text-[12.5px] text-[var(--muted-foreground)]">
+                  <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
                      {t('access_control.expiration_help')}
                   </p>
                 </div>
@@ -988,24 +988,24 @@ export function AccessControl() {
             {/* Meta strip */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface-sunken)] px-4 py-3">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                <span className="text-[0.6875rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                    {t('access_control.status_label')}
                 </span>
                 <Badge variant={viewingKey?.status === 'active' ? 'success' : 'neutral'}>
                    {viewingKey?.status && t(`access_control.status_${viewingKey.status}`)}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
+              <div className="flex items-center gap-2 text-[0.8125rem] text-[var(--muted-foreground)]">
                 <Calendar className="h-3.5 w-3.5" />
-                 <span className="text-[11px] font-medium uppercase tracking-[0.06em]">{t('access_control.created_label')}</span>
+                 <span className="text-[0.6875rem] font-medium uppercase tracking-[0.06em]">{t('access_control.created_label')}</span>
                 <span className="text-[var(--foreground)]">
                    {viewingKey && formatLocalizedDate(viewingKey.createdAt)}
                 </span>
               </div>
               {viewingKey?.expiration && (
-                <div className="flex items-center gap-2 text-[13px] text-[var(--muted-foreground)]">
+                <div className="flex items-center gap-2 text-[0.8125rem] text-[var(--muted-foreground)]">
                   <Calendar className="h-3.5 w-3.5" />
-                   <span className="text-[11px] font-medium uppercase tracking-[0.06em]">{t('access_control.expires_label')}</span>
+                   <span className="text-[0.6875rem] font-medium uppercase tracking-[0.06em]">{t('access_control.expires_label')}</span>
                    <span className="text-[var(--foreground)]">{formatLocalizedDate(viewingKey.expiration)}</span>
                 </div>
               )}
@@ -1019,7 +1019,7 @@ export function AccessControl() {
                 breakAll
               />
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                    {t('access_control.secret_access_key_label')}
                 </label>
                 {detailsSecretKey ? (
@@ -1051,11 +1051,11 @@ export function AccessControl() {
             {/* Bucket Permissions */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                    {t('access_control.bucket_permissions_label')}
                 </label>
                 {viewingKey && viewingKey.permissions.length > 0 && (
-                  <span className="text-[12px] text-[var(--muted-foreground)]">
+                  <span className="text-[0.75rem] text-[var(--muted-foreground)]">
                      {t(viewingKey.permissions.length === 1 ? 'access_control.one_bucket_count' : 'access_control.buckets_count')
                        .replace('{{count}}', viewingKey.permissions.length.toLocaleString(language))}
                   </span>
@@ -1070,7 +1070,7 @@ export function AccessControl() {
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <Database className="h-3.5 w-3.5 flex-shrink-0 text-[var(--muted-foreground)]" />
-                        <span className="truncate font-mono text-[13px]">{perm.bucketName}</span>
+                        <span className="truncate font-mono text-[0.8125rem]">{perm.bucketName}</span>
                       </div>
                       <div className="flex flex-shrink-0 gap-1">
                          {perm.read && <Badge variant="neutral">{t('access_control.permission_read')}</Badge>}
@@ -1082,7 +1082,7 @@ export function AccessControl() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-6 text-center">
-                  <p className="text-[13px] text-[var(--muted-foreground)]">
+                  <p className="text-[0.8125rem] text-[var(--muted-foreground)]">
                      {t('access_control.no_bucket_permissions')}
                   </p>
                 </div>
@@ -1121,7 +1121,7 @@ export function AccessControl() {
           </DialogHeader>
           <DialogBody className="space-y-5">
             <div className="space-y-1.5">
-               <label className="text-[13px] font-medium">{t('access_control.bucket_label')}</label>
+               <label className="text-[0.8125rem] font-medium">{t('access_control.bucket_label')}</label>
               <Select value={selectedBucket} onChange={(value) => handleBucketChange(value)}>
                  <SelectOption value="">{t('access_control.select_bucket_placeholder')}</SelectOption>
                 {availableBuckets.map((bucket) => (
@@ -1135,7 +1135,7 @@ export function AccessControl() {
             {selectedBucket && (
               <>
                 <div className="space-y-1.5">
-                   <label className="text-[13px] font-medium">{t('access_control.permissions_label')}</label>
+                   <label className="text-[0.8125rem] font-medium">{t('access_control.permissions_label')}</label>
                   <div className="divide-y divide-[var(--border)] rounded-md border border-[var(--border)]">
                     {[
                       {
@@ -1172,8 +1172,8 @@ export function AccessControl() {
                           onCheckedChange={(checked) => p.setChecked(checked as boolean)}
                         />
                         <div className="flex-1">
-                          <div className="text-[13.5px] font-medium">{p.label}</div>
-                          <p className="mt-0.5 font-mono text-[12px] text-[var(--muted-foreground)]">
+                          <div className="text-[0.8438rem] font-medium">{p.label}</div>
+                          <p className="mt-0.5 font-mono text-[0.75rem] text-[var(--muted-foreground)]">
                             {p.desc}
                           </p>
                         </div>
@@ -1189,7 +1189,7 @@ export function AccessControl() {
                   const hasAny = current && (current.read || current.write || current.owner);
                   return (
                     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-sunken)] px-3.5 py-3">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                      <div className="text-[0.6875rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                          {t('access_control.currently_granted')}
                       </div>
                       {hasAny ? (
@@ -1199,7 +1199,7 @@ export function AccessControl() {
                            {current!.owner && <Badge variant="warning">{t('access_control.permission_owner')}</Badge>}
                         </div>
                       ) : (
-                        <p className="mt-1 text-[12.5px] text-[var(--muted-foreground)]">
+                        <p className="mt-1 text-[0.7812rem] text-[var(--muted-foreground)]">
                            {t('access_control.no_permissions_for_bucket')}
                         </p>
                       )}
@@ -1211,13 +1211,13 @@ export function AccessControl() {
 
             {editingKey && editingKey.permissions.length > 0 && (
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
+                <label className="text-[0.75rem] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
                    {t('access_control.all_bucket_permissions')}
                 </label>
                 <div className="max-h-48 divide-y divide-[var(--border)] overflow-y-auto rounded-md border border-[var(--border)]">
                   {editingKey.permissions.map((perm, idx) => (
                     <div key={idx} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                      <span className="truncate font-mono text-[13px]">{perm.bucketName}</span>
+                      <span className="truncate font-mono text-[0.8125rem]">{perm.bucketName}</span>
                       <div className="flex flex-shrink-0 gap-1">
                          {perm.read && <Badge variant="neutral">{t('access_control.permission_read_short')}</Badge>}
                          {perm.write && <Badge variant="neutral">{t('access_control.permission_write_short')}</Badge>}

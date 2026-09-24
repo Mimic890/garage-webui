@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { BucketHistory } from '@/components/buckets/BucketHistory';
 import { AlertTriangle, Gauge, Info } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -127,7 +128,7 @@ export function BucketSettings() {
     newMaxObjects !== null && bucket?.objectCount != null && newMaxObjects < currentObjects;
 
   if (isLoading) {
-    return <div className="px-7 py-6 text-[13.5px] text-[var(--muted-foreground)]">{t('buckets.common.loading')}</div>;
+    return <div className="px-7 py-6 text-[0.8438rem] text-[var(--muted-foreground)]">{t('buckets.common.loading')}</div>;
   }
   if (!bucket) {
     return (
@@ -152,14 +153,15 @@ export function BucketSettings() {
 
   return (
     <div className="space-y-6 px-7 py-6">
+      <BucketHistory bucket={bucket.name} />
       {/* Info */}
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <Info className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">{t('buckets.settings.info.heading')}</h2>
+          <h2 className="text-[0.9375rem] font-semibold">{t('buckets.settings.info.heading')}</h2>
         </header>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-4 px-5 py-5 sm:grid-cols-2">
-          <Field label={t('buckets.fields.name')} value={<span className="font-mono text-[13.5px]">{bucket.name}</span>} />
+          <Field label={t('buckets.fields.name')} value={<span className="font-mono text-[0.8438rem]">{bucket.name}</span>} />
           <Field label={t('buckets.fields.region')} value={bucket.region ?? '—'} />
           <Field label={t('buckets.fields.created')} value={formatDateOrDash(bucket.creationDate)} />
           <Field label={t('buckets.fields.objects')} value={bucket.objectCount != null ? bucket.objectCount.toLocaleString(language) : '—'} />
@@ -179,7 +181,7 @@ export function BucketSettings() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <Gauge className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">{t('buckets.settings.quotas.heading')}</h2>
+          <h2 className="text-[0.9375rem] font-semibold">{t('buckets.settings.quotas.heading')}</h2>
         </header>
 
         <form onSubmit={onSubmit} className="space-y-6 px-5 py-5">
@@ -190,7 +192,7 @@ export function BucketSettings() {
                 control={control}
                 name="maxSizeEnabled"
                 render={({ field }) => (
-                  <label className="flex items-center gap-2 text-[14px]">
+                  <label className="flex items-center gap-2 text-[0.875rem]">
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                     <span>{t('buckets.settings.quotas.limit_size')}</span>
                   </label>
@@ -223,14 +225,14 @@ export function BucketSettings() {
                 )}
               />
             </div>
-            <p className="text-[13px] text-[var(--muted-foreground)]">
+            <p className="text-[0.8125rem] text-[var(--muted-foreground)]">
               {t('buckets.settings.quotas.current', { value: formatBytesOrDash(bucket.size) })}
             </p>
             {errors.maxSizeValue && (
-              <p className="text-[13px] text-[var(--destructive)]">{t(errors.maxSizeValue.message!)}</p>
+              <p className="text-[0.8125rem] text-[var(--destructive)]">{t(errors.maxSizeValue.message!)}</p>
             )}
             {sizeBelowCurrent && (
-              <p className="text-[13px] text-amber-600 dark:text-amber-400">
+              <p className="text-[0.8125rem] text-amber-600 dark:text-amber-400">
                 {t('buckets.settings.quotas.size_exceeded', { size: formatBytes(currentSize) })}
               </p>
             )}
@@ -243,7 +245,7 @@ export function BucketSettings() {
                 control={control}
                 name="maxObjectsEnabled"
                 render={({ field }) => (
-                  <label className="flex items-center gap-2 text-[14px]">
+                  <label className="flex items-center gap-2 text-[0.875rem]">
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                     <span>{t('buckets.settings.quotas.limit_objects')}</span>
                   </label>
@@ -258,14 +260,14 @@ export function BucketSettings() {
                 {...register('maxObjectsValue')}
               />
             </div>
-            <p className="text-[13px] text-[var(--muted-foreground)]">
+            <p className="text-[0.8125rem] text-[var(--muted-foreground)]">
               {t('buckets.settings.quotas.current', { value: bucket.objectCount != null ? bucket.objectCount.toLocaleString(language) : '—' })}
             </p>
             {errors.maxObjectsValue && (
-              <p className="text-[13px] text-[var(--destructive)]">{t(errors.maxObjectsValue.message!)}</p>
+              <p className="text-[0.8125rem] text-[var(--destructive)]">{t(errors.maxObjectsValue.message!)}</p>
             )}
             {objectsBelowCurrent && (
-              <p className="text-[13px] text-amber-600 dark:text-amber-400">
+              <p className="text-[0.8125rem] text-amber-600 dark:text-amber-400">
                 {t('buckets.settings.quotas.objects_exceeded', { count: currentObjects.toLocaleString(language) })}
               </p>
             )}
@@ -291,15 +293,15 @@ export function BucketSettings() {
       {canBucket(bucket, 'bucket.delete') && (
         <section className="rounded-xl border border-[var(--danger-border)] bg-[var(--card)]">
           <header className="border-b border-[var(--danger-border)] px-5 py-3">
-            <h2 className="text-[15px] font-semibold text-[var(--destructive)]">{t('buckets.settings.danger.heading')}</h2>
-            <p className="mt-0.5 text-[13.5px] text-[var(--muted-foreground)]">
+            <h2 className="text-[0.9375rem] font-semibold text-[var(--destructive)]">{t('buckets.settings.danger.heading')}</h2>
+            <p className="mt-0.5 text-[0.8438rem] text-[var(--muted-foreground)]">
               {t('buckets.settings.danger.description')}
             </p>
           </header>
           <div className="flex items-center justify-between gap-4 px-5 py-4">
             <div className="min-w-0">
-              <div className="text-[14px] font-medium">{t('buckets.actions.delete_bucket')}</div>
-              <div className="text-[13.5px] text-[var(--muted-foreground)]">
+              <div className="text-[0.875rem] font-medium">{t('buckets.actions.delete_bucket')}</div>
+              <div className="text-[0.8438rem] text-[var(--muted-foreground)]">
                 {t('buckets.settings.danger.delete_description')}
               </div>
             </div>
@@ -331,8 +333,8 @@ export function BucketSettings() {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{label}</dt>
-      <dd className="mt-1 text-[14px]">{value}</dd>
+      <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">{label}</dt>
+      <dd className="mt-1 text-[0.875rem]">{value}</dd>
     </div>
   );
 }

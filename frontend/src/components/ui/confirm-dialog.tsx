@@ -51,7 +51,7 @@ export function ConfirmDialog({
           </div>
         </DialogHeader>
         <DialogBody>
-          <p className="text-[13.5px] text-[var(--muted-foreground)]">{t('common.confirm.irreversible')}</p>
+          <p className="text-[0.8438rem] text-[var(--muted-foreground)]">{t('common.confirm.irreversible')}</p>
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>

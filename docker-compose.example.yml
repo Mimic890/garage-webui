@@ -10,7 +10,8 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      # Persisted admin account + cluster list (entrypoint chowns to uid 1000)
+      # Persisted admin account, cluster list, web settings and metrics
+      # history (SQLite). Entrypoint chowns to uid 1000.
       - garage_ui_data:/app/data
     environment:
       # Minimal environment variables, just for server basics
@@ -20,7 +21,10 @@ services:
       - GARAGE_UI_SERVER_ENVIRONMENT=development
       - GARAGE_UI_SERVER_ROOT_URL=http://localhost:8080
       - GARAGE_UI_DATA_DIR=/app/data
+      # Initial log level; can be overridden later in Settings → Security & server.
       - GARAGE_UI_LOGGING_LEVEL=info # Options: trace, debug, info, warn, error
+      # Monitoring interval/retention, thresholds and IP allowlists are set in
+      # the web UI (Settings) and stored in /app/data/garage-ui.db.
       - GARAGE_UI_AUTH_BOOTSTRAP_TOKEN=${GARAGE_UI_AUTH_BOOTSTRAP_TOKEN:?set a strong one-time bootstrap token}
       # Optional first-run Garage cluster bootstrap. Keep the token out of git;
       # use an env file or Docker secret in real deployments.

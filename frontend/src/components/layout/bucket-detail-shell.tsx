@@ -60,8 +60,8 @@ export function BucketDetailShell() {
           <div className="flex min-w-0 items-start gap-3">
             <IconTile icon={<Database />} tone="primary" size="lg" />
             <div className="min-w-0">
-              <h1 className="truncate text-[26px] font-semibold tracking-[-0.02em]">{bucketName}</h1>
-              <p className="mt-1 truncate font-mono text-[13.5px] text-[var(--muted-foreground)]">{s3Url}</p>
+              <h1 className="truncate text-[1.625rem] font-semibold tracking-[-0.02em]">{bucketName}</h1>
+              <p className="mt-1 truncate font-mono text-[0.8438rem] text-[var(--muted-foreground)]">{s3Url}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="success">{t('buckets.common.active')}</Badge>
                 {bucket?.objectCount != null && <Badge>{t('buckets.summary.objects', { count: bucket.objectCount.toLocaleString(language) })}</Badge>}
@@ -91,7 +91,7 @@ export function BucketDetailShell() {
             end={tab.end}
             className={({ isActive }) =>
               cn(
-                'relative -mb-px inline-flex h-12 items-center px-3.5 text-[14px] font-medium transition-colors',
+                'relative -mb-px inline-flex h-12 items-center px-3.5 text-[0.875rem] font-medium transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] rounded-sm',
                 isActive
                   ? 'text-[var(--primary)] border-b-2 border-[var(--primary)]'

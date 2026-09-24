@@ -12,6 +12,13 @@ import (
 type PanelHandler struct {
 	stateManager      *state.Manager
 	endpointAllowlist []string
+	allowlistProvider func() []string
+}
+
+// SetAllowlistProvider makes AddCluster read the SSRF allowlist at request
+// time (web settings) instead of the fixed startup value.
+func (h *PanelHandler) SetAllowlistProvider(fn func() []string) {
+	h.allowlistProvider = fn
 }
 
 // NewPanelHandler builds a PanelHandler. endpointAllowlist may be nil, in
@@ -97,7 +104,11 @@ func (h *PanelHandler) AddCluster(c fiber.Ctx) error {
 	if req.Name == "" || req.Endpoint == "" || req.AdminEndpoint == "" || req.AdminToken == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, "Missing required fields"))
 	}
-	if err := state.ValidateClusterEndpointsAllowlist(h.endpointAllowlist, req.Endpoint, req.AdminEndpoint); err != nil {
+	allowlist := h.endpointAllowlist
+	if h.allowlistProvider != nil {
+		allowlist = h.allowlistProvider()
+	}
+	if err := state.ValidateClusterEndpointsAllowlist(allowlist, req.Endpoint, req.AdminEndpoint); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse(models.ErrCodeBadRequest, err.Error()))
 	}
 

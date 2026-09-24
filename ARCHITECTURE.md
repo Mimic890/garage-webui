@@ -6,7 +6,7 @@ Web UI for [Garage](https://garagehq.deuxfleurs.fr/), an S3-compatible distribut
 
 - **Backend:** Go 1.26.5, Fiber v3 (HTTP), minio-go/v7 (S3 data plane), azuretls-client (Admin API), viper (config), zerolog (logging), golang-jwt + coreos/go-oidc (auth).
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, TanStack React Query, Zustand, React Router v7, axios, recharts, sonner, react-dropzone, highlight.js.
-- **Data store:** Garage itself (S3). No SQL database. Auth state persisted in localStorage via Zustand.
+- **Data store:** Garage itself (S3) for objects. `data/state.json` for the admin account and clusters. `data/garage-ui.db` (SQLite via pure-Go `modernc.org/sqlite`) for web-editable settings and the metrics history.
 - **Deployment:** Multi-stage Dockerfile (Node build → Go build → Alpine runtime); Helm chart in `helm/`.
 
 ## Folder Structure
@@ -26,6 +26,9 @@ backend/
   internal/authz/              # UI-layer permission policy (NOT a security boundary)
   internal/middleware/         # auth, CORS, request-id, structured logging
   internal/models/             # Request/response DTOs + Garage admin API JSON models
+  internal/appsettings/        # Web-editable runtime settings (SQLite document, env overrides, subscribers)
+  internal/telemetry/          # Metrics history: Prometheus parser, curated series, SQLite store
+                               #   (raw / 5m / 1h tiers), range queries, background collector
   pkg/logger/                  # zerolog wrapper with per-request context + redaction
   pkg/utils/                   # In-memory TTL cache (GlobalCache), retry-with-backoff
 frontend/
@@ -58,6 +61,9 @@ helm/garage-ui/                 # Helm chart for Kubernetes deployment
 | `frontend/src/hooks/useBucketObjects.ts` | Object listing state machine: debounced search, pagination tokens, upload tasks, delete. Has `fetchSeqRef` to discard stale fetch responses. |
 | `frontend/src/hooks/useApi.ts` | React Query hooks (`useBuckets`, `useClusterHealth`, mutations with cache invalidation). Query keys defined in `query-client.ts`. |
 | `frontend/src/store/auth-store.ts` | Zustand store (persisted). `initialize()` fetches `/auth/config` then `/auth/me`. Three auth modes: admin (basic), token, OIDC. |
+| `backend/internal/telemetry/collector.go` | Scrapes `/metrics`, cluster health/status and (on its own interval) bucket stats for every cluster; the loop re-reads settings on change. |
+| `backend/internal/telemetry/query.go` | Range evaluation: picks step/tier, spreads counter deltas across steps, forward-fills gauges for 5 minutes. |
+| `frontend/src/components/charts/TimeSeriesChart.tsx` | uPlot wrapper (synced cursor, drag-zoom, tooltip, legend). Dashboard panels live in `components/dashboard/`. |
 | `frontend/src/components/buckets/ObjectBrowserView.tsx` | Main object browser: drag-drop upload (two dropzone instances), breadcrumb nav, selection, bulk-delete confirm. |
 
 ## API Endpoints
@@ -94,6 +100,12 @@ All API routes under `/api/v1` require auth (JWT bearer token or OIDC cookie). `
 | GET | `/api/v1/cluster/nodes/:node_id` | `cluster.GetNodeInfo` | Per-node info (v2 only) |
 | GET | `/api/v1/cluster/nodes/:node_id/statistics` | `cluster.GetNodeStatistics` | Per-node stats (v2 only) |
 | GET | `/api/v1/monitoring/dashboard` | `monitoring.GetDashboardMetrics` | Aggregated dashboard metrics |
+| GET/PUT | `/api/v1/settings` | `settings.GetSettings` / `UpdateSettings` | Runtime settings (PUT: cluster admin) |
+| GET | `/api/v1/telemetry/status` | `telemetry.Status` | Collector + database status for X-Cluster-Id |
+| GET | `/api/v1/telemetry/series` | `telemetry.Series` | Recorded series catalogue |
+| POST | `/api/v1/telemetry/query` | `telemetry.Query` | Batch range queries (`rate`, `increase`, `ratio`, `avg/max/min/last`, `group_by`, `top_k`) |
+| POST | `/api/v1/telemetry/scrape` | `telemetry.Scrape` | Collect now (cluster admin) |
+| DELETE | `/api/v1/telemetry/history` | `telemetry.Purge` | Delete history (`?scope=all` for every cluster) |
 | GET | `/auth/config` | `auth.GetAuthConfig` | Auth mode flags (public) |
 | POST | `/auth/login` | `auth.LoginAdmin` | Admin basic auth (if enabled) |
 | POST | `/auth/login-token` | `auth.LoginToken` | Token auth (if enabled) |

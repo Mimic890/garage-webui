@@ -95,6 +95,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Superseded requests (React Query aborts them on key changes) are not errors.
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     // Handle 401 Unauthorized - redirect to login
     if (error.response?.status === 401) {
       // Only redirect if not already on login page

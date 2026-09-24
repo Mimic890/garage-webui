@@ -17,7 +17,7 @@ function Notice({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center gap-3 px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
+    <div className="flex flex-col items-center gap-3 px-5 py-10 text-center text-[0.8125rem] text-[var(--muted-foreground)]">
       <p>{message}</p>
       {(onRetry || onDownload) && (
         <div className="flex gap-2">
@@ -57,7 +57,7 @@ function CodeBlock({ text, objectKey }: { text: string; objectKey: string }) {
   }, [text, objectKey]);
 
   return (
-    <pre className="overflow-x-auto px-5 py-4 font-mono text-[12.5px] leading-relaxed">
+    <pre className="overflow-x-auto px-5 py-4 font-mono text-[0.7812rem] leading-relaxed">
       {html !== null ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{text}</code>}
     </pre>
   );
@@ -109,7 +109,7 @@ export function ObjectPreview({
       return <Notice message={t('buckets.preview.load_failed')} onRetry={preview.retry} onDownload={onDownload} />;
     case 'loading':
       return (
-        <div className="flex items-center justify-center gap-2 px-5 py-10 text-[13px] text-[var(--muted-foreground)]">
+        <div className="flex items-center justify-center gap-2 px-5 py-10 text-[0.8125rem] text-[var(--muted-foreground)]">
           <Loader2 className="h-4 w-4 animate-spin" /> {t('buckets.preview.loading')}
         </div>
       );

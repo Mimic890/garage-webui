@@ -23,6 +23,15 @@ export interface PaletteConfig {
 
 export const PALETTES: PaletteConfig[] = [
   {
+    id: 'graphite',
+    name: 'Graphite',
+    group: 'Brand',
+    colors: {
+      dark: { text: '#e3e5e8', bg: '#0e0f12', primary: '#ff8a3d', secondary: '#1f2228', accent: '#15171b' },
+      light: { text: '#16181d', bg: '#f6f7f9', primary: '#e8660c', secondary: '#eef0f3', accent: '#e1e4e8' },
+    },
+  },
+  {
     id: 'warm',
     name: 'Warm',
     group: 'Brand',
@@ -185,7 +194,7 @@ export function ThemeToggle() {
           {t('theme.mode.title')}
         </div>
         {isCatppuccin ? (
-          <p className="px-2.5 pb-1.5 text-[11px] text-muted-foreground leading-snug">
+          <p className="px-2.5 pb-1.5 text-[0.6875rem] text-muted-foreground leading-snug">
             {t('theme.mode.catppuccinHelp')}
           </p>
         ) : null}

@@ -29,7 +29,7 @@ func ClusterMiddleware(stateManager *state.Manager, logLevel, environment string
 
 	return func(c fiber.Ctx) error {
 		path := c.Path()
-		if strings.HasPrefix(path, "/api/v1/panel") || path == "/api/v1/capabilities" || path == "/api/v1/health" {
+		if strings.HasPrefix(path, "/api/v1/panel") || strings.HasPrefix(path, "/api/v1/telemetry") || path == "/api/v1/settings" || path == "/api/v1/capabilities" || path == "/api/v1/health" {
 			return c.Next()
 		}
 		clusterID := c.Get("X-Cluster-Id")

@@ -197,7 +197,7 @@ const DialogTitleText = React.forwardRef<HTMLHeadingElement, React.HTMLAttribute
     <h2
       ref={ref}
       id={titleId}
-      className={cn('text-[20px] font-semibold tracking-[-0.015em] leading-tight', className)}
+      className={cn('text-[1.25rem] font-semibold tracking-[-0.015em] leading-tight', className)}
       {...props}
     />
     );
@@ -212,7 +212,7 @@ const DialogDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttri
     <p
       ref={ref}
       id={descriptionId}
-      className={cn('mt-1 text-[13.5px] leading-[1.45] text-[var(--muted-foreground)]', className)}
+      className={cn('mt-1 text-[0.8438rem] leading-[1.45] text-[var(--muted-foreground)]', className)}
       {...props}
     />
     );
