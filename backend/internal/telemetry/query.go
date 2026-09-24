@@ -68,6 +68,10 @@ type RangeResponse struct {
 
 const maxPoints = 480
 
+// maxQueries bounds one request; the dashboard sends every visible panel's
+// queries together (about 60 today).
+const maxQueries = 256
+
 // staleness is how long a gauge value stays valid without a new sample, like
 // Prometheus' lookback delta. It bridges series scraped less often than the
 // query step (bucket statistics) without hiding real outages.
@@ -130,8 +134,8 @@ func (s *Store) Range(ctx context.Context, cluster string, req RangeRequest, scr
 	if req.From <= 0 || req.From >= req.To {
 		return nil, errors.New("from must be positive and before to")
 	}
-	if len(req.Queries) == 0 || len(req.Queries) > 32 {
-		return nil, errors.New("between 1 and 32 queries are required")
+	if len(req.Queries) == 0 || len(req.Queries) > maxQueries {
+		return nil, errors.New(fmt.Sprintf("between 1 and %d queries are required", maxQueries))
 	}
 	if scrapeInterval <= 0 {
 		scrapeInterval = 15
