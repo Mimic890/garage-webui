@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useTranslation } from '@/lib/i18n';
 import { TimeSeriesChart, type ChartSeries, type Threshold } from '@/components/charts/TimeSeriesChart';
 import { useRangeQuery, type TimeRange } from '@/hooks/useTelemetry';
+import { useBatchedRange, type PanelData } from '@/components/dashboard/batch';
 import type { MetricQuery, RangeResult } from '@/lib/telemetry';
 import { seriesColor } from '@/lib/chart-theme';
 import { formatValue, type Unit } from '@/lib/units';
@@ -23,6 +24,40 @@ export function useDashboard() {
   const ctx = React.useContext(DashboardContext);
   if (!ctx) throw new Error('useDashboard outside DashboardContext');
   return ctx;
+}
+
+/**
+ * Set by PanelGrid for the panel it wraps: the size the user chose, whether
+ * the dashboard is being edited, and the edit controls to show in the header.
+ */
+export interface PanelSlot {
+  height: number;
+  editing: boolean;
+  /** Hidden panel shown in edit mode: rendered, but not fetched or refreshed. */
+  inactive: boolean;
+  expanded: boolean;
+  toggleExpanded: () => void;
+  controls: React.ReactNode;
+  resizeHandle: React.ReactNode;
+}
+
+export const PanelSlotContext = React.createContext<PanelSlot | null>(null);
+
+/** Body height for a panel: the grid slot's size, or the given default. */
+export function usePanelHeight(fallback: number) {
+  return React.useContext(PanelSlotContext)?.height ?? fallback;
+}
+
+/**
+ * Data for a panel: from the dashboard's shared batch request when there is
+ * one, otherwise a request of its own. Inactive (hidden) panels fetch nothing.
+ */
+function usePanelData(queries: MetricQuery[], enabled = true): PanelData {
+  const { range, refetchInterval } = useDashboard();
+  const inactive = !!React.useContext(PanelSlotContext)?.inactive;
+  const batched = useBatchedRange(queries, enabled && !inactive);
+  const direct = useRangeQuery(queries, range, refetchInterval, enabled && !inactive && !batched);
+  return batched ?? { data: direct.data, isLoading: direct.isLoading, isFetching: direct.isFetching, isError: direct.isError };
 }
 
 export function PanelFrame({
@@ -45,8 +80,16 @@ export function PanelFrame({
   bodyClassName?: string;
 }) {
   const { t } = useTranslation();
+  const slot = React.useContext(PanelSlotContext);
+  const editing = !!slot?.editing;
   return (
-    <section className={cn('group/panel relative flex min-w-0 flex-col rounded-lg border border-[var(--border)] bg-[var(--card)]', className)}>
+    <section
+      className={cn(
+        'group/panel relative flex h-full min-w-0 flex-col rounded-lg border border-[var(--border)] bg-[var(--card)]',
+        editing && 'border-dashed border-[var(--input)]',
+        className,
+      )}
+    >
       <header className="flex h-9 shrink-0 items-center gap-1.5 px-3">
         <h3 className="min-w-0 truncate text-[0.8125rem] font-medium text-[var(--foreground)]">{title}</h3>
         {description && (
@@ -62,10 +105,11 @@ export function PanelFrame({
         <div className="ml-auto flex items-center gap-1">
           {error && <span className="text-[0.6875rem] text-[var(--destructive)]">{t('charts.error')}</span>}
           {loading && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--primary)]" />}
-          {actions}
+          {editing ? slot?.controls : actions}
         </div>
       </header>
       <div className={cn('min-h-0 flex-1 px-2 pb-2', bodyClassName)}>{children}</div>
+      {editing && slot?.resizeHandle}
     </section>
   );
 }
@@ -139,27 +183,31 @@ export function TimeSeriesPanel({
   legend = 'list',
   className,
 }: TimeSeriesPanelProps) {
-  const { range, refetchInterval, onZoom, seriesLabel } = useDashboard();
-  const [expanded, setExpanded] = React.useState(false);
+  const { onZoom, seriesLabel } = useDashboard();
+  const slot = React.useContext(PanelSlotContext);
+  const [localExpanded, setLocalExpanded] = React.useState(false);
+  const expanded = slot ? slot.expanded : localExpanded;
+  const toggleExpanded = slot ? slot.toggleExpanded : () => setLocalExpanded((e) => !e);
+  const baseHeight = slot?.height ?? height;
   const { t } = useTranslation();
-  const q = useRangeQuery(queries, range, refetchInterval);
+  const q = usePanelData(queries);
   const series = React.useMemo(
     () => toChartSeries(q.data, queries, { styles, labels, seriesLabel }),
     [q.data, queries, styles, labels, seriesLabel],
   );
 
-  const chartHeight = expanded ? Math.max(height * 2, 420) : height;
+  const chartHeight = expanded ? Math.max(baseHeight * 2, 420) : baseHeight;
   return (
     <PanelFrame
       title={title}
       description={description}
       loading={q.isFetching}
       error={q.isError}
-      className={cn(expanded && 'col-span-full', className)}
+      className={cn(!slot && expanded && 'col-span-full', className)}
       actions={
         <button
           type="button"
-          onClick={() => setExpanded((e) => !e)}
+          onClick={toggleExpanded}
           className="rounded p-0.5 text-[var(--muted-foreground)] opacity-0 transition-opacity hover:text-[var(--foreground)] group-hover/panel:opacity-100 focus:opacity-100"
           aria-label={expanded ? t('charts.collapse') : t('charts.expand')}
           title={expanded ? t('charts.collapse') : t('charts.expand')}
@@ -254,18 +302,21 @@ function reduceValues(values: (number | null)[], how: StatPanelProps['reduce']):
 }
 
 export function StatPanel({ title, description, query, unit, reduce = 'last', tone, value, sub, sparkline = true, className }: StatPanelProps) {
-  const { range, refetchInterval } = useDashboard();
   const queries = React.useMemo(() => (query ? [query] : []), [query]);
-  const q = useRangeQuery(queries, range, refetchInterval, !!query);
+  const q = usePanelData(queries, !!query);
   const values = q.data?.series?.[0]?.values ?? [];
   const reduced = reduceValues(values, reduce);
   const toneName = tone ? tone(reduced) : 'neutral';
   const color = toneColor[toneName];
   const density = useSettingsStore((s) => s.density);
+  const slotHeight = React.useContext(PanelSlotContext)?.height;
 
   return (
     <PanelFrame title={title} description={description} loading={q.isFetching && !!query} className={className} bodyClassName="px-3 pb-0 flex flex-col">
-      <div className={cn('flex flex-1 flex-col justify-end', density === 'compact' ? 'min-h-[64px]' : 'min-h-[84px]')}>
+      <div
+        className={cn('flex flex-1 flex-col justify-end', !slotHeight && (density === 'compact' ? 'min-h-[64px]' : 'min-h-[84px]'))}
+        style={slotHeight ? { minHeight: slotHeight } : undefined}
+      >
         {q.isLoading && query ? (
           <div className="h-7 w-24 animate-pulse rounded bg-[var(--accent)]" />
         ) : (
@@ -314,11 +365,12 @@ export function BarGauge({ items, format }: { items: BarGaugeItem[]; format: (v:
   );
 }
 
-export function DashboardRow({ id, title, children, extra }: { id: string; title: string; children: React.ReactNode; extra?: React.ReactNode }) {
+export function DashboardRow({ id, title, children, extra, editing }: { id: string; title: string; children: React.ReactNode; extra?: React.ReactNode; editing?: boolean }) {
   const collapsed = useSettingsStore((s) => s.collapsedRows.includes(id));
   const toggleRow = useSettingsStore((s) => s.toggleRow);
+  // Outside edit mode a row whose panels are all hidden disappears entirely.
   return (
-    <section className="space-y-2">
+    <section className={cn('space-y-2', !editing && !collapsed && '[&:not(:has([data-panel]))]:hidden')}>
       <div className="flex items-center gap-2">
         <button
           type="button"

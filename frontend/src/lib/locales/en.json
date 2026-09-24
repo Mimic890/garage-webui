@@ -984,5 +984,15 @@
   "connections.allowlist.allow": "Allow {{ip}}",
   "connections.allowlist.hint": "Adds the address to Settings → Security → cluster endpoint allowlist",
   "connections.allowlist.added": "{{ip}} added to the allowlist",
-  "connections.notifications.updated": "Connection updated"
+  "connections.notifications.updated": "Connection updated",
+  "dashboard.edit.start": "Edit layout",
+  "dashboard.edit.done": "Done",
+  "dashboard.edit.reset": "Reset",
+  "dashboard.edit.resetHint": "Restore the default order, sizes and visibility",
+  "dashboard.edit.move": "Drag to move",
+  "dashboard.edit.hide": "Hide panel",
+  "dashboard.edit.show": "Show panel",
+  "dashboard.edit.resize": "Drag to resize (arrow keys work too)",
+  "dashboard.edit.hiddenPanels": "Hidden panels",
+  "dashboard.edit.dropToHide": "Drop a panel here to hide it"
 }

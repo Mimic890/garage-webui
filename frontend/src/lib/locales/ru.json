@@ -984,5 +984,15 @@
   "connections.allowlist.allow": "Разрешить {{ip}}",
   "connections.allowlist.hint": "Добавит адрес в Настройки → Безопасность → разрешённые адреса кластеров",
   "connections.allowlist.added": "{{ip}} добавлен в разрешённые",
-  "connections.notifications.updated": "Подключение обновлено"
+  "connections.notifications.updated": "Подключение обновлено",
+  "dashboard.edit.start": "Изменить",
+  "dashboard.edit.done": "Готово",
+  "dashboard.edit.reset": "Сбросить",
+  "dashboard.edit.resetHint": "Вернуть порядок, размеры и видимость по умолчанию",
+  "dashboard.edit.move": "Перетащите, чтобы переместить",
+  "dashboard.edit.hide": "Скрыть панель",
+  "dashboard.edit.show": "Показать панель",
+  "dashboard.edit.resize": "Потяните, чтобы изменить размер (или стрелками)",
+  "dashboard.edit.hiddenPanels": "Скрытые панели",
+  "dashboard.edit.dropToHide": "Перетащите сюда панель, чтобы скрыть её"
 }
