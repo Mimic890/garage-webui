@@ -34,7 +34,7 @@ export function BucketWebsite() {
   }, [bucket?.name, bucket?.websiteAccess, bucket?.websiteConfig?.indexDocument, bucket?.websiteConfig?.errorDocument]);
 
   if (isLoading) {
-    return <div className="px-7 py-6 text-[13.5px] text-[var(--muted-foreground)]">{t('buckets.common.loading')}</div>;
+    return <div className="px-7 py-6 text-[0.8438rem] text-[var(--muted-foreground)]">{t('buckets.common.loading')}</div>;
   }
   if (!bucket) {
     return (
@@ -82,14 +82,14 @@ export function BucketWebsite() {
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <header className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-3">
           <Globe className="h-4 w-4 text-[var(--primary)]" />
-          <h2 className="text-[15px] font-semibold">{t('buckets.website.heading')}</h2>
+          <h2 className="text-[0.9375rem] font-semibold">{t('buckets.website.heading')}</h2>
         </header>
 
         <div className="space-y-6 px-5 py-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[14px] font-medium">{t('buckets.website.access.label')}</p>
-              <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
+              <p className="text-[0.875rem] font-medium">{t('buckets.website.access.label')}</p>
+              <p className="mt-0.5 text-[0.7812rem] text-[var(--muted-foreground)]">
                 {t('buckets.website.access.description')}
               </p>
             </div>
@@ -104,7 +104,7 @@ export function BucketWebsite() {
           {enabled && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[13.5px] font-medium">
+                <label className="text-[0.8438rem] font-medium">
                   {t('buckets.website.index_document.label')} <span className="text-[var(--destructive)]">*</span>
                 </label>
                 <Input
@@ -112,19 +112,19 @@ export function BucketWebsite() {
                   onChange={(e) => setIndexDocument(e.target.value)}
                   placeholder={t('buckets.website.index_document.placeholder')}
                 />
-                <p className="text-[12.5px] text-[var(--muted-foreground)]">
+                <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
                   {t('buckets.website.index_document.description')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[13.5px] font-medium">{t('buckets.website.error_document.label')}</label>
+                <label className="text-[0.8438rem] font-medium">{t('buckets.website.error_document.label')}</label>
                 <Input
                   value={errorDocument}
                   onChange={(e) => setErrorDocument(e.target.value)}
                   placeholder={t('buckets.website.error_document.placeholder')}
                 />
-                <p className="text-[12.5px] text-[var(--muted-foreground)]">
+                <p className="text-[0.7812rem] text-[var(--muted-foreground)]">
                   {t('buckets.website.error_document.description')}
                 </p>
               </div>

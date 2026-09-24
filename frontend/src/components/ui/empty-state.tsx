@@ -21,9 +21,9 @@ export function EmptyState({ icon, title, description, action, tone = 'primary',
     >
       <IconTile icon={icon} tone={tone} size="lg" />
       <div className="space-y-1">
-        <h3 className="text-[17px] font-semibold tracking-tight">{title}</h3>
+        <h3 className="text-[1.0625rem] font-semibold tracking-tight">{title}</h3>
         {description && (
-          <p className="max-w-sm text-[13.5px] text-[var(--muted-foreground)]">{description}</p>
+          <p className="max-w-sm text-[0.8438rem] text-[var(--muted-foreground)]">{description}</p>
         )}
       </div>
       {action && <div className="pt-1">{action}</div>}

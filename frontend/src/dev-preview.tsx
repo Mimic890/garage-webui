@@ -62,11 +62,11 @@ function Preview() {
           </DialogHeader>
           <DialogBody className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-[13px] font-medium">Key name</label>
+              <label className="text-[0.8125rem] font-medium">Key name</label>
               <Input placeholder="Backup service" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[13px] font-medium">Bucket</label>
+              <label className="text-[0.8125rem] font-medium">Bucket</label>
               <Select value={bucket} onChange={setBucket}>
                 <SelectOption value="">Select a bucket</SelectOption>
                 {buckets.map((name) => (
@@ -78,12 +78,12 @@ function Preview() {
             </div>
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="space-y-1.5">
-                <label className="text-[13px] font-medium">Filler field {i + 1}</label>
+                <label className="text-[0.8125rem] font-medium">Filler field {i + 1}</label>
                 <Input placeholder="makes the body scroll" />
               </div>
             ))}
             <div className="space-y-1.5">
-              <label className="text-[13px] font-medium">Bucket (bottom of the form)</label>
+              <label className="text-[0.8125rem] font-medium">Bucket (bottom of the form)</label>
               <Select value={bucket} onChange={setBucket}>
                 <SelectOption value="">Select a bucket</SelectOption>
                 {buckets.map((name) => (

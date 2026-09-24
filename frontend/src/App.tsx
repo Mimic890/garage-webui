@@ -19,6 +19,7 @@ import {UserSettings} from '@/pages/UserSettings';
 import {Login} from '@/pages/Login';
 import {Setup} from '@/pages/Setup';
 import {Toaster} from 'sonner';
+import {AppearanceController} from '@/components/appearance';
 import {queryClient} from '@/lib/query-client';
 import {useAuthStore} from '@/store/auth-store';
 import {ProtectedRoute} from '@/components/auth/ProtectedRoute';
@@ -44,8 +45,8 @@ function ThemedToaster() {
         classNames: {
           toast:
             'rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] font-sans shadow-lg',
-          title: 'text-[14px] font-medium',
-          description: 'text-[13px] text-[var(--muted-foreground)]',
+          title: 'text-[0.875rem] font-medium',
+          description: 'text-[0.8125rem] text-[var(--muted-foreground)]',
         },
       }}
     />
@@ -102,7 +103,8 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultPalette="warm" defaultMode="dark">
+      <ThemeProvider defaultPalette="graphite" defaultMode="dark">
+        <AppearanceController />
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>

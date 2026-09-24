@@ -312,3 +312,12 @@ func TestPickStep(t *testing.T) {
 		t.Errorf("10y step = %d", got)
 	}
 }
+
+func TestForwardFill(t *testing.T) {
+	one := 1.0
+	vals := []*float64{nil, &one, nil, nil, nil}
+	forwardFill(vals, 2)
+	if vals[0] != nil || vals[2] == nil || *vals[3] != 1 || vals[4] != nil {
+		t.Errorf("forwardFill = %v", vals)
+	}
+}
