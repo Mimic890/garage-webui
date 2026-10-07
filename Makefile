@@ -4,7 +4,7 @@
 DOCKER_COMPOSE = docker compose
 DOCKER_COMPOSE_DEV = docker compose -f docker-compose.dev.yml
 DOCKER_COMPOSE_PROD = docker compose -f docker-compose.yml
-IMAGE_NAME = noooste/garage-ui
+IMAGE_NAME = ghcr.io/mimic890/garage-webui
 IMAGE_TAG = latest
 
 ## help: Show this help message

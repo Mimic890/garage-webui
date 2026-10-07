@@ -37,7 +37,7 @@
         "repository": {
           "type": "string",
           "description": "Container registry and image name",
-          "default": "noooste/garage-ui"
+          "default": "ghcr.io/mimic890/garage-webui"
         },
         "pullPolicy": {
           "type": "string",

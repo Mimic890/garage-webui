@@ -107,7 +107,7 @@ The chart is published as an OCI artifact to GitHub Container Registry. No
 `helm repo add` is required:
 
 ```bash
-helm install garage-ui oci://ghcr.io/noooste/charts/garage-ui \
+helm install garage-ui oci://ghcr.io/mimic890/charts/garage-ui \
   --version <x.y.z> -f my-values.yaml
 ```
 
@@ -115,13 +115,10 @@ The chart is signed with [cosign](https://docs.sigstore.dev/) using keyless
 signing. To verify the signature before installing:
 
 ```bash
-cosign verify ghcr.io/noooste/charts/garage-ui:<x.y.z> \
-  --certificate-identity-regexp 'https://github.com/Mimic890/garage-ui/.+' \
+cosign verify ghcr.io/mimic890/charts/garage-ui:<x.y.z> \
+  --certificate-identity-regexp 'https://github.com/Mimic890/garage-webui/.+' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
-
-The chart also remains available from the classic Helm repository at
-`https://helm.noste.dev`.
 
 ### Installing with inline values
 

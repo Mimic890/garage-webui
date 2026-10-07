@@ -12,7 +12,7 @@ persistence:
   storageClassName: ""
 
 image:
-  repository: noooste/garage-ui
+  repository: ghcr.io/mimic890/garage-webui
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
   tag: ""
