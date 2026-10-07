@@ -19,7 +19,6 @@ import { seriesColor } from '@/lib/chart-theme';
 import {
   BarGauge,
   DashboardContext,
-  DashboardRow,
   DashboardTooltipProvider,
   PanelFrame,
   StatPanel,
@@ -28,7 +27,7 @@ import {
   type Tone,
 } from '@/components/dashboard/panels';
 import { RefreshPicker, TimeRangePicker } from '@/components/dashboard/time-controls';
-import { PanelGrid } from '@/components/dashboard/panel-grid';
+import { DashboardBoard } from '@/components/dashboard/board';
 import { QueryBatchProvider } from '@/components/dashboard/batch';
 import { useDashboardLayout, type PanelSize } from '@/store/dashboard-layout-store';
 import type { ClusterNode } from '@/types';
@@ -168,6 +167,8 @@ export function Dashboard() {
   const [params, setParams] = useSearchParams();
   const [editing, setEditing] = React.useState(false);
   const resetLayout = useDashboardLayout((s) => s.reset);
+  const layoutMode = useDashboardLayout((s) => s.mode);
+  const setLayoutMode = useDashboardLayout((s) => s.setMode);
   const hasCluster = clusters.length > 0 && !!activeClusterId;
 
   const settingsQ = useAppSettings(hasCluster);
@@ -289,6 +290,21 @@ export function Dashboard() {
               <div className="flex flex-wrap items-center gap-2">
                 {editing ? (
                   <>
+                    <div className="flex rounded-md border border-[var(--border)] p-0.5" role="radiogroup" aria-label={t('dashboard.edit.mode')}>
+                      {(['grouped', 'free'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          role="radio"
+                          aria-checked={layoutMode === m}
+                          onClick={() => setLayoutMode(m)}
+                          title={t(`dashboard.edit.mode.${m}.hint`)}
+                          className={`rounded px-2 py-0.5 text-[0.75rem] ${layoutMode === m ? 'bg-[var(--accent)] font-medium text-[var(--foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+                        >
+                          {t(`dashboard.edit.mode.${m}`)}
+                        </button>
+                      ))}
+                    </div>
                     <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => resetLayout()} title={t('dashboard.edit.resetHint')}>
                       <RotateCcw className="h-3.5 w-3.5" />
                       {t('dashboard.edit.reset')}
@@ -335,11 +351,10 @@ export function Dashboard() {
               </StatusBanner>
             )}
 
-            <DashboardRow editing={editing} id="overview" title={t('dashboard.row.overview')}>
-              <PanelGrid
-                row="overview"
-                editing={editing}
-                panels={[
+            <DashboardBoard
+              editing={editing}
+              rows={[
+            { id: 'overview', title: t('dashboard.row.overview'), panels: [
                   { id: 'overview.health', w: 2, h: 84, compact: true, minH: 50, title: t('dashboard.stat.health'), render: () => (
                     <StatPanel
                       title={t('dashboard.stat.health')}
@@ -390,14 +405,8 @@ export function Dashboard() {
                   { id: 'overview.resync', w: 2, h: 84, compact: true, minH: 50, title: t('dashboard.stat.resync'), render: () => (
                     <StatPanel title={t('dashboard.stat.resync')} unit="count" query={Q.resync} tone={(v) => (v === null ? 'neutral' : v > 1000 ? 'warn' : 'ok')} sub={t('dashboard.stat.resyncSub')} />
                   ) },
-                ]}
-              />
-            </DashboardRow>
-            <DashboardRow editing={editing} id="s3" title={t('dashboard.row.s3')}>
-              <PanelGrid
-                row="s3"
-                editing={editing}
-                panels={[
+            ] },
+            { id: 's3', title: t('dashboard.row.s3'), panels: [
                   { id: 's3.requestsByEndpoint', w: 6, h: 230, title: t('dashboard.panel.requestsByEndpoint'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.requestsByEndpoint')} description={t('dashboard.panel.requestsByEndpoint.desc')} queries={P.requestsByEndpoint} unit="reqps" stacked legend="table" height={230} />
                   ) },
@@ -422,14 +431,8 @@ export function Dashboard() {
                   { id: 's3.webLatency', w: 6, h: 160, title: t('dashboard.panel.webLatency'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.webLatency')} queries={P.webLatency} unit="ms" styles={QUANTILE_STYLES} fillOpacity={0.06} height={160} />
                   ) },
-                ]}
-              />
-            </DashboardRow>
-            <DashboardRow editing={editing} id="storage" title={t('dashboard.row.storage')}>
-              <PanelGrid
-                row="storage"
-                editing={editing}
-                panels={[
+            ] },
+            { id: 'storage', title: t('dashboard.row.storage'), panels: [
                   { id: 'storage.storedData', w: 3, h: 180, title: t('dashboard.panel.storedData'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.storedData')} queries={P.storageBytes} unit="bytes" labels={{ bytes: t('dashboard.series.stored') }} styles={{ bytes: { color: 'var(--chart-blue)' } }} height={180} />
                   ) },
@@ -492,14 +495,8 @@ export function Dashboard() {
                   { id: 'storage.multipart', w: 4, h: 200, title: t('dashboard.panel.multipart'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.multipart')} description={t('dashboard.panel.multipart.desc')} queries={P.multipart} unit="count" labels={{ mpu: t('dashboard.series.uploads') }} styles={{ mpu: { color: 'var(--chart-orange)' } }} height={200} />
                   ) },
-                ]}
-              />
-            </DashboardRow>
-            <DashboardRow editing={editing} id="nodes" title={t('dashboard.row.nodes')} extra={<span className="text-[0.75rem] text-[var(--muted-foreground)]">{nodes.length > 0 && t('dashboard.nodesCount', { count: nodes.length })}</span>}>
-              <PanelGrid
-                row="nodes"
-                editing={editing}
-                panels={[
+            ] },
+            { id: 'nodes', title: t('dashboard.row.nodes'), extra: <span className="text-[0.75rem] text-[var(--muted-foreground)]">{nodes.length > 0 && t('dashboard.nodesCount', { count: nodes.length })}</span>, panels: [
                   { id: 'nodes.diskUsage', w: 6, h: 170, title: t('dashboard.panel.diskUsage'), render: (size) => (
                     <PanelFrame title={t('dashboard.panel.diskUsage')} description={t('dashboard.panel.diskUsage.desc')} loading={nodesQ.isFetching}>
                       {nodes.filter((n) => n.dataPartition).length === 0 ? (
@@ -611,14 +608,8 @@ export function Dashboard() {
                     </PanelFrame>
                   ) }]
                     : []),
-                ]}
-              />
-            </DashboardRow>
-            <DashboardRow editing={editing} id="internals" title={t('dashboard.row.internals')}>
-              <PanelGrid
-                row="internals"
-                editing={editing}
-                panels={[
+            ] },
+            { id: 'internals', title: t('dashboard.row.internals'), panels: [
                   { id: 'internals.blockIo', w: 4, h: 170, title: t('dashboard.panel.blockIo'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.blockIo')} description={t('dashboard.panel.blockIo.desc')} queries={P.blockIo} unit="bytesPerSec" labels={{ write: t('dashboard.series.write'), read: t('dashboard.series.read') }} styles={{ write: { color: 'var(--chart-orange)' }, read: { color: 'var(--chart-blue)' } }} height={170} />
                   ) },
@@ -652,9 +643,9 @@ export function Dashboard() {
                   { id: 'internals.collector', w: 4, h: 170, title: t('dashboard.panel.collector'), render: () => (
                     <TimeSeriesPanel title={t('dashboard.panel.collector')} description={t('dashboard.panel.collector.desc')} queries={P.collector} unit="ms" labels={{ scrape: t('dashboard.series.scrape') }} styles={{ scrape: { color: 'var(--chart-gray)' } }} height={170} />
                   ) },
-                ]}
-              />
-            </DashboardRow>
+            ] },
+              ]}
+            />
           </div>
         </div>
         </QueryBatchProvider>
