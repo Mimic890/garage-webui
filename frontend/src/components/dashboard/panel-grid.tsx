@@ -1,21 +1,12 @@
 import * as React from 'react';
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Eye, EyeOff, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/lib/i18n';
 import { PanelSlotContext, type PanelSlot } from '@/components/dashboard/panels';
-import { mergeOrder, useDashboardLayout, type PanelSize } from '@/store/dashboard-layout-store';
+import { useDashboardLayout, type PanelSize } from '@/store/dashboard-layout-store';
 
 export interface PanelDef {
   id: string;
@@ -35,21 +26,6 @@ export interface PanelDef {
 const COLS = 12;
 const H_STEP = 10;
 const MAX_H = 900;
-// Custom widths apply from this width up; below it panels use a responsive
-// default so a 2-column tile never gets squeezed on a laptop.
-const WIDE_QUERY = '(min-width: 1280px)';
-
-function useWide() {
-  const [wide, setWide] = React.useState(() => typeof window !== 'undefined' && window.matchMedia(WIDE_QUERY).matches);
-  React.useEffect(() => {
-    const mq = window.matchMedia(WIDE_QUERY);
-    const on = () => setWide(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return wide;
-}
-
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function ResizeHandle({ size, minH, gridRef, onPreview, onCommit }: {
@@ -208,7 +184,6 @@ function SortablePanel({ def, size, hidden, editing, wide, gridRef }: {
         'relative min-w-0',
         !wide && !expanded && (def.compact ? 'col-span-6 sm:col-span-4' : def.w >= COLS ? 'col-span-12' : 'col-span-12 lg:col-span-6'),
         !wide && expanded && 'col-span-12',
-        hidden && 'opacity-50 saturate-50',
         isDragging && 'opacity-80 shadow-lg',
       )}
     >
@@ -217,87 +192,62 @@ function SortablePanel({ def, size, hidden, editing, wide, gridRef }: {
   );
 }
 
-function HiddenZone({ id, empty, children }: { id: string; empty: boolean; children: React.ReactNode }) {
-  const { t } = useTranslation();
-  const { setNodeRef, isOver } = useDroppable({ id });
+/**
+ * One sortable list of panels on a 12-column grid, and a drop target for
+ * panels dragged in from another list. The DndContext lives in the board.
+ */
+export function PanelContainer({ id, ids, defs, editing, hidden = false, wide, placeholder }: {
+  id: string;
+  ids: string[];
+  defs: Map<string, PanelDef>;
+  editing: boolean;
+  hidden?: boolean;
+  wide: boolean;
+  /** Shown in edit mode while the list is empty. */
+  placeholder?: string;
+}) {
+  const sizes = useDashboardLayout((s) => s.sizes);
+  const gridRef = React.useRef<HTMLDivElement>(null);
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !editing });
+  const setRefs = React.useCallback(
+    (el: HTMLDivElement | null) => {
+      gridRef.current = el;
+      setNodeRef(el);
+    },
+    [setNodeRef],
+  );
+
+  if (!editing && ids.length === 0) return null;
   return (
-    <div ref={setNodeRef} className={cn('mt-3 border-t border-dashed border-[var(--input)] pt-3', isOver && 'border-[var(--primary)]')}>
-      <div className="mb-2 text-[0.6875rem] uppercase tracking-wide text-[var(--muted-foreground)]">{t('dashboard.edit.hiddenPanels')}</div>
-      {empty ? (
-        <div className={cn('rounded-md border border-dashed border-[var(--border)] py-4 text-center text-[0.75rem] text-[var(--muted-foreground)]', isOver && 'border-[var(--primary)] text-[var(--foreground)]')}>
-          {t('dashboard.edit.dropToHide')}
-        </div>
-      ) : (
-        children
-      )}
-    </div>
+    <SortableContext id={id} items={ids} strategy={rectSortingStrategy}>
+      <div ref={setRefs} className="grid grid-cols-12 gap-2">
+        {ids.map((pid) => {
+          const def = defs.get(pid)!;
+          const size = { w: sizes[pid]?.w ?? def.w, h: sizes[pid]?.h ?? def.h };
+          return <SortablePanel key={pid} def={def} size={size} hidden={hidden} editing={editing} wide={wide} gridRef={gridRef} />;
+        })}
+        {editing && ids.length === 0 && placeholder && (
+          <div
+            className={cn(
+              'col-span-12 rounded-md border border-dashed border-[var(--border)] py-4 text-center text-[0.75rem] text-[var(--muted-foreground)]',
+              isOver && 'border-[var(--primary)] text-[var(--foreground)]',
+            )}
+          >
+            {placeholder}
+          </div>
+        )}
+      </div>
+    </SortableContext>
   );
 }
 
-/**
- * A dashboard row's panels on a 12-column grid. In edit mode panels can be
- * dragged by their grip, hidden with the eye button and resized from the
- * bottom-right corner; hidden panels then sit under a dashed line. Outside
- * edit mode hidden panels are not rendered at all (so they fetch nothing).
- */
-export function PanelGrid({ row, panels, editing }: { row: string; panels: PanelDef[]; editing: boolean }) {
-  const saved = useDashboardLayout((s) => s.order[row]);
-  const hiddenIds = useDashboardLayout((s) => s.hidden);
-  const sizes = useDashboardLayout((s) => s.sizes);
-  const setOrder = useDashboardLayout((s) => s.setOrder);
-  const setHidden = useDashboardLayout((s) => s.setHidden);
-  const gridRef = React.useRef<HTMLDivElement>(null);
-  const wide = useWide();
-
-  const byId = React.useMemo(() => new Map(panels.map((p) => [p.id, p])), [panels]);
-  const order = React.useMemo(() => mergeOrder(saved, panels.map((p) => p.id)), [saved, panels]);
-  const hiddenSet = React.useMemo(() => new Set(hiddenIds), [hiddenIds]);
-  const visible = order.filter((id) => !hiddenSet.has(id));
-  const hidden = order.filter((id) => hiddenSet.has(id));
-  const zoneId = `${row}:hidden`;
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over) return;
-    const id = String(active.id);
-    const overId = String(over.id);
-    if (overId === zoneId) {
-      setHidden(id, true);
-      return;
-    }
-    if (id === overId) return;
-    // Dropping onto a panel of the other group moves it across.
-    const toHidden = hiddenSet.has(overId);
-    if (toHidden !== hiddenSet.has(id)) setHidden(id, toHidden);
-    setOrder(row, arrayMove(order, order.indexOf(id), order.indexOf(overId)));
-  };
-
-  const sizeOf = (p: PanelDef): PanelSize => ({ w: sizes[p.id]?.w ?? p.w, h: sizes[p.id]?.h ?? p.h });
-  const renderPanel = (id: string, isHidden: boolean) => {
-    const def = byId.get(id)!;
-    return <SortablePanel key={id} def={def} size={sizeOf(def)} hidden={isHidden} editing={editing} wide={wide} gridRef={gridRef} />;
-  };
-
-  if (!editing && visible.length === 0) return null;
-
+/** Hidden panels, shown only in edit mode under a dashed line. */
+export function HiddenZone({ id, ids, defs, wide }: { id: string; ids: string[]; defs: Map<string, PanelDef>; wide: boolean }) {
+  const { t } = useTranslation();
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={visible} strategy={rectSortingStrategy}>
-        <div ref={gridRef} className="grid grid-cols-12 gap-2">
-          {visible.map((id) => renderPanel(id, false))}
-        </div>
-      </SortableContext>
-      {editing && (
-        <HiddenZone id={zoneId} empty={hidden.length === 0}>
-          <SortableContext items={hidden} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-12 gap-2">{hidden.map((id) => renderPanel(id, true))}</div>
-          </SortableContext>
-        </HiddenZone>
-      )}
-    </DndContext>
+    <div className="mt-3 border-t border-dashed border-[var(--input)] pt-3">
+      <div className="mb-2 text-[0.6875rem] uppercase tracking-wide text-[var(--muted-foreground)]">{t('dashboard.edit.hiddenPanels')}</div>
+      <PanelContainer id={id} ids={ids} defs={defs} editing hidden wide={wide} placeholder={t('dashboard.edit.dropToHide')} />
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ChevronRight, Info, Maximize2, Minimize2 } from 'lucide-react';
+import { Info, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/lib/i18n';
 import { TimeSeriesChart, type ChartSeries, type Threshold } from '@/components/charts/TimeSeriesChart';
@@ -27,7 +27,7 @@ export function useDashboard() {
 }
 
 /**
- * Set by PanelGrid for the panel it wraps: the size the user chose, whether
+ * Set by the dashboard grid for the panel it wraps: the size the user chose, whether
  * the dashboard is being edited, and the edit controls to show in the header.
  */
 export interface PanelSlot {
@@ -362,30 +362,6 @@ export function BarGauge({ items, format }: { items: BarGaugeItem[]; format: (v:
         );
       })}
     </div>
-  );
-}
-
-export function DashboardRow({ id, title, children, extra, editing }: { id: string; title: string; children: React.ReactNode; extra?: React.ReactNode; editing?: boolean }) {
-  const collapsed = useSettingsStore((s) => s.collapsedRows.includes(id));
-  const toggleRow = useSettingsStore((s) => s.toggleRow);
-  // Outside edit mode a row whose panels are all hidden disappears entirely.
-  return (
-    <section className={cn('space-y-2', !editing && !collapsed && '[&:not(:has([data-panel]))]:hidden')}>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => toggleRow(id)}
-          className="flex items-center gap-1.5 rounded px-1 py-0.5 text-[0.8125rem] font-semibold text-[var(--foreground)] hover:bg-[var(--accent)]"
-          aria-expanded={!collapsed}
-        >
-          <ChevronRight className={cn('h-4 w-4 text-[var(--muted-foreground)] transition-transform', !collapsed && 'rotate-90')} />
-          {title}
-        </button>
-        <div className="h-px flex-1 bg-[var(--border)]" />
-        {extra}
-      </div>
-      {!collapsed && children}
-    </section>
   );
 }
 
